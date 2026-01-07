@@ -105,6 +105,7 @@ async def hael_route(request: VapiToolRequest) -> VapiToolResponse:
 
         else:
             # Unknown brain - needs human
+            result = None
             speak = (
                 "I'm not sure how to help with that. "
                 "Let me connect you with a representative who can assist."
@@ -116,7 +117,7 @@ async def hael_route(request: VapiToolRequest) -> VapiToolResponse:
             }
 
         # Add missing fields to response if needs human
-        if action == "needs_human" and hasattr(result, "missing_fields"):
+        if action == "needs_human" and result is not None and hasattr(result, "missing_fields"):
             if result.missing_fields:
                 speak += f" I'll need the following information: {', '.join(result.missing_fields)}."
                 data["missing_fields"] = result.missing_fields

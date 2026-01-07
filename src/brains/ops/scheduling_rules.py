@@ -192,6 +192,15 @@ def validate_scheduling_request(
     """
     existing_bookings = existing_bookings or []
     
+    # Check if in past (most critical check - do first)
+    if requested_start < datetime.now():
+        return SchedulingResult(
+            success=False,
+            slot=None,
+            reason="Cannot schedule in the past",
+            alternatives=[],
+        )
+    
     # Check if in business hours
     if not is_business_hours(requested_start):
         next_slot = get_next_available_slot(
@@ -205,15 +214,6 @@ def validate_scheduling_request(
             slot=None,
             reason="Requested time is outside business hours",
             alternatives=[next_slot] if next_slot else [],
-        )
-    
-    # Check if in past
-    if requested_start < datetime.now():
-        return SchedulingResult(
-            success=False,
-            slot=None,
-            reason="Cannot schedule in the past",
-            alternatives=[],
         )
     
     slot_end = calculate_slot_end(requested_start, duration_minutes)

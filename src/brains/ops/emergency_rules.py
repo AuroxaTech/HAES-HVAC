@@ -83,8 +83,11 @@ def qualify_emergency(
     
     # Temperature-based emergency detection
     if temperature_mentioned is not None:
-        # No heat emergency
-        if ("no heat" in desc_lower or "heating not working" in desc_lower):
+        # No heat emergency - match various phrasings
+        heat_keywords = ["no heat", "heating not working", "heating is not working",
+                        "heater not working", "heater is not working", "furnace not working",
+                        "furnace is not working", "heat not working", "heat is not working"]
+        if any(kw in desc_lower for kw in heat_keywords):
             if temperature_mentioned < NO_HEAT_TEMP_THRESHOLD:
                 return EmergencyResult(
                     is_emergency=True,
@@ -92,9 +95,11 @@ def qualify_emergency(
                     priority_override=1,
                 )
         
-        # No AC emergency
-        if ("no ac" in desc_lower or "no cooling" in desc_lower or 
-            "ac not working" in desc_lower or "air conditioning not working" in desc_lower):
+        # No AC emergency - match various phrasings
+        ac_keywords = ["no ac", "no cooling", "ac not working", "ac is not working",
+                      "air conditioning not working", "air conditioning is not working",
+                      "a/c not working", "a/c is not working", "air conditioner not working"]
+        if any(kw in desc_lower for kw in ac_keywords):
             if temperature_mentioned > NO_AC_TEMP_THRESHOLD:
                 return EmergencyResult(
                     is_emergency=True,

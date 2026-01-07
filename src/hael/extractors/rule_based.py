@@ -18,28 +18,45 @@ from src.hael.schema import Entity, HaelExtractionResult, Intent, UrgencyLevel
 # =============================================================================
 
 INTENT_KEYWORDS: dict[Intent, list[str]] = {
-    # OPS-BRAIN intents
-    Intent.SERVICE_REQUEST: [
-        "need service", "need repair", "not working", "broken", "fix",
-        "service call", "technician", "tech out", "come out",
-        "hvac problem", "ac problem", "heating problem", "furnace problem",
-        "unit not working", "system down", "need help with",
+    # PEOPLE-BRAIN intents (check first - more specific)
+    Intent.HIRING_INQUIRY: [
+        "are you hiring", "hiring", "job opening", "position available",
+        "career", "employment opportunity", "work for you",
+        "apply for", "application", "looking for work", "job",
     ],
-    Intent.SCHEDULE_APPOINTMENT: [
-        "schedule", "book", "appointment", "set up", "arrange",
-        "available time", "next available", "earliest", "come by",
+    Intent.ONBOARDING_INQUIRY: [
+        "onboarding", "new hire", "first day", "orientation",
+        "paperwork", "training schedule",
+    ],
+    Intent.PAYROLL_INQUIRY: [
+        "payroll", "paycheck", "pay stub", "my commission",
+        "direct deposit", "w-2", "tax form", "get paid", "my pay",
+    ],
+
+    # OPS-BRAIN intents
+    Intent.CANCEL_APPOINTMENT: [
+        "cancel my", "cancel the", "cancel appointment", "cancel service",
+        "don't need service", "no longer need", "want to cancel",
     ],
     Intent.RESCHEDULE_APPOINTMENT: [
         "reschedule", "change appointment", "move appointment",
         "different time", "different day", "change the time",
     ],
-    Intent.CANCEL_APPOINTMENT: [
-        "cancel", "cancel appointment", "don't need", "no longer need",
-        "cancel service", "cancel the",
-    ],
     Intent.STATUS_UPDATE_REQUEST: [
-        "status", "where is", "when will", "eta", "technician coming",
-        "update on", "what's the status", "track",
+        "status of my", "where is the technician", "eta",
+        "technician coming", "update on my", "what's the status",
+        "track my", "when is the tech",
+    ],
+    Intent.SCHEDULE_APPOINTMENT: [
+        "schedule", "book", "set up appointment", "arrange",
+        "available time", "next available", "earliest", "come by",
+    ],
+    Intent.SERVICE_REQUEST: [
+        "need service", "need repair", "not working", "broken", "fix",
+        "service call", "send technician", "tech out", "come out",
+        "hvac problem", "ac problem", "heating problem", "furnace problem",
+        "unit not working", "system down", "need help with",
+        "my ac", "my hvac", "my furnace", "my heater",
     ],
 
     # REVENUE-BRAIN intents
@@ -55,7 +72,7 @@ INTENT_KEYWORDS: dict[Intent, list[str]] = {
         "amount due", "owe", "balance",
     ],
     Intent.PAYMENT_TERMS_INQUIRY: [
-        "payment terms", "pay", "payment options", "financing",
+        "payment terms", "payment options", "financing",
         "when is payment", "payment due", "how to pay",
     ],
     Intent.INVOICE_REQUEST: [
@@ -69,20 +86,6 @@ INTENT_KEYWORDS: dict[Intent, list[str]] = {
     Intent.PURCHASE_REQUEST: [
         "order parts", "order equipment", "purchase", "buy",
         "need to order",
-    ],
-
-    # PEOPLE-BRAIN intents
-    Intent.HIRING_INQUIRY: [
-        "hiring", "job", "position", "career", "employment",
-        "work for", "apply", "application", "looking for work",
-    ],
-    Intent.ONBOARDING_INQUIRY: [
-        "onboarding", "new hire", "first day", "orientation",
-        "paperwork", "training schedule",
-    ],
-    Intent.PAYROLL_INQUIRY: [
-        "payroll", "paycheck", "pay stub", "commission",
-        "direct deposit", "w-2", "tax form",
     ],
 }
 
@@ -183,13 +186,16 @@ class RuleBasedExtractor(BaseExtractor):
         signals: dict[str, Any] = {"matched_keywords": [], "intent_scores": {}}
 
         # Score each intent based on keyword matches
+        # Longer keyword matches get bonus points for specificity
         intent_scores: dict[Intent, float] = {}
         for intent, keywords in INTENT_KEYWORDS.items():
             score = 0.0
             matched = []
             for keyword in keywords:
                 if keyword in text_lower:
-                    score += 1.0
+                    # Bonus for longer/more specific keywords
+                    specificity_bonus = len(keyword.split()) * 0.5
+                    score += 1.0 + specificity_bonus
                     matched.append(keyword)
             if matched:
                 intent_scores[intent] = score

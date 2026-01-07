@@ -105,6 +105,7 @@ async def chat_message(request: ChatMessageRequest) -> ChatMessageResponse:
 
         else:
             # Unknown brain - needs human
+            result = None
             reply = (
                 "I'm not sure how to help with that request. "
                 "Would you like me to connect you with a representative?"
@@ -115,7 +116,7 @@ async def chat_message(request: ChatMessageRequest) -> ChatMessageResponse:
             }
 
         # Add missing fields info for chat
-        if action == "needs_human" and hasattr(result, "missing_fields"):
+        if action == "needs_human" and result is not None and hasattr(result, "missing_fields"):
             if result.missing_fields:
                 reply += f"\n\nTo proceed, I'll need: {', '.join(result.missing_fields)}"
                 data["missing_fields"] = result.missing_fields

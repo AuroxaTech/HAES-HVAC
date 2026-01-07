@@ -69,15 +69,15 @@ class TestGetLatestReport:
         assert "period_start" in report
         assert "period_end" in report
 
-    def test_summary_has_text(self, client: TestClient):
-        """Summary should include text."""
+    def test_summary_has_key_metrics(self, client: TestClient):
+        """Summary should include key_metrics."""
         response = client.get("/reports/latest")
         
         data = response.json()
         summary = data["summary"]
         
-        assert "summary_text" in summary
-        assert len(summary["summary_text"]) > 0
+        assert "key_metrics" in summary
+        assert len(summary["key_metrics"]) > 0
 
 
 class TestRunReportOnce:
@@ -180,8 +180,8 @@ class TestReportDataStructure:
         
         summary = data["summary"]
         
-        # Required fields
-        required = ["summary_text", "generated_at"]
+        # Required fields per ReportSummary schema
+        required = ["report_type", "period", "key_metrics", "alerts"]
         for field in required:
             assert field in summary, f"Missing required field: {field}"
 
