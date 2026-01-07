@@ -1,0 +1,62 @@
+# Fly.io Configuration for HAES HVAC
+# See https://fly.io/docs/reference/configuration/
+
+app = "haes-hvac"
+primary_region = "dfw"  # Dallas - close to Austin
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  ENVIRONMENT = "production"
+  PORT = "8080"
+  LOG_LEVEL = "INFO"
+  REPORT_TIMEZONE = "America/Chicago"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 250
+    soft_limit = 200
+
+[[http_service.checks]]
+  grace_period = "10s"
+  interval = "30s"
+  method = "GET"
+  path = "/health"
+  timeout = "5s"
+
+[checks]
+  [checks.health]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    path = "/health"
+    port = 8080
+    timeout = "5s"
+    type = "http"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 512
+
+# Secrets to set via `fly secrets set`:
+# DATABASE_URL
+# ODOO_BASE_URL
+# ODOO_DB
+# ODOO_USERNAME
+# ODOO_PASSWORD
+# VAPI_API_KEY
+# VAPI_WEBHOOK_SECRET
+# TWILIO_ACCOUNT_SID
+# TWILIO_AUTH_TOKEN
+# TWILIO_PHONE_NUMBER
+

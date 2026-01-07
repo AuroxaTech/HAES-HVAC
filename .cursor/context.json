@@ -1,0 +1,172 @@
+{
+  "project": {
+    "name": "HAES HVAC",
+    "repo_root": "/Users/mac/Developer/HAES HVAC",
+    "description": "AI-powered HVAC Business Automation System integrating with Odoo 18 Enterprise, Vapi.ai, and Twilio"
+  },
+  "architecture": {
+    "type": "modular_monolith",
+    "framework": "FastAPI",
+    "python_version": "3.11+",
+    "modules": [
+      "HAEL (Command Engine)",
+      "CORE-BRAIN (Pricing/Accounting/Compliance)",
+      "OPS-BRAIN (Dispatch/Scheduling)",
+      "REVENUE-BRAIN (Leads/Quoting/Sales)",
+      "PEOPLE-BRAIN (HR/Onboarding/Payroll)"
+    ],
+    "data_flow_summary": "Voice/Chat -> API -> HAEL -> Brain -> Odoo"
+  },
+  "modules_status": [
+    { "module": "Module 1 - Foundation", "status": "done", "last_updated": "2026-01-08" },
+    { "module": "Module 2 - Odoo Integration", "status": "done", "last_updated": "2026-01-08" },
+    { "module": "Module 3 - HAEL", "status": "done", "last_updated": "2026-01-08" },
+    { "module": "Module 4 - OPS-BRAIN", "status": "done", "last_updated": "2026-01-08" },
+    { "module": "Module 5 - CORE-BRAIN", "status": "done", "last_updated": "2026-01-08" },
+    { "module": "Module 6 - REVENUE-BRAIN", "status": "done", "last_updated": "2026-01-08" },
+    { "module": "Module 7 - PEOPLE-BRAIN", "status": "done", "last_updated": "2026-01-08" },
+    { "module": "Module 8 - Voice + Chat", "status": "done", "last_updated": "2026-01-08" },
+    { "module": "Module 9 - KPI + Reporting", "status": "done", "last_updated": "2026-01-08" },
+    { "module": "Module 10 - Fly.io Deployment", "status": "done", "last_updated": "2026-01-08" },
+    { "module": "Module 11 - QA + Hardening", "status": "done", "last_updated": "2026-01-08" }
+  ],
+  "endpoints": [
+    { "method": "GET", "path": "/", "purpose": "Service metadata" },
+    { "method": "GET", "path": "/health", "purpose": "Health check with DB status" },
+    { "method": "GET", "path": "/monitoring/metrics", "purpose": "Basic application metrics" },
+    { "method": "POST", "path": "/vapi/tools/hael_route", "purpose": "Vapi voice agent tool endpoint" },
+    { "method": "POST", "path": "/webhooks/vapi", "purpose": "Vapi call lifecycle webhooks" },
+    { "method": "GET", "path": "/webhooks/vapi/health", "purpose": "Webhook health check" },
+    { "method": "POST", "path": "/chat/message", "purpose": "Website chat message processing" },
+    { "method": "GET", "path": "/reports/latest", "purpose": "Get latest report by type" },
+    { "method": "POST", "path": "/reports/run-once", "purpose": "Generate report on-demand" },
+    { "method": "GET", "path": "/reports/runs", "purpose": "List stored report runs" }
+  ],
+  "db_schema": {
+    "tables": [
+      {
+        "name": "idempotency_keys",
+        "columns": ["id (UUID PK)", "scope", "key", "status", "response_hash", "response_json", "created_at", "expires_at"],
+        "purpose": "Request deduplication"
+      },
+      {
+        "name": "audit_log",
+        "columns": ["id (INT PK)", "created_at", "request_id", "channel", "actor", "intent", "brain", "command_json", "odoo_result_json", "status", "error_message"],
+        "purpose": "Action audit trail"
+      },
+      {
+        "name": "jobs",
+        "columns": ["id (INT PK)", "created_at", "run_at", "type", "payload_json", "status", "attempts", "max_attempts", "last_error", "completed_at", "correlation_id"],
+        "purpose": "Background job queue"
+      },
+      {
+        "name": "report_runs",
+        "columns": ["id (INT PK)", "created_at", "report_type", "period_start", "period_end", "status", "report_json", "summary_text", "correlation_id"],
+        "purpose": "Report artifacts storage"
+      },
+      {
+        "name": "report_deliveries",
+        "columns": ["id (INT PK)", "created_at", "report_run_id (FK)", "channel", "recipient", "status", "provider_message_id", "error_message"],
+        "purpose": "Report delivery tracking"
+      }
+    ]
+  },
+  "hael": {
+    "intents": [
+      "service_request", "schedule_appointment", "reschedule_appointment", 
+      "cancel_appointment", "status_update_request", "quote_request",
+      "billing_inquiry", "payment_terms_inquiry", "invoice_request",
+      "inventory_inquiry", "purchase_request", "hiring_inquiry",
+      "onboarding_inquiry", "payroll_inquiry", "unknown"
+    ],
+    "intent_brain_mapping": {
+      "ops": ["service_request", "schedule_appointment", "reschedule_appointment", "cancel_appointment", "status_update_request"],
+      "revenue": ["quote_request"],
+      "core": ["billing_inquiry", "payment_terms_inquiry", "invoice_request", "inventory_inquiry", "purchase_request"],
+      "people": ["hiring_inquiry", "onboarding_inquiry", "payroll_inquiry"]
+    },
+    "required_fields": {
+      "service_request": ["identity", "location", "problem_description", "urgency_level"],
+      "quote_request": ["identity", "property_type", "timeline"]
+    }
+  },
+  "brains": {
+    "ops": {
+      "handlers": "handle_ops_command",
+      "features": ["Emergency qualification", "Service catalog", "Tech roster", "Scheduling rules"]
+    },
+    "core": {
+      "handlers": "handle_core_command", 
+      "features": ["Pricing tiers", "Approval workflows", "Payment terms", "Compliance disclosures"]
+    },
+    "revenue": {
+      "handlers": "handle_revenue_command",
+      "features": ["Lead qualification (hot/warm/cold)", "Lead routing", "Follow-up sequences", "Pipeline stages"]
+    },
+    "people": {
+      "handlers": "handle_people_command",
+      "features": ["Hiring requirements", "Onboarding checklist", "Training program", "Payroll/commission rules"]
+    }
+  },
+  "env_vars": [
+    "ENVIRONMENT", "HOST", "PORT", "LOG_LEVEL",
+    "DATABASE_URL", "DB_POOL_SIZE", "DB_MAX_OVERFLOW", "DB_POOL_TIMEOUT",
+    "ODOO_BASE_URL", "ODOO_DB", "ODOO_USERNAME", "ODOO_PASSWORD",
+    "ODOO_TIMEOUT_SECONDS", "ODOO_AUTH_MODE", "ODOO_VERIFY_SSL",
+    "VAPI_API_KEY", "VAPI_WEBHOOK_SECRET",
+    "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER",
+    "CHAT_SHARED_SECRET", "WEBHOOK_BASE_URL",
+    "REPORT_TIMEZONE", "REPORT_RECIPIENTS_JSON",
+    "SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_FROM_EMAIL"
+  ],
+  "integrations": {
+    "odoo": {
+      "status": "implemented",
+      "client": "src/integrations/odoo.py",
+      "notes": "JSON-RPC over HTTPS, async httpx client"
+    },
+    "vapi": {
+      "status": "implemented",
+      "endpoints": ["/vapi/tools/hael_route", "/webhooks/vapi"],
+      "notes": "Single tool endpoint design"
+    },
+    "twilio": {
+      "status": "placeholder",
+      "notes": "SMS delivery adapter pending"
+    },
+    "flyio": {
+      "status": "configured",
+      "config": "fly.toml",
+      "notes": "Dallas region, shared-cpu-1x"
+    },
+    "postgres": {
+      "status": "configured",
+      "notes": "Primary database with migrations"
+    }
+  },
+  "assumptions_and_open_questions": [
+    "Odoo 18 Enterprise is accessible via JSON-RPC",
+    "Vapi.ai tool endpoint design: single hael_route tool",
+    "Weather API not integrated - emergency rules use explicit temperature statements",
+    "Time tracking integration unspecified - payroll excludes hourly calculations"
+  ],
+  "module_11_qa_hardening": {
+    "idempotency": "src/utils/idempotency.py - Database-backed request deduplication",
+    "rate_limiting": "src/utils/rate_limiter.py - Per-IP sliding window rate limiter",
+    "webhook_verification": "src/utils/webhook_verify.py - HMAC signature verification for Vapi webhooks",
+    "security_headers": "src/utils/security.py - Security headers middleware (HSTS, X-Frame-Options, CSP, etc.)",
+    "production_checklist": "scripts/production_checklist.py - Automated deployment readiness check",
+    "new_tests": [
+      "tests/test_idempotency.py",
+      "tests/test_rate_limiter.py",
+      "tests/test_webhook_verification.py",
+      "tests/test_security.py",
+      "tests/test_reports_api.py"
+    ],
+    "new_settings": [
+      "RATE_LIMIT_ENABLED",
+      "RATE_LIMIT_REQUESTS_PER_WINDOW",
+      "RATE_LIMIT_WINDOW_SECONDS"
+    ]
+  }
+}

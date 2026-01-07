@@ -1,0 +1,95 @@
+{
+  "samples": [
+    {
+      "id": "service_request_complete",
+      "description": "Complete service request with all fields",
+      "command": {
+        "intent": "service_request",
+        "entities": {
+          "phone": "512-555-1234",
+          "zip_code": "78701",
+          "problem_description": "AC not blowing cold air",
+          "urgency_level": "medium"
+        },
+        "requires_human": false,
+        "missing_fields": []
+      },
+      "expected": {
+        "status": "success",
+        "requires_human": false,
+        "has_work_order": true,
+        "has_technician": true
+      }
+    },
+    {
+      "id": "service_request_emergency_gas",
+      "description": "Emergency gas leak service request",
+      "command": {
+        "intent": "service_request",
+        "entities": {
+          "phone": "512-555-9999",
+          "zip_code": "78702",
+          "problem_description": "I smell gas coming from my furnace!",
+          "urgency_level": "emergency"
+        },
+        "requires_human": false,
+        "missing_fields": []
+      },
+      "expected": {
+        "status": "success",
+        "requires_human": false,
+        "is_emergency": true
+      }
+    },
+    {
+      "id": "service_request_missing_identity",
+      "description": "Service request missing contact info",
+      "command": {
+        "intent": "service_request",
+        "entities": {
+          "zip_code": "78701",
+          "problem_description": "AC not working",
+          "urgency_level": "medium"
+        },
+        "requires_human": false,
+        "missing_fields": []
+      },
+      "expected": {
+        "status": "needs_human",
+        "requires_human": true,
+        "missing_fields_contain": ["identity"]
+      }
+    },
+    {
+      "id": "cancel_appointment",
+      "description": "Cancel appointment request",
+      "command": {
+        "intent": "cancel_appointment",
+        "entities": {
+          "phone": "512-555-4444"
+        },
+        "requires_human": false,
+        "missing_fields": []
+      },
+      "expected": {
+        "status": "success",
+        "requires_human": false
+      }
+    },
+    {
+      "id": "status_update_no_contact",
+      "description": "Status update without contact info",
+      "command": {
+        "intent": "status_update_request",
+        "entities": {},
+        "requires_human": false,
+        "missing_fields": []
+      },
+      "expected": {
+        "status": "needs_human",
+        "requires_human": true
+      }
+    }
+  ]
+}
+

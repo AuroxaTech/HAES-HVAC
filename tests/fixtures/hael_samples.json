@@ -1,0 +1,120 @@
+{
+  "samples": [
+    {
+      "id": "service_request_complete",
+      "description": "Service request with phone, address, and problem - should route to OPS, no human needed",
+      "input": "Hi, my AC is not working. My phone is 512-555-1234 and I'm at 78701. There's no cold air coming out at all.",
+      "expected": {
+        "intent": "service_request",
+        "brain": "ops",
+        "requires_human": false,
+        "has_phone": true,
+        "has_zip": true,
+        "has_problem_description": true
+      }
+    },
+    {
+      "id": "service_request_emergency",
+      "description": "Emergency service request - gas leak",
+      "input": "I smell gas in my house! Please send someone immediately! Call me at 512-555-9999",
+      "expected": {
+        "intent": "service_request",
+        "brain": "ops",
+        "requires_human": false,
+        "urgency_level": "emergency",
+        "has_phone": true
+      }
+    },
+    {
+      "id": "quote_request_missing_sqft",
+      "description": "Quote request missing square footage - should require human",
+      "input": "I need a quote for a new AC system. My email is john@example.com. It's for my residential home and I need it within the next month.",
+      "expected": {
+        "intent": "quote_request",
+        "brain": "revenue",
+        "requires_human": true,
+        "missing_fields_contain": ["square_footage"],
+        "has_email": true,
+        "has_property_type": true
+      }
+    },
+    {
+      "id": "billing_inquiry",
+      "description": "Billing question - routes to CORE",
+      "input": "When is my payment due? My email is customer@test.com",
+      "expected": {
+        "intent": "billing_inquiry",
+        "brain": "core",
+        "requires_human": false,
+        "has_email": true
+      }
+    },
+    {
+      "id": "payroll_inquiry",
+      "description": "Payroll question - routes to PEOPLE",
+      "input": "When will I get my next paycheck? This is tech@haes.com",
+      "expected": {
+        "intent": "payroll_inquiry",
+        "brain": "people",
+        "requires_human": false,
+        "has_email": true
+      }
+    },
+    {
+      "id": "unknown_message",
+      "description": "Unknown/unrelated message - requires human",
+      "input": "What's the weather like today?",
+      "expected": {
+        "intent": "unknown",
+        "brain": "unknown",
+        "requires_human": true
+      }
+    },
+    {
+      "id": "schedule_appointment",
+      "description": "Scheduling request with contact info",
+      "input": "I'd like to schedule an appointment for AC maintenance. You can reach me at 555-123-4567. I'm in the 78702 area. Just regular maintenance, not urgent.",
+      "expected": {
+        "intent": "schedule_appointment",
+        "brain": "ops",
+        "requires_human": false,
+        "has_phone": true,
+        "has_zip": true
+      }
+    },
+    {
+      "id": "cancel_appointment",
+      "description": "Cancellation request",
+      "input": "I need to cancel my service appointment. My phone number is 512-444-5555.",
+      "expected": {
+        "intent": "cancel_appointment",
+        "brain": "ops",
+        "requires_human": false,
+        "has_phone": true
+      }
+    },
+    {
+      "id": "hiring_inquiry",
+      "description": "Job inquiry - routes to PEOPLE",
+      "input": "Are you hiring any HVAC technicians? I'm looking for work.",
+      "expected": {
+        "intent": "hiring_inquiry",
+        "brain": "people",
+        "requires_human": false
+      }
+    },
+    {
+      "id": "emergency_no_heat_cold",
+      "description": "No heat emergency with temperature mentioned",
+      "input": "My heater stopped working and it's only 45 degrees outside! I have elderly parents here. Call me at 512-888-7777",
+      "expected": {
+        "intent": "service_request",
+        "brain": "ops",
+        "requires_human": false,
+        "urgency_level": "emergency",
+        "has_phone": true
+      }
+    }
+  ]
+}
+
