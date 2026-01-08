@@ -11,6 +11,7 @@ import time
 from typing import Callable
 
 from fastapi import HTTPException, Request, Response
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from src.config.settings import get_settings
@@ -169,9 +170,9 @@ class WebhookVerificationMiddleware(BaseHTTPMiddleware):
                     settings = get_settings()
                     if settings.is_production and settings.VAPI_WEBHOOK_SECRET:
                         logger.error("Missing webhook signature in production")
-                        raise HTTPException(
+                        return JSONResponse(
                             status_code=401,
-                            detail="Missing webhook signature",
+                            content={"error": "Missing webhook signature"},
                         )
                     # Allow in development
                     return await call_next(request)
@@ -181,9 +182,9 @@ class WebhookVerificationMiddleware(BaseHTTPMiddleware):
 
                 # Verify signature
                 if not verify_vapi_signature(body, signature, timestamp):
-                    raise HTTPException(
+                    return JSONResponse(
                         status_code=401,
-                        detail="Invalid webhook signature",
+                        content={"error": "Invalid webhook signature"},
                     )
 
         return await call_next(request)

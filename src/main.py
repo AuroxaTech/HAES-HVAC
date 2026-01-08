@@ -23,6 +23,7 @@ from src.utils.logger import get_logger, log_request, setup_logging
 from src.utils.request_id import generate_request_id, get_request_id, set_request_id
 from src.utils.rate_limiter import RateLimitMiddleware, RateLimitConfig
 from src.utils.security import SecurityHeadersMiddleware, log_security_warnings
+from src.utils.webhook_verify import WebhookVerificationMiddleware
 
 logger = get_logger(__name__)
 
@@ -70,6 +71,9 @@ app.add_middleware(
 
 # Add security headers middleware
 app.add_middleware(SecurityHeadersMiddleware)
+
+# Add webhook verification middleware (Vapi signatures)
+app.add_middleware(WebhookVerificationMiddleware)
 
 # Add rate limiting middleware
 if settings.RATE_LIMIT_ENABLED:
