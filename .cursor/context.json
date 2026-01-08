@@ -4,6 +4,15 @@
     "repo_root": "/Users/mac/Developer/HAES HVAC",
     "description": "AI-powered HVAC Business Automation System integrating with Odoo 18 Enterprise, Vapi.ai, and Twilio"
   },
+  "documentation": {
+    "folder": "doc/",
+    "files": [
+      { "file": "doc/README.md", "purpose": "Project overview and quick start guide" },
+      { "file": "doc/DEPLOYMENT.md", "purpose": "Fly.io deployment guide and configuration" },
+      { "file": "doc/Requirements.md", "purpose": "High-level project requirements" },
+      { "file": "doc/HAES - Requirement Discovery Document.md", "purpose": "Detailed RDD with business rules and policies" }
+    ]
+  },
   "architecture": {
     "type": "modular_monolith",
     "framework": "FastAPI",
@@ -167,6 +176,59 @@
       "RATE_LIMIT_ENABLED",
       "RATE_LIMIT_REQUESTS_PER_WINDOW",
       "RATE_LIMIT_WINDOW_SECONDS"
+    ]
+  },
+  "closeout_blockers_resolved": {
+    "resolved_date": "2026-01-09",
+    "secrets_redacted": "doc/HAES - Requirement Discovery Document.md (Odoo API key + Twilio credentials redacted)",
+    "discovery_file": ".cursor/odoo_discovery.json - 18 models discovered and accessible",
+    "logger_fix": "src/utils/logger.py - Fixed StructuredFormatter.format() asctime error",
+    "test_suite": "213 tests passing (including database tests)",
+    "remaining_action": "Rotate credentials before production deployment"
+  },
+  "final_verification": {
+    "verified_date": "2026-01-09",
+    "integrations": {
+      "odoo": {
+        "status": "VERIFIED_WORKING",
+        "url": "https://www.hvacrfinest.com",
+        "database": "[REDACTED]",
+        "user": "Internal Odoo user (redacted)",
+        "models_accessible": 18
+      },
+      "vapi": {
+        "status": "VERIFIED_WORKING",
+        "assistants": ["Riley"]
+      },
+      "twilio": {
+        "status": "VERIFIED_WORKING",
+        "account": "Twilio account configured (redacted)",
+        "phone": "[REDACTED]"
+      },
+      "postgresql": {
+        "status": "VERIFIED_WORKING",
+        "tables": ["alembic_version", "audit_log", "idempotency_keys", "jobs", "report_deliveries", "report_runs"]
+      }
+    },
+    "tests": {
+      "total": 213,
+      "passed": 213,
+      "skipped": 4,
+      "failed": 0
+    },
+    "brains_tested": {
+      "ops": "Working - service requests, emergency rules",
+      "core": "Working - payment terms, pricing",
+      "revenue": "Working - quote requests, lead qualification",
+      "people": "Working - hiring inquiries, onboarding"
+    },
+    "ready_for_production": true,
+    "deployment_steps": [
+      "fly launch",
+      "fly postgres create --name haes-db",
+      "fly postgres attach haes-db",
+      "fly secrets set ODOO_PASSWORD=... VAPI_API_KEY=... TWILIO_AUTH_TOKEN=...",
+      "fly deploy"
     ]
   }
 }

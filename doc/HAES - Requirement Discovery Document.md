@@ -51,7 +51,7 @@ We need access to your Odoo ERP system to build the API integration layer.
 **Odoo Instance URL:**
 
 ```
-[(https://hvacrfinest.odoo.odoo.com)]
+Odoo URL - [https://](https://hvacrfinest.odoo.odoo.com)hvacrfinest.odoo.odoo.com
 ```
 
 **Odoo Version:**
@@ -82,7 +82,7 @@ We need access to your Odoo ERP system to build the API integration layer.
 ```
 API Username: Admin(I)
 API Email: Junior@hvacrfinest.com
-API Key: 36416bb976848ce6d96fc0f6b38692afbe2707f1
+API Key: <REDACTED - stored in .env as ODOO_PASSWORD>
 ```
 
 **Option B:  Admin Access**
@@ -98,13 +98,10 @@ visually during the discovery phase.
    - Access Rights: ✅ All modules
 4. Send  the login credentials
 
-
 **After completing, fill in below:**
 
 ```
-Media@hvacrfinest.com is the user
-
-Pw is 123456789!
+- Name: Auroxa Developer   - Login: auroxatechofficial@gmail.com
 ```
 
 **Client Comments:**
@@ -1365,9 +1362,9 @@ Aubry Ritchie	| 910-238-0011	| ritchie74@gmail.com	| Senior Tech	| epa 608	| Eas
 
 ```
 Vehicle ID | Assigned Technician | GPS Tracking | Stock Capacity
-RDM 3029 | Aubry | No | 20 jobs
-SZD 4771 | Bounthon | Yes | 20 Jobs
-SZD 4769 | Junior | No | 20 Jobs
+RDM 3029 | Aubry | No | 25 jobs
+SZD 4771 | Bounthon | Yes | 30 Jobs
+SZD 4769 | Junior | No | 30 Jobs
 ```
 
 **Route Optimization Priorities:**
@@ -1564,13 +1561,13 @@ Cold leads: 1 week
 Quote template location in Odoo: _______________
 Quote valid for: _____ days
 
-Currently we do not have any templates
+Currently we do not have any templates but we would like to build it out and have it do this feature
 ```
 
 **Quote approval required:**
 
 - [x]  Yes (over $85)
-- [ ]  No
+- [x]  No
 
 **Quote Components:**
 
@@ -1579,6 +1576,8 @@ Equipment cost markup: _____%
 Labor cost calculation: _______________
 Permit/disposal fees: _______________
 Financing options presentation: _______________
+
+lets have a conversation on what we are trying to achieve based on our attach pricing. 
 ```
 
 **Proposal Delivery:**
@@ -1604,49 +1603,109 @@ Financing options presentation: _______________
 **Sales Pipeline Stages in Odoo:**
 
 ```
-Pending Schedule
-(Lead qualified | Waiting to be booked | Entry point for all new calls, web forms, property management tickets)
+PROTOCOL 1
+SAME-DAY ONLINE SALES → VERIFIED → INSTALL (PrimeFlow™)
 
-Job Scheduled
-(Appointment booked | Technician assigned | Production slot reserved)
+Purpose:
+Allow customers to buy systems online or through AI instantly, then perform a same-day verification + immediate install.
 
-On The Way
-(Technician en route | Live ETA | Customer notified)
+FLOW
+1️⃣ Customer Purchases Online / AI Quote
 
-On-Site
-(Technician working | Diagnostic | Repair | Install | Quote generation in progress)
+AI qualifies:
+• Address
+• Square footage
+• Photos (if available)
+• Financing pre-approval
+• Deposit collected
 
-On Hold | Must Reschedule
-(Parts needed | Customer unavailable | Weather delays | Return trip pending)
+Pipeline → Quote Approved – Hold
 
-Paused | Return Same Day
-(Temporary same-day pause | Waiting on access | Waiting on parts | Same-day continuation)
+2️⃣ Fast Verification Dispatch
 
-Pending Quote Approval
-(Quote sent | Financing presented | Follow-up automation running)
+OPS-BRAIN auto dispatches:
 
-Quote Approved | Waiting for Parts
-(Sale won | Parts procurement | Install | Return trip staged)
+• Senior Tech Verification Slot
+• 30–45 minute inspection only
+• No sales pitch
+• Verify electrical | duct | gas | access
 
-Quote Approved | Hold
-(Sale approved but delayed | HOA | Permits | Customer scheduling)
+Pipeline → Paused | Return Same Day
 
-Completed
-(Job closed | Invoice finalized | Review request sent)
+3️⃣ Verification Result
+Result	Action
+Matches online quote	Install released immediately
+Minor adjustment	Revised price auto-approved
+Major conflict	Convert to Traditional Flow
+4️⃣ Install Crew Auto-Release
 
-Warranty | Review and Paid
-(Warranty service | Payment confirmed | Review captured)
+• Install crew auto-dispatched
+• Parts released
+• Permit auto-triggered
+• Customer notified
 
-Invoices Not Paid
-(AR follow-up | Collections | Payment resolution)
+Pipeline → Completed
 
-Closed
-(Final financial close | Job archived)
+Controls
+
+• No same-day without deposit
+• No deviation allowed by tech
+• All photos required
+• Auto audit trail
+• Emergency override allowed
+
+PROTOCOL 2
+TECH / SALES CLOSE → AI IVR CLOSE (ConversionFlow™)
+
+Purpose:
+Allow techs & sales to close deals in the field using AI IVR as a closing & processing engine.
+
+FLOW
+1️⃣ Tech flags Install Candidate
+
+Pipeline → Pending Quote Approval
+
+2️⃣ Tech calls IVR “Close Line”
+
+AI IVR:
+• Reads proposal
+• Presents Good/Better/Best
+• Presents financing
+• Records acceptance
+• Collects deposit
+
+3️⃣ Customer Voice-Approves
+
+AI records:
+• System selection
+• Price
+• Financing or cash
+• Consent & signature capture
+
+Pipeline → Quote Approved – Waiting for Parts
+
+4️⃣ OPS Dispatches Install
+
+• Install crew scheduled
+• Parts pulled
+• Permits queued
+• Job locked
+
+Controls
+
+• IVR recordings stored
+• Auto financing enforcement
+• No field discounting
+• All closings logged
+• Same-day premium logic applies
+PAID IN FULL DISCOUNT- 2.5%
 ```
 
 **Automated Follow-up Sequences:**
 
 ```csharp
+if not same day with half down or paid in full
+
 Quote sent →
 Immediate thank-you text + financing options + scheduling link
 
@@ -1667,8 +1726,8 @@ Enter 90-day reactivation drip
 **What actions move a lead to customer status:**
 
 - [ ]  Quote accepted
-- [ ]  Deposit received
-- [x]  Work order created
+- [x]  Deposit received
+- [ ]  Work order created
 - [ ]  Other: ___
 
 **Client Comments:**
@@ -1676,7 +1735,9 @@ Enter 90-day reactivation drip
 <aside>
 💬
 
-[Add any notes about sales pipeline]
+```jsx
+if not same day with half down or paid in full
+```
 
 </aside>
 
@@ -1699,9 +1760,9 @@ AI pre-screen → License & EPA verification → Experience scoring → Culture-
 
 Interview stages:
 
-Phone screen
+Phone screen using ai bot by provide a ivr number, once approved moved to the next phase
 
-Technical interview
+interview
 
 Ride-along working interview
 
@@ -1873,7 +1934,7 @@ Ongoing education requirements:
 **Technician Pay Structure:**
 
 - [ ]  Hourly: $_/hour
-- [ ]  Salary: $_/year
+- [x]  Salary: $_/year
 - [x]  Commission: 15% of sales for repairs and 5% on sale of installs
 - [x]  Flat rate per job
 - [x]  Hybrid: on bigger projects, commission techs get day rates
@@ -1887,8 +1948,68 @@ Ongoing education requirements:
 - [ ]  Job completion
 
 ```
-Commission tiers: _______________
-Spiffs/bonuses: _______________
+HVAC-R FINEST
+FIELD PARTNER PAY & COMPLETION OWNERSHIP POLICY™
+
+(Applies to Career Partner Subcontractor Service Technicians – 1099)
+
+COMPLETION OWNERSHIP RULE
+
+The technician who diagnoses and sells a repair is expected to complete that repair.
+Completion credit is only earned by the technician who performs the approved work, unless an approved transfer is granted.
+
+Failure to return and complete your own sold repair results in forfeiture of service commission.
+
+APPROVED TRANSFER CONDITIONS
+
+(Only these allow transfer of completion credit)
+
+• Parts unavailable
+• Customer schedule prevents return
+• Dispatch-approved reroute
+• Emergency reassignment
+• Safety or access restriction
+• Weather delay
+• Supervisor direction
+
+SERVICE COMMISSION LADDER (Service Work Only)
+Time With Company	Base Commission
+0 – 24 Months	16%
+2 – 4 Years	18%
+4+ Years	20%
+
+(Applies to service labor, IAQ, accessories & memberships — excludes equipment.)
+
+EQUIPMENT SALES BONUS
+
++2.5% on equipment sales only
+(Condensers | Furnaces | Air handlers | Coils | RTUs | Mini-splits)
+
+WARRANTY & MAJOR COMPONENT BONUSES
+
+(Split evenly among crew)
+
+Job Type	Bonus
+Compressor (Warranty)	$175
+Condenser Coil (Warranty)	$220
+Evaporator Coil (Warranty)	$220
+Compressor (Non-Warranty)	$175
+INSTALLATION BONUSES
+
+(Split evenly among install crew)
+
+Equipment Installed	Bonus
+Condenser	$350
+Air Handler / Furnace	$350
+Coil	$350
+RTU	$550
+Complete Split System (3 pcs)	$1,050
+TRANSFER SPLIT RULE (Only When Approved)
+Role	Payout
+Originating Tech (sold)	40% of service commission
+Completing Tech	60% of service commission
+Equipment bonus	100% to selling tech
+Warranty & install bonuses	100% to completing crew
 ```
 
 **Overtime Rules:**
@@ -1903,14 +2024,132 @@ Double-time threshold: _____ hours
 
 **Time tracking integrated with Odoo:**
 
-- [ ]  Yes
+- [x]  Yes
 - [ ]  No
 
 ```
 Time tracking method: _______________
 Approval workflow before payroll run: _______________
 Payroll processing system: _______________
+
+OFFICE STAFF (W-2)
+
+Time tracking method:
+Odoo Attendance App
+• Clock-in | Clock-out | Meeting | Training | Lunch events
+
+Approval workflow before payroll run:
+Supervisor review → HR (Linda) approval → Owner payroll release
+
+Payroll processing system:
+Odoo Payroll
+
+OFFICE CONTRACTORS (1099)
+
+Time tracking method:
+Odoo Projects (task | milestone based)
+
+Approval workflow before payroll run:
+Controller review → Owner approval
+
+Payroll processing system:
+Vendor Bills (Odoo Accounting)
+
+FIELD TECHNICIANS (W-2)
+
+Time tracking method:
+Odoo Field Service + Odoo Attendance
+• Job | Travel | Training | Shop events
+• GPS-linked job logs
+
+Approval workflow before payroll run:
+Dispatch review → Operations Manager → HR (Linda) → Owner payroll release
+
+Payroll processing system:
+Odoo Payroll
+
+FIELD SUBCONTRACTORS (1099)
+
+Time tracking method:
+Odoo Projects (job based | no hourly)
+
+Approval workflow before payroll run:
+Project Manager → Controller → Owner approval
+
+Payroll processing system:
+Vendor Bills (Odoo Accounting)
+
+INSTALLATION TEAM (W-2)
+
+Time tracking method:
+Odoo Field Service job logs + Attendance
+
+Approval workflow before payroll run:
+Installation Manager → HR → Owner payroll release
+
+Payroll processing system:
+Odoo Payroll
+
+INSTALL SUBCONTRACTORS (1099)
+
+Time tracking method:
+Odoo Projects (phase based milestones)
+
+Approval workflow before payroll run:
+Project Manager → Controller → Owner approval
+
+Payroll processing system:
+Vendor Bills (Odoo Accounting)
+
+SALES TEAM (W-2)
+
+Time tracking method:
+Odoo CRM activity logs + Attendance
+
+Approval workflow before payroll run:
+Sales Manager → HR → Owner payroll release
+
+Payroll processing system:
+Odoo Payroll
+
+SALES CONTRACTORS (1099)
+
+Time tracking method:
+Closed deals in Odoo CRM
+
+Approval workflow before payroll run:
+Sales Director → Controller → Owner approval
+
+Payroll processing system:
+Vendor Bills (Odoo Accounting)
+
+MANAGEMENT (W-2)
+
+Time tracking method:
+Odoo Attendance (salary | leadership events)
+
+Approval workflow before payroll run:
+Owner → HR
+
+Payroll processing system:
+Odoo Payroll
+
+CONSULTANTS (1099)
+
+Time tracking method:
+Project milestones in Odoo Projects
+
+Approval workflow before payroll run:
+Controller → Owner approval
+
+Payroll processing system:
+Vendor Bills (Odoo Accounting)
 ```
+
+|  |  |  |
+| --- | --- | --- |
+|  |  |  |
+|  |  |  |
 
 **Client Comments:**
 
@@ -1940,7 +2179,7 @@ Your AI voice agent will be built on **Vapi**, a leading AI voice platform that 
 **Do you already have a Vapi account?**
 
 - [ ]  Yes - Provide account details below
-- [ ]  No - We'll help you create one
+- [x]  No - We'll help you create one
 
 ```
 Vapi Account Email (if existing): _______________
@@ -1950,8 +2189,8 @@ Vapi Organization ID (if existing): _______________
 **Important:** You will need to add credits to your Vapi account. Typical costs are **$0.08-0.15 per minute** of call time. We'll help you estimate monthly usage based on your call volume.
 
 ```
-Estimated monthly call volume: _____ calls
-Average call duration: _____ minutes
+Estimated monthly call volume: 200 calls
+Average call duration: 5 minutes
 ```
 
 ---
@@ -1966,40 +2205,44 @@ Average call duration: _____ minutes
 
 **How do you want to handle phone numbers?**
 
-- [ ]  Port existing number to Twilio (recommended - full AI control)
+- [x]  Port existing number to Twilio (recommended - full AI control)
 - [ ]  Get new Twilio number and forward existing to it
 - [ ]  Keep existing provider and forward calls to Vapi number
-- [ ]  Already have Twilio account - use existing
+- [x]  Already have Twilio account - use existing
 
 **If you have an existing Twilio account:**
 
 ```
-Twilio Account SID: _______________
-Twilio Auth Token: _______________
-Existing phone numbers: _______________
+Twilio Account SID: <REDACTED - stored in .env as TWILIO_ACCOUNT_SID>
+Twilio Auth Token: <REDACTED - stored in .env as TWILIO_AUTH_TOKEN>
+Existing phone numbers: +18557683265
+
+***we have not integrated twilio to odoo, we are having trouble since we signed up. 
 ```
 
 **If porting or getting a new number:**
 
 ```
 Preferred area code: _______________
-Port existing number: Yes/No
-Current phone provider (if porting): _______________
-Account number (for porting): _______________
-Authorized person for port: _______________
+Port existing number: Yes
+Current phone provider (if porting): 972-372-4458
+Account number (for porting): QB2138210010323
+Authorized person for port: Linda and Junior
 ```
 
 **Additional phone numbers needed:**
 
-- [ ]  Sales line
-- [ ]  Service line
-- [ ]  After-hours line
-- [ ]  Other: ___
+- [x]  Sales line
+- [x]  Service line
+- [x]  After-hours line
+- [x]  Other: Customer Service/Customer satisfaction/manger/inhouse tech support
 
 <aside>
 💬
 
 [Add any notes about platform setup or phone numbers]
+
+what will inhouse management team look like for communitcation?
 
 </aside>
 
@@ -2008,24 +2251,27 @@ Authorized person for port: _______________
 ### 7.2 Current Phone System Details
 
 ```
-Provider: _______________
-Account admin contact: _______________
-Number of lines: _______________
+Provider: 8x8
+Account admin contact: Linda
+Number of lines: 1
 ```
 
 **Primary Business Phone Number:**
 
 ```
 [The main number customers call]
+972-372-4458
 ```
 
 **Department/Extension Numbers:**
 
 ```
-Service/Dispatch: _______________
-Sales: _______________
-Billing: _______________
-After-hours: _______________
+Service/Dispatch: 1001
+Sales: 1002
+Billing: 1003
+After-hours: 1004
+
+currently, we do not have these - these are numbers we would like to use for extension
 ```
 
 **Client Comments:**
@@ -2042,41 +2288,41 @@ After-hours: _______________
 **AI answers:**
 
 - [ ]  Immediately
-- [ ]  After ___ rings
+- [x]  After 2 rings
 
 ```
-If AI cannot handle: Transfer to _______________
+If AI cannot handle: Transfer to customer service
 ```
 
 **If no answer:**
 
-- [ ]  Voicemail
-- [ ]  Callback requested
-- [ ]  SMS sent
+- [x]  Voicemail
+- [x]  Callback requested
+- [x]  SMS sent
 
 **After-Hours Call Flow:**
 
-- [ ]  AI handles all calls
+- [x]  AI handles all calls
 - [ ]  Emergency calls transfer to: ___
 - [ ]  Non-emergency: Schedule callback for next business day
 
 **Call Types AI Should Handle:**
 
-- [ ]  New service requests
-- [ ]  Appointment scheduling
-- [ ]  Appointment changes/cancellations
-- [ ]  Service status updates
-- [ ]  General information (hours, service area, etc.)
-- [ ]  Payment questions
-- [ ]  Quote requests
-- [ ]  Other: ___
+- [x]  New service requests
+- [x]  Appointment scheduling
+- [x]  Appointment changes/cancellations
+- [x]  Service status updates
+- [x]  General information (hours, service area, etc.)
+- [x]  Payment questions
+- [x]  Quote requests
+- [x]  Other: ___sales and inhouse team
 
 **Call Types Requiring Human:**
 
 - [ ]  Complaints/escalations
-- [ ]  Complex technical questions
-- [ ]  Warranty claims
-- [ ]  Large commercial quotes
+- [x]  Complex technical questions
+- [x]  Warranty claims
+- [x]  Large commercial quotes
 - [ ]  Other: ___
 
 **Client Comments:**
@@ -2084,7 +2330,7 @@ If AI cannot handle: Transfer to _______________
 <aside>
 💬
 
-[Add any notes about call handling]
+[Add any notes about call handling] if escalation occurs. collect data and alert team to return call
 
 </aside>
 
@@ -2092,44 +2338,88 @@ If AI cannot handle: Transfer to _______________
 
 ```
 How should AI answer the phone?
-[Example: "Thank you for calling HAES HVAC, this is Alex, how can I help you today?"]
+[Example: "Thank you for calling HVACR FINEST, this is Jessica how can I help you today?"]
 ```
 
 **Brand Voice:**
 
 **Tone:**
 
-- [ ]  Professional
-- [ ]  Friendly
+- [x]  Professional
+- [x]  Friendly
 - [ ]  Technical
-- [ ]  Other: ___
+- [ ]  Other: caring
 
 **Formality:**
 
 - [ ]  Formal
 - [ ]  Casual
-- [ ]  Balanced
+- [x]  Balanced
 
 **Pacing:**
 
 - [ ]  Fast
-- [ ]  Moderate
+- [x]  Moderate
 - [ ]  Slow
 
 **Prohibited Words/Phrases:**
 
 ```
 What should AI never say?
-- _______________
-- _______________
+“That will definitely fix it.”
+
+“That will be covered under warranty.”
+
+“We guarantee that price.”
+
+“That is the cheapest option.”
+
+“We can waive fees.”
+
+“You don’t need a technician.”
+
+“It’s probably nothing.”
+
+“We caused that.”
+
+“We will reimburse you.”
+
+“We’ll fix it for free.”
+
+“We don’t charge for that.”
+
+“I promise.”
+
+“We are responsible for damages.”
+
+“You don’t need financing.”
+
+“We can match any price.”
+
+“That repair is permanent.”
+
+“We can work without a permit.”
+
+“We can bypass code.”
+
+“We can reuse old refrigerant.”
+
+“We’ll do it today no matter what.”
+
+and more as needed
 ```
 
 **Preferred Terminology:**
 
 ```
-Instead of "cheap" say: _______________
-Instead of "free" say: _______________
-Equipment terms: _______________
+Instead of “cheap” say:
+Best value option | Most cost-effective solution | Budget-friendly option
+
+Instead of “free” say:
+Included with service | Covered under your service visit | No additional charge | Waived
+
+Equipment terms:
+Comfort system | HVAC system | Heating & cooling system | Climate control equipment
 ```
 
 **Client Comments:**
@@ -2156,7 +2446,7 @@ Your AI system needs reliable hosting for backend APIs, webhooks, and optional f
 **Do you already have a [Fly.io](http://Fly.io) account?**
 
 - [ ]  Yes - Provide account details below
-- [ ]  No - We'll help you create one
+- [x]  No - We'll help you create one
 
 ```
 [Fly.io](http://Fly.io) Account Email (if existing): _______________
@@ -2171,22 +2461,22 @@ Your AI system needs reliable hosting for backend APIs, webhooks, and optional f
 
 **Do you want to use a custom domain for your dashboard/API?**
 
-- [ ]  Yes - I have a domain
+- [x]  Yes - I have a domain
 - [ ]  Yes - I need to purchase a domain
 - [ ]  No - Use default [Fly.io](http://Fly.io) subdomain ([yourapp.fly.dev](http://yourapp.fly.dev))
 
 **If using custom domain:**
 
 ```
-Domain name: _______________ (e.g., [haeshvac.com](http://haeshvac.com))
-Domain registrar: _______________ (GoDaddy, Namecheap, etc.)
-Domain admin access: Yes/No
+Domain name: hvacrfinest.com (e.g., [haeshvac.com](http://haeshvac.com))
+Domain registrar: Namecheap (GoDaddy, Namecheap, etc.)
+Domain admin access: Yes
 ```
 
 **Preferred subdomains:**
 
 ```
-Main website/dashboard: _______________ (e.g., [www.haeshvac.com](http://www.haeshvac.com))
+Main website/dashboard: www.hvacrfinest.com (e.g., [www.haeshvac.com](http://www.haeshvac.com))
 API endpoint: _______________ (e.g., [api.haeshvac.com](http://api.haeshvac.com))
 Other subdomains needed: _______________
 ```
@@ -2197,25 +2487,36 @@ Other subdomains needed: _______________
 
 **Backend Services:**
 
-- [ ]  Vapi webhook handlers (FastAPI)
-- [ ]  Odoo API integration layer
-- [ ]  Command Engine (HAEL)
-- [ ]  AI Brain microservices
-- [ ]  Database (if needed)
+- [x]  Vapi webhook handlers (FastAPI)
+- [x]  Odoo API integration layer
+- [x]  Command Engine (HAEL)
+- [x]  AI Brain microservices
+- [x]  Database (if needed)
 
 **Frontend Services (Optional):**
 
 - [ ]  KPI Dashboard
 - [ ]  Admin panel
 - [ ]  Customer portal
-- [ ]  Other: ___
+- [ ]  Other: ___ all will be on Odoo
 
 **Resource Requirements:**
 
 ```
-Expected monthly traffic: _______________
-Peak concurrent users: _______________
-Data storage needs: _______________
+Expected monthly traffic:
+2,000 – 5,000 requests per month
+
+(This includes Vapi webhooks, Odoo sync calls, automation jobs, retries, logging, follow-ups, etc.)
+
+Peak concurrent users:
+5 – 10 concurrent sessions
+
+(This covers peak Texas summer after-hours surge, multiple calls happening at once, and background jobs.)
+
+Data storage needs:
+5 – 10 GB (Postgres + logs + call transcripts)
+
+(Enough for 12+ months of call history, audit logs, job routing data, and automation state.)
 ```
 
 ---
@@ -2224,25 +2525,25 @@ Data storage needs: _______________
 
 **Who will handle deployments?**
 
-- [ ]  Innova team handles all deployments (recommended initially)
-- [ ]  Train our team to deploy independently
-- [ ]  Hybrid approach
+- [x]  Innova team handles all deployments (recommended initially)
+- [x]  Train our team to deploy independently
+- [x]  Hybrid approach
 
 **Deployment notifications:**
 
 ```
-Send deployment notifications to: _______________
-Preferred notification method: Email/Slack/SMS
+Send deployment notifications to: Junior and Linda
+Preferred notification method: Email
 ```
 
 **Backup requirements:**
 
-- [ ]  Daily automated backups
+- [x]  Daily automated backups
 - [ ]  Weekly automated backups
 - [ ]  Manual backups only
 
 ```
-Backup retention period: _____ days
+Backup retention period: 30 days
 ```
 
 ---
@@ -2253,9 +2554,9 @@ Backup retention period: _____ days
 
 **Additional security requirements:**
 
-- [ ]  DDoS protection
-- [ ]  WAF (Web Application Firewall)
-- [ ]  IP whitelisting
+- [x]  DDoS protection
+- [x]  WAF (Web Application Firewall)
+- [x]  IP whitelisting
 - [ ]  VPN access requirement
 - [ ]  Other: ___
 
@@ -2303,7 +2604,7 @@ Your website chat assistant provides 24/7 customer engagement on your website. T
 ### 8.1 Website Integration
 
 - [ ]  WordPress
-- [ ]  Odoo Website Builder
+- [x]  Odoo Website Builder
 - [ ]  Custom
 - [ ]  Other: ___
 
@@ -2311,13 +2612,15 @@ Your website chat assistant provides 24/7 customer engagement on your website. T
 
 ```
 [Your website address]
+
+hvacrfinest.com - sometimes our customers are not able to get on
 ```
 
 **Admin Access:**
 
 ```
-Username/Email: _______________
-Where to place chat widget: _______________
+Username/Email: Admin
+Where to place chat widget: bottom right corner (on all pages)
 ```
 
 **Client Comments:**
@@ -2337,48 +2640,59 @@ Where to place chat widget: _______________
 
 ```
 [What should appear when chat opens?]
+
+Hi! 👋 Welcome to HVAC-R Finest.
+I can help you schedule service, request a quote, or check availability.
+To get started, I just need a few quick details.
 ```
 
 **Pre-Chat Qualification:**
 
 **Name:**
 
-- [ ]  Required
+- [x]  Required
 - [ ]  Optional
 
 **Email:**
 
-- [ ]  Required
+- [x]  Required
 - [ ]  Optional
 
 **Phone:**
 
-- [ ]  Required
+- [x]  Required
 - [ ]  Optional
 
 **Service needed:**
 
-- [ ]  Required
+- [x]  Required
 - [ ]  Optional
 
 **Chat to Lead Conversion:**
 
 ```
-Create lead in Odoo after: _______________
-Lead assignment rule: _______________
-Email notification to: _______________
+Create lead in Odoo after:
+Pre-chat qualification completed
+(Name + Phone + Service Needed captured)
+
+Lead assignment rule:
+Auto-assign by service area + service type
+(Residential | Commercial | Property Management routed to the correct queue)
+
+Email notification to:
+Dispatch Team | Linda | info@hvacrfinest.com
 ```
 
 **Live Handoff:**
 
 **Chat can transfer to human:**
 
-- [ ]  Yes
+- [x]  Yes
 - [ ]  No
 
 ```
-Transfer to: _______________
-Hours for live transfer: _______________
+Transfer to: customer service
+Hours for live transfer: 8am to 5pm cst
 ```
 
 **Client Comments:**
@@ -2386,7 +2700,7 @@ Hours for live transfer: _______________
 <aside>
 💬
 
-[Add any notes about chat bot behavior]
+[Add any notes about chat bot behavior] make sure its enthusiastic and caring yet helpful
 
 </aside>
 
@@ -2399,11 +2713,22 @@ Hours for live transfer: _______________
 **Decision Tree - Which Brain Processes What:**
 
 ```
-Customer Input | Intent | Routed To Brain | Action
-"My AC broke" | Emergency repair | OPS-BRAIN | Schedule emergency call
-"How much for new system" | Quote request | REVENUE-BRAIN | Gather details, create lead
-"When is my payment due" | Billing inquiry | CORE-BRAIN | Lookup invoice, provide info
-_____ | _____ | _____ | _____
+"My AC broke" | Emergency repair | OPS-BRAIN | Create Odoo lead, route to emergency queue, schedule emergency call
+"No heat" | Emergency repair | OPS-BRAIN | Create Odoo lead, route to emergency queue, schedule emergency call
+"My AC isn’t cooling" | Repair request | OPS-BRAIN | Create Odoo lead, schedule diagnostic
+"I need maintenance" | Tune-up request | OPS-BRAIN | Create maintenance lead, route to maintenance queue
+"I want a new system" | Install inquiry | REVENUE-BRAIN | Gather install details, create install lead, present financing
+"How much for new system" | Quote request | REVENUE-BRAIN | Gather details, create quote lead, start follow-up automation
+"I need financing" | Financing inquiry | REVENUE-BRAIN | Present financing options, create quote lead
+"What’s the status of my install" | Project status | CORE-BRAIN | Lookup project in Odoo, provide status
+"When is my payment due" | Billing inquiry | CORE-BRAIN | Lookup invoice, provide balance and due date
+"I need a receipt" | Receipt request | CORE-BRAIN | Retrieve invoice, email receipt
+"I want to reschedule" | Reschedule request | OPS-BRAIN | Modify job schedule in Odoo
+"I need to cancel" | Cancellation | OPS-BRAIN | Cancel job, apply policy, notify dispatch
+"I have a warranty issue" | Warranty service | OPS-BRAIN | Create warranty job, priority return-trip routing
+"I have a complaint" | Escalation | CORE-BRAIN | Create escalation ticket, notify management
+"I want to join the maintenance club" | Membership inquiry | REVENUE-BRAIN | Create membership lead, enrollment flow
+"I manage rental homes" | Property management | OPS-BRAIN | Route to property management queue
 ```
 
 **Client Comments:**
@@ -2421,24 +2746,38 @@ _____ | _____ | _____ | _____
 
 **For Service Requests:**
 
-- [ ]  Name
-- [ ]  Phone
-- [ ]  Email
-- [ ]  Address
-- [ ]  Problem description
-- [ ]  System type
-- [ ]  Urgency level
-- [ ]  Preferred appointment time
-- [ ]  Other: ___
+- [x]  Name
+- [x]  Phone
+- [x]  Email
+- [x]  Address
+- [x]  Problem description
+- [x]  System type
+- [x]  Urgency level
+- [x]  Preferred appointment time
+- [x]  Other:
+    - [x]  Gate/Access code
+    - [x]  Property management company (if applicable)
+    - [x]  Pets on site (Yes/No)
+    - [x]  Occupied/Unoccupied
+    - [x]  Cooling/Heating not working (Yes/No)
+    - [x]  After-hours authorization (Yes/No)
 
 **For Quote Requests:**
 
-- [ ]  Property type
-- [ ]  Square footage
-- [ ]  Current system age
-- [ ]  Budget range
-- [ ]  Timeline
-- [ ]  Other: ___
+- [x]  Property type
+- [x]  Square footage
+- [x]  Current system age
+- [x]  Budget range
+- [x]  Timeline
+- [x]  Other:
+    - [x]  Utility type (Gas/Electric)
+    - [x]  Number of systems
+    - [x]  Ductwork condition (known/unknown)
+    - [x]  Preferred financing (yes/no)
+    - [x]  HOA approval required (yes/no)
+    - [x]  Ceiling height (standard/vaulted)
+    - [x]  data plate photos of equipment
+    - [x]  over all photos of inside and outside unit
 
 **Client Comments:**
 
@@ -2455,17 +2794,17 @@ _____ | _____ | _____ | _____
 
 **Before submitting this form, confirm you have:**
 
-- [ ]  Provided Odoo access credentials
+- [x]  Provided Odoo access credentials
 - [ ]  Listed all service types and pricing
-- [ ]  Defined technician roster and scheduling rules
-- [ ]  Specified inventory and parts management details
+- [x]  Defined technician roster and scheduling rules
+- [x]  Specified inventory and parts management details
 - [ ]  Outlined sales and marketing automation needs
 - [ ]  Configured payroll and HR workflows
-- [ ]  Set voice and chat bot parameters
-- [ ]  Defined KPI metrics and alert rules
-- [ ]  Identified systems for integration/migration
-- [ ]  Specified testing and training requirements
-- [ ]  Provided all stakeholder contact information
+- [x]  Set voice and chat bot parameters
+- [x]  Defined KPI metrics and alert rules
+- [x]  Identified systems for integration/migration
+- [x]  Specified testing and training requirements
+- [x]  Provided all stakeholder contact information
 
 ---
 

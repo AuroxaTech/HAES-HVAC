@@ -27,8 +27,11 @@ class StructuredFormatter(logging.Formatter):
         if not hasattr(record, "request_id"):
             record.request_id = "-"
 
+        # Generate timestamp using the formatter's formatTime method
+        timestamp = self.formatTime(record, self.datefmt)
+
         return (
-            f"{record.asctime} | {record.levelname:8} | "
+            f"{timestamp} | {record.levelname:8} | "
             f"[{record.request_id}] | {record.name} | {record.getMessage()}"
         )
 

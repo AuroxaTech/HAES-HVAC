@@ -10,6 +10,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
 from src.config.settings import get_settings
+from src.db.url import normalize_postgres_url
 
 
 @lru_cache
@@ -23,7 +24,7 @@ def get_engine() -> Engine:
     settings = get_settings()
 
     engine = create_engine(
-        settings.DATABASE_URL,
+        normalize_postgres_url(settings.DATABASE_URL),
         pool_size=settings.DB_POOL_SIZE,
         max_overflow=settings.DB_MAX_OVERFLOW,
         pool_timeout=settings.DB_POOL_TIMEOUT,

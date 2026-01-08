@@ -4,21 +4,47 @@
 
 ### Prerequisites
 
-1. Install the Fly CLI: https://fly.io/docs/hands-on/install-flyctl/
-2. Authenticate: `fly auth login`
-3. Have a Postgres database provisioned
+1. **Add Payment Method**: Fly.io requires a payment method to create apps and databases.
+   - Go to: https://fly.io/dashboard/hvacr-finest/billing
+   - Add a credit card or purchase credits
+   - This is required before proceeding
 
-### Initial Setup
+2. Install the Fly CLI: https://fly.io/docs/hands-on/install-flyctl/
+3. Authenticate: `fly auth login`
+4. Ensure `.env` file is configured with all credentials
+
+### Quick Deployment (Automated)
+
+After adding payment method, run the automated deployment script:
+
+```bash
+./scripts/deploy_to_fly.sh
+```
+
+This script will:
+- Create the Fly.io app
+- Create and attach PostgreSQL database
+- Set all secrets from your `.env` file
+- Configure the application
+
+Then deploy:
+```bash
+fly deploy
+```
+
+### Manual Setup
+
+If you prefer manual setup:
 
 1. Create the app:
    ```bash
-   fly apps create haes-hvac
+   fly apps create haes-hvac --org personal
    ```
 
 2. Create Postgres database:
    ```bash
-   fly postgres create --name haes-hvac-db
-   fly postgres attach haes-hvac-db --app haes-hvac
+   fly postgres create --name haes-db --region dfw --vm-size shared-cpu-1x --volume-size 10
+   fly postgres attach haes-db --app haes-hvac
    ```
 
 3. Set secrets (never commit these!):
@@ -27,19 +53,18 @@
    # fly secrets set DATABASE_URL="postgresql://..."
    
    # Odoo
-   fly secrets set ODOO_BASE_URL="https://your-odoo.odoo.com"
-   fly secrets set ODOO_DB="your-db-name"
-   fly secrets set ODOO_USERNAME="your-username"
-   fly secrets set ODOO_PASSWORD="your-api-key"
+   fly secrets set ODOO_BASE_URL="<your-odoo-base-url>" --app haes-hvac
+   fly secrets set ODOO_DB="<your-odoo-db-name>" --app haes-hvac
+   fly secrets set ODOO_USERNAME="<your-odoo-login-email>" --app haes-hvac
+   fly secrets set ODOO_PASSWORD="<your-odoo-password-or-api-key>" --app haes-hvac
    
    # Vapi
-   fly secrets set VAPI_API_KEY="your-vapi-key"
-   fly secrets set VAPI_WEBHOOK_SECRET="your-webhook-secret"
+   fly secrets set VAPI_API_KEY="<your-vapi-api-key>" --app haes-hvac
    
    # Twilio
-   fly secrets set TWILIO_ACCOUNT_SID="your-sid"
-   fly secrets set TWILIO_AUTH_TOKEN="your-token"
-   fly secrets set TWILIO_PHONE_NUMBER="+1234567890"
+   fly secrets set TWILIO_ACCOUNT_SID="<your-twilio-account-sid>" --app haes-hvac
+   fly secrets set TWILIO_AUTH_TOKEN="<your-twilio-auth-token>" --app haes-hvac
+   fly secrets set TWILIO_PHONE_NUMBER="<your-twilio-phone-number>" --app haes-hvac
    ```
 
 4. Deploy:

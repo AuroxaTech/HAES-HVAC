@@ -57,8 +57,11 @@ class Settings(BaseSettings):
     # =========================================================================
     # Vapi.ai Voice Integration
     # =========================================================================
-    VAPI_API_KEY: str = Field(default="", description="Vapi API key")
+    VAPI_API_KEY: str = Field(default="", description="Vapi private API key")
+    VAPI_PUBLIC_KEY: str = Field(default="", description="Vapi public API key")
     VAPI_WEBHOOK_SECRET: str = Field(default="", description="Vapi webhook verification secret")
+    VAPI_ASSISTANT_ID: str = Field(default="", description="Vapi assistant ID")
+    VAPI_TWILIO_PHONE_ID: str = Field(default="", description="Vapi Twilio phone ID")
 
     # =========================================================================
     # Twilio SMS/Voice

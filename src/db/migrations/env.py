@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirna
 
 from src.config.settings import get_settings
 from src.db.models import Base
+from src.db.url import normalize_postgres_url
 
 # this is the Alembic Config object
 config = context.config
@@ -31,7 +32,7 @@ target_metadata = Base.metadata
 def get_url() -> str:
     """Get database URL from settings."""
     settings = get_settings()
-    return settings.DATABASE_URL
+    return normalize_postgres_url(settings.DATABASE_URL)
 
 
 def run_migrations_offline() -> None:
