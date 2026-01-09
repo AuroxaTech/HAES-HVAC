@@ -14,7 +14,8 @@
       { "file": "doc/vapi/system_prompt.md", "purpose": "Riley AI assistant system prompt" },
       { "file": "doc/vapi/tool_schema.json", "purpose": "Vapi hael_route tool definition" },
       { "file": "doc/vapi/kb/customer_faq.md", "purpose": "Vapi Knowledge Base - Customer FAQ" },
-      { "file": "doc/vapi/kb/policies.md", "purpose": "Vapi Knowledge Base - Policies & Disclosures" }
+      { "file": "doc/vapi/kb/policies.md", "purpose": "Vapi Knowledge Base - Policies & Disclosures" },
+      { "file": "doc/vapi/kb/ops_intake_and_call_policy.md", "purpose": "Vapi Knowledge Base - Intake checklists, emergency rules, prohibited phrases, terminology" }
     ]
   },
   "architecture": {
@@ -156,7 +157,11 @@
       "documentation": {
         "system_prompt": "doc/vapi/system_prompt.md",
         "tool_schema": "doc/vapi/tool_schema.json",
-        "kb_docs": ["doc/vapi/kb/customer_faq.md", "doc/vapi/kb/policies.md"]
+        "kb_docs": [
+          "doc/vapi/kb/customer_faq.md",
+          "doc/vapi/kb/policies.md",
+          "doc/vapi/kb/ops_intake_and_call_policy.md"
+        ]
       },
       "notes": "Signature verification enforced in production via VAPI_WEBHOOK_SECRET"
     },
