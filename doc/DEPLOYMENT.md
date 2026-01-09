@@ -98,6 +98,72 @@ The app exposes these health endpoints:
 
 - `GET /health` - Overall health with DB status
 - `GET /monitoring/metrics` - Basic metrics
+- `GET /vapi/server/health` - Vapi Server URL health check
+
+## Vapi Integration
+
+### Overview
+
+The application uses **Vapi Server URL** integration for voice calls. All Vapi tool calls and transfer requests flow through:
+
+```
+POST /vapi/server
+```
+
+This endpoint handles:
+- **tool-calls**: Execute the `hael_route` tool via HAES pipeline
+- **transfer-destination-request**: Return transfer destination based on business hours
+- **end-of-call-report**: Log call summaries
+- **status-update**: Log status changes
+
+### Vapi Dashboard Configuration
+
+1. **Update Assistant "Riley"**:
+   - Go to Vapi Dashboard > Assistants > Riley
+   - Set **Server URL**: `https://haes-hvac.fly.dev/vapi/server`
+   - Set **Server URL Secret**: Same as `VAPI_WEBHOOK_SECRET` in Fly.io
+   - Enable **Server Messages**: `tool-calls`, `transfer-destination-request`, `end-of-call-report`, `status-update`
+
+2. **Create/Update Tool "hael_route"**:
+   - Go to Vapi Dashboard > Tools
+   - Create function tool with name: `hael_route`
+   - Parameters:
+     - `user_text` (string, required): Customer's request
+     - `conversation_context` (string, optional): Gathered info summary
+   - Server URL: `https://haes-hvac.fly.dev/vapi/server`
+   - Attach tool to assistant Riley
+
+3. **System Prompt**:
+   - Use the prompt from: `doc/vapi/system_prompt.md`
+
+4. **Knowledge Base** (optional):
+   - Upload docs from: `doc/vapi/kb/customer_faq.md`, `doc/vapi/kb/policies.md`
+
+### Transfer Policy
+
+- **During business hours (8 AM - 5 PM CST, Mon-Fri)**: Transfer to `972-372-4458`
+- **After hours**: Collect callback info, no transfer
+
+### Signature Verification
+
+In production, all requests to `/vapi/server` require a valid signature:
+- Header: `X-Vapi-Signature`
+- Optional: `X-Vapi-Timestamp`
+
+Set `VAPI_WEBHOOK_SECRET` in Fly.io to match Vapi's `serverUrlSecret`.
+
+### Testing Vapi Integration
+
+```bash
+# Run verification script locally
+python scripts/verify_vapi_server_url.py
+
+# Run against production (unsigned - will 401)
+python scripts/verify_vapi_server_url.py --prod
+
+# Run against production with signature
+VAPI_WEBHOOK_SECRET=your_secret python scripts/verify_vapi_server_url.py --prod --signed
+```
 
 ### Scaling
 

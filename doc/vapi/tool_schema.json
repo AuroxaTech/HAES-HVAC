@@ -1,0 +1,101 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Vapi hael_route Tool Definition",
+  "description": "Tool schema for HAES HVAC voice routing via Vapi",
+  "tool_definition": {
+    "type": "function",
+    "messages": [
+      {
+        "type": "request-start",
+        "content": "Let me check that for you."
+      },
+      {
+        "type": "request-complete",
+        "content": ""
+      },
+      {
+        "type": "request-failed",
+        "content": "I'm having trouble processing that request. Let me try again."
+      },
+      {
+        "type": "request-response-delayed",
+        "content": "This is taking a moment. Please hold.",
+        "timingMilliseconds": 3000
+      }
+    ],
+    "function": {
+      "name": "hael_route",
+      "description": "Routes customer requests through the HAES system for service scheduling, quotes, billing inquiries, and status updates. Call this tool after gathering required information from the customer.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "user_text": {
+            "type": "string",
+            "description": "The customer's request in their own words. Include key details like name, address, problem description, and urgency."
+          },
+          "conversation_context": {
+            "type": "string",
+            "description": "Optional. Brief summary of information gathered so far (name, phone, address, issue type, urgency, etc.)."
+          }
+        },
+        "required": ["user_text"]
+      }
+    },
+    "async": false,
+    "server": {
+      "url": "https://haes-hvac.fly.dev/vapi/server"
+    }
+  },
+  "expected_response_schema": {
+    "type": "object",
+    "properties": {
+      "results": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "toolCallId": {
+              "type": "string",
+              "description": "The ID from the original tool call"
+            },
+            "result": {
+              "type": "string",
+              "description": "JSON-stringified result object containing speak, action, and data"
+            }
+          },
+          "required": ["toolCallId", "result"]
+        }
+      }
+    },
+    "required": ["results"]
+  },
+  "result_object_schema": {
+    "type": "object",
+    "properties": {
+      "speak": {
+        "type": "string",
+        "description": "Message for the assistant to speak to the customer"
+      },
+      "action": {
+        "type": "string",
+        "enum": ["completed", "needs_human", "error"],
+        "description": "Outcome of the request"
+      },
+      "data": {
+        "type": "object",
+        "description": "Additional data about the result (ticket ID, missing fields, etc.)"
+      }
+    },
+    "required": ["speak", "action"]
+  },
+  "notes": {
+    "vapi_dashboard_instructions": [
+      "1. Go to Vapi Dashboard > Tools",
+      "2. Create new function tool with the definition above",
+      "3. Attach the tool to assistant 'Riley' (ID: f639ba5f-7c38-4949-9479-ec2a40428d76)",
+      "4. Set serverUrlSecret to match VAPI_WEBHOOK_SECRET in Fly.io"
+    ],
+    "server_url": "https://haes-hvac.fly.dev/vapi/server",
+    "signature_header": "X-Vapi-Signature"
+  }
+}

@@ -1,0 +1,177 @@
+# HVAC-R Finest - Policies & Disclosures
+
+**For Vapi Knowledge Base**  
+*Non-sensitive information only*
+
+---
+
+## Licensing & Certifications
+
+### Company Licensing
+HVAC-R Finest is licensed by the **Texas Department of Licensing and Regulation (TDLR)** to perform HVAC work in the state of Texas.
+
+### Technician Certifications
+All HVAC-R Finest technicians hold:
+- **EPA 608 Certification** – Required for handling refrigerants
+- Additional manufacturer-specific certifications as applicable
+
+---
+
+## Service Policies
+
+### Appointment Policy
+- Appointments are confirmed with a date and time window.
+- An adult (18+) must be present unless alternative arrangements are made.
+- We request **24 hours notice** for cancellations or reschedules.
+- No-show appointments may be subject to a trip charge.
+
+### Emergency Service Policy
+- Emergency service is available 24/7 for qualifying situations.
+- Emergency and after-hours premiums apply.
+- Emergency dispatch is prioritized over scheduled maintenance.
+- Gas leaks, CO detection, and safety hazards receive highest priority.
+
+### Weekend Availability Policy
+- Weekend appointments are limited and typically booked weeks in advance.
+- Standard recommendation: Book a weekday appointment for faster service.
+- If weekend availability opens, we will contact customers on the waitlist.
+
+---
+
+## Pricing Policies
+
+### Service Call Fees
+- A diagnostic/trip fee applies to all service calls.
+- Fee amount varies by customer type (residential, commercial, property management).
+- After-hours, emergency, weekend, and holiday calls include additional premiums.
+- **The diagnostic fee applies whether or not repairs are completed.**
+
+### Estimates & Proposals
+- Repair estimates are provided before work begins.
+- Customer approval is required before proceeding with repairs.
+- If a customer declines repair, only the diagnostic fee applies.
+- Installation quotes require a site visit for accurate assessment.
+
+### Price Changes
+- Quoted prices are valid for 30 days unless otherwise specified.
+- Material and equipment costs may vary based on supply chain conditions.
+- Promotional pricing is subject to availability and expiration.
+
+---
+
+## Payment Policies
+
+### Residential Customers
+- Payment is due **at completion of service**.
+- Accepted methods: Credit card, debit card, check, cash.
+- Financing available for equipment purchases (subject to approval).
+
+### Commercial Customers
+- Net 30 terms available for **approved accounts only**.
+- New commercial accounts may require credit approval.
+- Property management and national accounts follow contract-specific terms.
+
+### Declined Payments
+- If payment is declined, service may be placed on hold until resolved.
+- Outstanding balances must be settled before scheduling additional service.
+
+---
+
+## Warranty Policies
+
+### Labor Warranty
+- Standard labor warranty applies to all repairs (terms vary by service type).
+- Labor warranty is voided if equipment is tampered with by unauthorized parties.
+
+### Equipment Warranty
+- New equipment installations include manufacturer warranty.
+- Extended warranty options available at time of purchase.
+- Warranty registration may be required to activate coverage.
+
+### Warranty Claim Process
+1. Contact our office with your service history and issue description.
+2. A technician will assess the system.
+3. If covered under warranty, repair or replacement is provided per warranty terms.
+4. **Warranty coverage is determined case by case—coverage is not guaranteed until assessed.**
+
+---
+
+## Safety & Compliance
+
+### Permit Policy
+- All work requiring permits will be properly permitted.
+- **We do not perform work that bypasses building codes.**
+- Inspection scheduling is handled as part of permitted work.
+
+### Refrigerant Handling
+- All refrigerant work follows **EPA Section 608 regulations**.
+- Refrigerant is not reused between customers.
+- Proper recovery and disposal procedures are followed.
+
+### Electrical Safety
+- Electrical work is performed by qualified technicians.
+- If electrical issues exceed HVAC scope, we will refer to a licensed electrician.
+
+---
+
+## Privacy & Data
+
+### Customer Information
+- Customer information is used only for service delivery.
+- We do not sell customer data to third parties.
+- Payment information is processed securely.
+
+### Call Recording
+- Calls may be recorded for quality assurance and training.
+- By continuing the call, customers consent to recording.
+
+---
+
+## Communication Policies
+
+### What Our Team Can Say
+Our representatives are trained to:
+- Provide accurate service information
+- Explain diagnostic findings clearly
+- Present repair options with transparent pricing
+- Schedule appointments efficiently
+- Answer common questions about HVAC systems
+
+### What Our Team Cannot Promise
+Our representatives **will not** make guarantees or commitments regarding:
+- Warranty coverage before assessment
+- Exact repair outcomes
+- Price matching competitors
+- Waiving standard fees
+- Bypassing code requirements
+- Same-day service availability (depends on schedule)
+
+### Escalation Path
+If a customer is unsatisfied or has a complaint:
+1. Request a callback from a manager.
+2. Concerns will be reviewed within 1 business day.
+3. Resolution options will be presented based on findings.
+
+---
+
+## Terms of Service
+
+### Liability
+- HVAC-R Finest is not liable for pre-existing conditions.
+- Customer is responsible for disclosing known issues.
+- Damage caused by customer negligence or third parties is not covered.
+
+### Service Limitations
+- Service is subject to technician availability.
+- Extreme weather, supply chain issues, or emergencies may affect scheduling.
+- Access limitations (locked gates, aggressive pets, unsafe conditions) may delay service.
+
+### Agreement
+- Scheduling a service call constitutes agreement to these policies.
+- Changes to policies are posted on our website or communicated directly.
+
+---
+
+## Contact for Policy Questions
+
+For questions about our policies, contact our office during business hours (8 AM – 5 PM CST, Monday–Friday).

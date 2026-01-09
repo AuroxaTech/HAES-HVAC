@@ -151,6 +151,7 @@ class WebhookVerificationMiddleware(BaseHTTPMiddleware):
 
     WEBHOOK_PATHS = {
         "/webhooks/vapi": "vapi",
+        "/vapi/server": "vapi",  # Vapi Server URL endpoint
     }
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:

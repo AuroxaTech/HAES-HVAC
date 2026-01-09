@@ -249,10 +249,11 @@ async def health() -> dict[str, Any]:
 app.include_router(monitoring_router)
 
 # Module 8: Voice + Chat
-from src.api import vapi_tools_router, chat_router
+from src.api import vapi_tools_router, vapi_server_router, chat_router
 from src.webhooks import vapi_webhooks_router
 
 app.include_router(vapi_tools_router)
+app.include_router(vapi_server_router)  # Vapi Server URL endpoint
 app.include_router(chat_router)
 app.include_router(vapi_webhooks_router)
 

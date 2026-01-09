@@ -10,7 +10,11 @@
       { "file": "doc/README.md", "purpose": "Project overview and quick start guide" },
       { "file": "doc/DEPLOYMENT.md", "purpose": "Fly.io deployment guide and configuration" },
       { "file": "doc/Requirements.md", "purpose": "High-level project requirements" },
-      { "file": "doc/HAES - Requirement Discovery Document.md", "purpose": "Detailed RDD with business rules and policies" }
+      { "file": "doc/HAES - Requirement Discovery Document.md", "purpose": "Detailed RDD with business rules and policies" },
+      { "file": "doc/vapi/system_prompt.md", "purpose": "Riley AI assistant system prompt" },
+      { "file": "doc/vapi/tool_schema.json", "purpose": "Vapi hael_route tool definition" },
+      { "file": "doc/vapi/kb/customer_faq.md", "purpose": "Vapi Knowledge Base - Customer FAQ" },
+      { "file": "doc/vapi/kb/policies.md", "purpose": "Vapi Knowledge Base - Policies & Disclosures" }
     ]
   },
   "architecture": {
@@ -37,14 +41,17 @@
     { "module": "Module 8 - Voice + Chat", "status": "done", "last_updated": "2026-01-08" },
     { "module": "Module 9 - KPI + Reporting", "status": "done", "last_updated": "2026-01-08" },
     { "module": "Module 10 - Fly.io Deployment", "status": "done", "last_updated": "2026-01-08" },
-    { "module": "Module 11 - QA + Hardening", "status": "done", "last_updated": "2026-01-08" }
+    { "module": "Module 11 - QA + Hardening", "status": "done", "last_updated": "2026-01-08" },
+    { "module": "Vapi Full Setup", "status": "done", "last_updated": "2026-01-09" }
   ],
   "endpoints": [
     { "method": "GET", "path": "/", "purpose": "Service metadata" },
     { "method": "GET", "path": "/health", "purpose": "Health check with DB status" },
     { "method": "GET", "path": "/monitoring/metrics", "purpose": "Basic application metrics" },
-    { "method": "POST", "path": "/vapi/tools/hael_route", "purpose": "Vapi voice agent tool endpoint" },
-    { "method": "POST", "path": "/webhooks/vapi", "purpose": "Vapi call lifecycle webhooks" },
+    { "method": "POST", "path": "/vapi/server", "purpose": "Vapi Server URL endpoint (production integration)" },
+    { "method": "GET", "path": "/vapi/server/health", "purpose": "Vapi Server URL health check" },
+    { "method": "POST", "path": "/vapi/tools/hael_route", "purpose": "Vapi voice agent tool endpoint (legacy/testing)" },
+    { "method": "POST", "path": "/webhooks/vapi", "purpose": "Vapi call lifecycle webhooks (legacy)" },
     { "method": "GET", "path": "/webhooks/vapi/health", "purpose": "Webhook health check" },
     { "method": "POST", "path": "/chat/message", "purpose": "Website chat message processing" },
     { "method": "GET", "path": "/reports/latest", "purpose": "Get latest report by type" },
@@ -135,9 +142,23 @@
       "notes": "JSON-RPC over HTTPS, async httpx client"
     },
     "vapi": {
-      "status": "implemented",
-      "endpoints": ["/vapi/tools/hael_route", "/webhooks/vapi"],
-      "notes": "Single tool endpoint design"
+      "status": "fully_configured",
+      "integration_mode": "Server URL (tool-calls)",
+      "production_endpoint": "/vapi/server",
+      "legacy_endpoints": ["/vapi/tools/hael_route", "/webhooks/vapi"],
+      "tool_name": "hael_route",
+      "assistant_name": "Riley",
+      "transfer_policy": {
+        "business_hours": "8 AM - 5 PM America/Chicago, Mon-Fri",
+        "transfer_number": "+19723724458",
+        "after_hours": "Callback intake"
+      },
+      "documentation": {
+        "system_prompt": "doc/vapi/system_prompt.md",
+        "tool_schema": "doc/vapi/tool_schema.json",
+        "kb_docs": ["doc/vapi/kb/customer_faq.md", "doc/vapi/kb/policies.md"]
+      },
+      "notes": "Signature verification enforced in production via VAPI_WEBHOOK_SECRET"
     },
     "twilio": {
       "status": "placeholder",
@@ -170,7 +191,8 @@
       "tests/test_rate_limiter.py",
       "tests/test_webhook_verification.py",
       "tests/test_security.py",
-      "tests/test_reports_api.py"
+      "tests/test_reports_api.py",
+      "tests/test_vapi_server_url.py"
     ],
     "new_settings": [
       "RATE_LIMIT_ENABLED",

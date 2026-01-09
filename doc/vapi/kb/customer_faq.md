@@ -1,0 +1,182 @@
+# HVAC-R Finest - Customer FAQ
+
+**For Vapi Knowledge Base**  
+*Non-sensitive information only*
+
+---
+
+## About the Company
+
+### Who is HVAC-R Finest?
+HVAC-R Finest is a licensed HVAC company serving the Dallas-Fort Worth metroplex. We specialize in heating, ventilation, air conditioning, and refrigeration services for residential and commercial customers.
+
+### What areas do you serve?
+We serve the greater DFW area including:
+- **South/Central:** DeSoto, Red Oak, Lancaster, Cedar Hill, Duncanville
+- **West:** Arlington, Grand Prairie, Mansfield, Fort Worth
+- **East:** Rockwall, Forney, Garland, Mesquite, Rowlett
+
+### Are you licensed and insured?
+Yes. HVAC-R Finest is licensed by the Texas Department of Licensing and Regulation (TDLR). All our technicians are EPA 608 certified.
+
+---
+
+## Business Hours
+
+### What are your regular hours?
+Our office is open Monday through Friday, 8:00 AM to 5:00 PM Central Time.
+
+### Do you offer weekend service?
+Weekend appointments are limited and typically booked out. If you need service, we recommend booking a weekday appointment to ensure availability. If a weekend slot opens up, we'll contact you.
+
+### Do you offer emergency service?
+Yes, we offer 24/7 emergency service for qualifying situations like gas leaks, complete system failures, or extreme temperature conditions. Emergency and after-hours premiums apply.
+
+### What holidays are you closed?
+We observe the following holidays:
+- New Year's Day
+- Memorial Day
+- Independence Day (July 4th)
+- Labor Day
+- Veterans Day
+- Thanksgiving Day
+- Black Friday
+- Christmas Eve
+- Christmas Day
+- Week after Christmas
+
+---
+
+## Services
+
+### What services do you offer?
+- **Heating:** Furnace repair, heat pump service, heating installation
+- **Cooling:** AC repair, AC installation, refrigerant recharge
+- **Maintenance:** Seasonal tune-ups, preventive maintenance plans
+- **Commercial HVAC:** Office buildings, restaurants, retail, hotels
+- **Refrigeration:** Walk-in coolers, commercial refrigeration
+- **Indoor Air Quality:** Air filtration, duct cleaning, humidity control
+- **New Installations:** Complete system replacements and new construction
+
+### Do you work on all brands?
+Yes, our technicians are trained to work on all major HVAC brands including Carrier, Trane, Lennox, Goodman, Rheem, American Standard, Bryant, and more.
+
+---
+
+## Appointments & Scheduling
+
+### How do I schedule an appointment?
+You can schedule by:
+1. Calling our main number (answered 24/7 by our AI assistant Riley)
+2. Requesting online (coming soon)
+
+### How long are appointment windows?
+Appointment windows vary by service type:
+- **Emergency calls:** Immediate dispatch
+- **Standard service calls:** 2-4 hour windows
+- **Maintenance visits:** 2-hour windows
+- **Installation projects:** Full or half-day blocks
+
+### What if I need to reschedule?
+No problem! Call us to reschedule. We ask for at least 24 hours notice when possible so we can offer your slot to another customer.
+
+### Do you offer same-day service?
+Same-day service is available based on technician availability. Emergencies are prioritized for immediate dispatch.
+
+---
+
+## Emergencies
+
+### What counts as an HVAC emergency?
+- Gas leak or carbon monoxide smell
+- Electrical burning smell
+- No heat when it's below 55°F outside
+- No AC when it's above 85°F outside
+- Complete system failure (no airflow at all)
+- Water leak from your HVAC system
+- Server room or medical equipment cooling failure
+- Senior, infant, or medically-vulnerable occupant without conditioning
+
+### What should I do if I smell gas?
+1. Leave the building immediately
+2. Do not use electrical switches or phones inside
+3. Call 911 from outside
+4. Then call us for HVAC support
+
+### Is there an extra charge for emergency service?
+Yes, emergency and after-hours service includes a premium due to expedited dispatch and technician availability outside normal hours.
+
+---
+
+## Pricing & Payment
+
+### How much does a service call cost?
+Service call pricing depends on customer type and timing:
+- **Residential:** Diagnostic fee starting at $125
+- **Commercial:** Diagnostic fee starting at $250
+- **After-hours/Emergency:** Additional premium applies
+
+*Final pricing depends on the specific service needed. Our technician will provide a full estimate before any work begins.*
+
+### What payment methods do you accept?
+- Credit cards (Visa, Mastercard, American Express, Discover)
+- Debit cards
+- Checks
+- Cash
+
+### Do you offer financing?
+Yes, financing options are available for equipment installations and major repairs. Ask our team for details.
+
+### When is payment due?
+- **Residential:** Payment is due at completion of service
+- **Commercial:** Net 30 terms available for approved accounts
+
+---
+
+## Quotes & Estimates
+
+### How do I get a quote for a new system?
+Call us to request a quote. We'll gather information about your property and needs, then schedule a site visit for a complete assessment and proposal.
+
+### Is the estimate free?
+Site visits for replacement/installation quotes are typically complimentary. Our team will confirm when scheduling.
+
+### How long is a quote valid?
+Quotes are typically valid for 30 days, subject to equipment and material availability.
+
+---
+
+## Warranties & Guarantees
+
+### Do you offer a warranty on your work?
+Yes, we stand behind our work. Specific warranty terms depend on the type of service or installation. Our technician will explain warranty coverage at the time of service.
+
+### What about manufacturer warranties?
+We honor all manufacturer warranties on equipment we install. Extended warranties are also available for purchase.
+
+*Note: Warranty claims must be evaluated by our team. Coverage determinations are made case by case.*
+
+---
+
+## Preparing for Your Appointment
+
+### How should I prepare for the technician visit?
+- Clear the area around your HVAC equipment
+- Note any gate codes or access instructions
+- Secure pets if needed
+- Have an adult (18+) present for the appointment
+- Know where your thermostat and electrical panel are located
+
+### Do I need to be home?
+An adult (18+) should be present unless prior arrangements are made with our office.
+
+---
+
+## Contact
+
+### How do I reach you?
+- **Phone:** Call our main number (answered 24/7)
+- **Website:** www.hvacrfinest.com
+
+### What if I have a complaint?
+We take all feedback seriously. Ask to speak with a manager or request a callback from our office to discuss your concerns.

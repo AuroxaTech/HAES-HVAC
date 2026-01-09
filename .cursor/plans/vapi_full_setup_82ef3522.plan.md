@@ -4,42 +4,42 @@ overview: Make Vapi fully functional for HAES by adding a production-grade assis
 todos:
   - id: vapi-prompt
     content: Create Riley system prompt + policy docs from RDD (tone, prohibited phrases, fail-closed intake, weekend/after-hours policy) and keep them non-sensitive
-    status: pending
+    status: completed
   - id: vapi-tool-schema
     content: Define Vapi tool `hael_route` schema (user_text + conversation_context) and attach it to assistant
-    status: pending
+    status: completed
     dependencies:
       - vapi-prompt
   - id: backend-vapi-server-url
     content: Implement Vapi Server URL endpoint (`POST /vapi/server`) supporting `tool-calls` and `transfer-destination-request` with signature verification
-    status: pending
+    status: completed
     dependencies:
       - vapi-tool-schema
   - id: handoff-hours
     content: Implement deterministic business-hours transfer policy (8am–5pm America/Chicago) to 972-372-4458; after-hours callback intake
-    status: pending
+    status: completed
     dependencies:
       - backend-vapi-server-url
   - id: kb-pack
     content: Create curated KB documents (FAQs + policies + disclosures) and upload to Vapi Knowledge Base; ensure operational actions still require tool usage
-    status: pending
+    status: completed
     dependencies:
       - vapi-prompt
   - id: vapi-dashboard-config
     content: "Update Vapi assistant: serverUrl=/vapi/server, serverUrlSecret, serverMessages; route phone number to assistant; validate toolIds"
-    status: pending
+    status: completed
     dependencies:
       - backend-vapi-server-url
       - handoff-hours
       - kb-pack
   - id: verification
     content: Add test + scripts for signed tool-calls payload; run production smoke tests; run 3 real inbound call scenarios (OPS/REVENUE/CORE) and verify Odoo artifacts + audit_log
-    status: pending
+    status: completed
     dependencies:
       - vapi-dashboard-config
   - id: docs-context
     content: Update doc/DEPLOYMENT.md and .cursor/context.json to reflect new Vapi Server URL architecture and endpoints
-    status: pending
+    status: completed
     dependencies:
       - verification
 ---
