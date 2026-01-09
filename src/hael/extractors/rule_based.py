@@ -21,96 +21,169 @@ INTENT_KEYWORDS: dict[Intent, list[str]] = {
     # PEOPLE-BRAIN intents (check first - more specific)
     Intent.HIRING_INQUIRY: [
         "are you hiring", "hiring", "job opening", "position available",
-        "career", "employment opportunity", "work for you",
-        "apply for", "application", "looking for work", "job",
+        "career", "employment opportunity", "employment opportunities",
+        "work for you", "apply for a position", "apply for", "application",
+        "looking for work", "job", "positions open", "positions available",
+        "join your team", "looking for employment", "technician positions",
+        "need technicians", "do you need hvac", "need hvac technicians",
     ],
     Intent.ONBOARDING_INQUIRY: [
         "onboarding", "new hire", "first day", "orientation",
-        "paperwork", "training schedule",
+        "paperwork", "training schedule", "new employee",
+        "employee setup", "report on my first day", "what do i need for my first day",
     ],
     Intent.PAYROLL_INQUIRY: [
         "payroll", "paycheck", "pay stub", "my commission",
-        "direct deposit", "w-2", "tax form", "get paid", "my pay",
+        "direct deposit", "w-2", "w2", "tax form", "get paid", "my pay",
+        "payday", "when do i get paid", "pay stubs", "commission calculated",
+        "paycheck is wrong",
+    ],
+
+    # REVENUE-BRAIN intents (put before SERVICE_REQUEST so they win ties)
+    Intent.QUOTE_REQUEST: [
+        "need a quote", "want a quote", "get a quote", "quote for",
+        "get an estimate", "give me an estimate", "estimate for replacing",
+        "quote", "estimate", "price for", "how much for",
+        "how much would", "how much does", "how much to",
+        "cost to", "cost of", "what's the cost", "what's the price",
+        "want to know the cost", "know the cost",
+        "new system", "replacement system", "new installation",
+        "install", "installation", "replacement",
+        "pricing", "bid", "proposal", "free estimate",
+        "price range", "interested in getting a quote", "pricing information",
+        "ballpark estimate", "what would it run", "quote request",
+    ],
+
+    # CORE-BRAIN intents (before SERVICE_REQUEST)
+    Intent.BILLING_INQUIRY: [
+        "bill", "billing", "charge", "charged", "statement",
+        "amount due", "owe", "balance", "overcharged", "double charged",
+        "billing question", "explain the charge", "explain these charges",
+        "why was i charged", "error on my bill", "mistake on my invoice",
+        "verify a charge", "review my billing", "outstanding balance",
+        "total amount due", "account balance", "why is my bill",
+        "question about my account", "service fee",
+    ],
+    Intent.PAYMENT_TERMS_INQUIRY: [
+        "payment terms", "payment options", "financing",
+        "when is payment", "payment due", "how to pay", "how can i pay",
+        "accept credit cards", "credit cards", "credit card",
+        "installments", "pay in installments",
+        "payment plans", "payment plan", "offer payment",
+        "financing options", "what's your payment policy",
+        "how long do i have to pay",
+    ],
+    Intent.INVOICE_REQUEST: [
+        "invoice", "receipt", "send invoice", "email invoice",
+        "copy of invoice", "invoice copy", "resend my invoice",
+        "duplicate invoice", "itemized invoice", "need documentation",
+        "need a receipt", "for taxes", "for my records",
+    ],
+    Intent.INVENTORY_INQUIRY: [
+        "parts", "part available", "in stock", "inventory",
+        "have the part", "equipment available", "parts availability",
+        "do you have this", "do you have the", "check if you have",
+        "do you have trane", "do you have carrier", "do you have lennox",
+        "is this available", "do you carry", "what brands do you stock",
+        "do you stock", "is this model", "check inventory",
+        "filter available", "is the filter", "filters",
+    ],
+    Intent.PURCHASE_REQUEST: [
+        "purchase a", "buy a", "order a new", "order a",
+        "want to order", "want to buy", "want to purchase",
+        "need to order", "need to purchase",
+        "order parts", "order equipment", "purchase", "buy",
+        "buy parts", "buy equipment", "place an order",
+        "order replacement", "order supplies", "can i buy",
+        "purchase order", "get shipped", "shipped",
+        "get a new filter", "new filter shipped",
     ],
 
     # OPS-BRAIN intents
     Intent.CANCEL_APPOINTMENT: [
-        "cancel my", "cancel the", "cancel appointment", "cancel service",
-        "don't need service", "no longer need", "want to cancel",
+        "cancel my appointment", "cancel my service", "cancel my booking",
+        "cancel the appointment", "cancel the service", "cancel appointment", 
+        "cancel service", "cancel the technician", "want to cancel",
+        "don't need service anymore", "don't need the service", 
+        "no longer need service", "no longer need", "remove my appointment",
+        "cancel tomorrow", "cancel scheduled", "i want to cancel",
+        "cancel my scheduled", "cancel scheduled visit",
     ],
     Intent.RESCHEDULE_APPOINTMENT: [
-        "reschedule", "change appointment", "move appointment",
-        "different time", "different day", "change the time",
+        "reschedule my appointment", "reschedule my service", "reschedule",
+        "change my appointment", "change the appointment", "change appointment",
+        "move my appointment", "move appointment", "different time",
+        "different day", "change the time", "can't make my appointment",
+        "push back my appointment", "change my booking",
     ],
     Intent.STATUS_UPDATE_REQUEST: [
-        "status of my", "where is the technician", "eta",
-        "technician coming", "update on my", "what's the status",
-        "track my", "when is the tech",
+        "status of my", "where is the technician", "where's the tech",
+        "eta", "technician coming", "update on my", "what's the status",
+        "track my", "when is the tech", "when will the tech",
+        "how long until", "is the technician on the way", "on the way",
+        "status update", "is my appointment still on", "when can i expect",
+        "someone arrives", "tech arrive",
     ],
     Intent.SCHEDULE_APPOINTMENT: [
-        "schedule", "book", "set up appointment", "arrange",
-        "available time", "next available", "earliest", "come by",
+        "schedule an appointment", "schedule appointment", "schedule a technician",
+        "book an appointment", "book appointment", "book a service",
+        "set up an appointment", "set up appointment", "make an appointment",
+        "set up a time", "arrange a service", "arrange service", "available time",
+        "next available", "earliest available", "earliest", "come by",
+        "get on the schedule", "times are available", "schedule a tune-up",
+        "schedule annual", "schedule maintenance", "book maintenance",
+        "come out tomorrow", "come tomorrow", "come out next",
     ],
+    
+    # SERVICE_REQUEST last (most generic - should lose ties to specific intents)
     Intent.SERVICE_REQUEST: [
         "need service", "need repair", "not working", "broken", "fix",
         "service call", "send technician", "tech out", "come out",
         "hvac problem", "ac problem", "heating problem", "furnace problem",
-        "unit not working", "system down", "need help with",
-        "my ac", "my hvac", "my furnace", "my heater",
-        "service request", "heater", "furnace", "ac ", "a/c", "air conditioner",
+        "unit not working", "system down", "system is down", "need help with",
+        "my ac is", "my ac", "my hvac", "my furnace", "my heater",
+        "service request", "heater", "furnace", "a/c", "air conditioner",
+        "air conditioning unit", "air conditioning",
         "not heating", "not cooling", "won't heat", "won't cool",
-        "requesting service", "request service", "schedule service",
-    ],
-
-    # REVENUE-BRAIN intents
-    Intent.QUOTE_REQUEST: [
-        "quote", "estimate", "price for", "how much", "cost",
-        "new system", "replacement", "install", "installation",
-        "pricing", "bid", "proposal",
-    ],
-
-    # CORE-BRAIN intents
-    Intent.BILLING_INQUIRY: [
-        "bill", "billing", "charge", "charged", "statement",
-        "amount due", "owe", "balance",
-    ],
-    Intent.PAYMENT_TERMS_INQUIRY: [
-        "payment terms", "payment options", "financing",
-        "when is payment", "payment due", "how to pay",
-    ],
-    Intent.INVOICE_REQUEST: [
-        "invoice", "receipt", "send invoice", "email invoice",
-        "copy of invoice", "invoice copy",
-    ],
-    Intent.INVENTORY_INQUIRY: [
-        "parts", "part available", "in stock", "inventory",
-        "have the part", "equipment available",
-    ],
-    Intent.PURCHASE_REQUEST: [
-        "order parts", "order equipment", "purchase", "buy",
-        "need to order",
+        "requesting service", "request service",
+        "heat pump", "heating system", "cooling system", "central air",
+        "stopped working", "stopped", "broke down",
+        "making noise", "making a noise", "strange noise", "popping sounds",
+        "won't turn on", "won't start", "isn't working", "not turning on",
+        "not coming on", "heat not", "fan not", "fan is not",
+        "blowing cold", "blowing hot", "blowing warm", "not blowing",
+        "compressor", "thermostat is", "thermostat not", "ductwork",
+        "air handler", "condenser", "evaporator", "coil", "short cycling",
+        "leaking water", "frozen", "technician needed", "need someone to look",
+        "system keeps", "smells weird", "loud noise", "pilot light",
+        "mini split", "window unit", "central heating",
+        "need ac service", "heater service", "ac service",
+        "high electric bills", "vents not blowing",
+        "malfunctioning", "needs freon", "outdoor unit",
+        # Emergency indicators that imply service needed
+        "gas leak", "smell gas", "smell burning", "carbon monoxide", "co detector",
+        "burning smell", "smoke", "sparks", "fire", "flooding", "water damage",
     ],
 }
 
-# Emergency detection keywords (always trigger emergency urgency)
+# Emergency detection keywords (always trigger emergency urgency - safety hazards)
 EMERGENCY_KEYWORDS = [
-    "gas leak", "smell gas", "carbon monoxide", "co detector",
-    "burning smell", "electrical smell", "smoke",
-    "sparks", "sparking", "fire", "flames",
-    "flooding", "water damage", "water leak",
-    "no heat", "no heating", "furnace won't", "heater won't",
-    "no ac", "no air", "no cooling", "ac won't", "air conditioner won't",
-    "server room", "data center", "medical", "medication",
+    "gas leak", "smell gas", "i smell gas", "carbon monoxide", "co detector",
+    "burning smell", "smell burning", "i smell burning",
+    "electrical smell", "smoke", "fire smell",
+    "sparks", "sparking", "fire", "flames", "caught fire",
+    "flooding", "water damage", "water leak", "leaking everywhere",
+    "server room", "data center", "medical equipment",
     "refrigeration", "freezer", "walk-in",
-    "emergency", "urgent", "immediately", "asap",
 ]
 
 # High urgency keywords (if not emergency)
 HIGH_URGENCY_KEYWORDS = [
-    "today", "right now", "as soon as possible",
+    "today", "right now", "as soon as possible", "right away",
     "very hot", "very cold", "uncomfortable",
-    "elderly", "baby", "infant", "children",
-    "health issue", "sick",
+    "elderly", "senior", "senior citizen", "baby", "infant", "newborn", "children",
+    "health issue", "sick", "urgent", "asap", "immediately", "emergency",
+    "no heat", "no heating", "no ac", "no cooling", "no air",
 ]
 
 # =============================================================================
@@ -118,7 +191,7 @@ HIGH_URGENCY_KEYWORDS = [
 # =============================================================================
 
 PHONE_PATTERN = re.compile(
-    r"(?:\+?1[-.\s]?)?\(?([0-9]{3})\)?[-.\s]?([0-9]{3})[-.\s]?([0-9]{4})"
+    r"(?:\+?1[-.\s/]?)?\(?([0-9]{3})\)?[-.\s/]?([0-9]{3})[-.\s/]?([0-9]{4})"
 )
 
 EMAIL_PATTERN = re.compile(
@@ -128,7 +201,7 @@ EMAIL_PATTERN = re.compile(
 ZIP_CODE_PATTERN = re.compile(r"\b(\d{5})(?:-\d{4})?\b")
 
 SQUARE_FOOTAGE_PATTERN = re.compile(
-    r"(\d{1,5})\s*(?:sq\.?\s*ft\.?|square\s*feet|sqft)", re.IGNORECASE
+    r"(\d[\d,]{0,4})\s*(?:sq\.?\s*ft\.?|square\s*(?:feet?|foot)|sqft|sf\b)", re.IGNORECASE
 )
 
 SYSTEM_AGE_PATTERN = re.compile(
@@ -245,7 +318,9 @@ class RuleBasedExtractor(BaseExtractor):
         # Square footage
         sqft_match = SQUARE_FOOTAGE_PATTERN.search(text)
         if sqft_match:
-            entities.square_footage = int(sqft_match.group(1))
+            # Remove commas from number before converting
+            sqft_str = sqft_match.group(1).replace(",", "")
+            entities.square_footage = int(sqft_str)
 
         # System age
         age_match = SYSTEM_AGE_PATTERN.search(text_lower)
@@ -258,7 +333,7 @@ class RuleBasedExtractor(BaseExtractor):
             entities.temperature_mentioned = int(temp_match.group(1))
 
         # Property type inference
-        if any(kw in text_lower for kw in ["commercial", "business", "office", "warehouse", "retail"]):
+        if any(kw in text_lower for kw in ["commercial", "business", "office", "warehouse", "retail", "restaurant", "store"]):
             entities.property_type = "commercial"
         elif any(kw in text_lower for kw in ["home", "house", "residential", "apartment", "condo"]):
             entities.property_type = "residential"
@@ -282,7 +357,7 @@ class RuleBasedExtractor(BaseExtractor):
         - Flooding/water damage
         - Medical/refrigeration/server room failures
         """
-        # Check for always-emergency keywords
+        # Check for always-emergency keywords (safety hazards)
         for keyword in EMERGENCY_KEYWORDS:
             if keyword in text_lower:
                 return UrgencyLevel.EMERGENCY
@@ -290,9 +365,15 @@ class RuleBasedExtractor(BaseExtractor):
         # Temperature-based emergency detection
         if entities.temperature_mentioned:
             temp = entities.temperature_mentioned
-            if "no heat" in text_lower and temp < 55:
+            # No heat with cold temperature is emergency
+            no_heat_phrases = ["no heat", "no heating", "heat not working", "heater not working"]
+            if any(phrase in text_lower for phrase in no_heat_phrases) and temp < 55:
                 return UrgencyLevel.EMERGENCY
-            if ("no ac" in text_lower or "no cooling" in text_lower) and temp > 85:
+            # No AC with hot temperature is emergency
+            no_ac_phrases = ["no ac", "no cooling", "ac not working", "ac broken", 
+                           "air conditioner not working", "air conditioner broken",
+                           "ac won't", "no air"]
+            if any(phrase in text_lower for phrase in no_ac_phrases) and temp > 85:
                 return UrgencyLevel.EMERGENCY
 
         # High urgency keywords
@@ -301,8 +382,8 @@ class RuleBasedExtractor(BaseExtractor):
                 return UrgencyLevel.HIGH
 
         # Default based on context
-        if "repair" in text_lower or "fix" in text_lower:
+        if any(kw in text_lower for kw in ["repair", "fix", "service", "tune-up", "tune up", "maintenance"]):
             return UrgencyLevel.MEDIUM
 
-        return UrgencyLevel.UNKNOWN
+        return UrgencyLevel.LOW
 

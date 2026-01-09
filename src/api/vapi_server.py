@@ -135,28 +135,118 @@ def get_transfer_destination() -> VapiTransferResponse:
 # ============================================================================
 
 def execute_hael_route(
-    user_text: str,
-    conversation_context: str | None,
+    parameters: dict[str, Any],
     tool_call_id: str,
     call_id: str | None,
 ) -> dict[str, Any]:
     """
     Execute the hael_route tool through the HAES pipeline.
     
+    Accepts structured parameters from Vapi:
+    - request_type: service_request, quote_request, etc.
+    - customer_name: Customer's full name
+    - phone: Phone number
+    - email: Email (optional)
+    - address: Full service address
+    - issue_description: Problem description
+    - urgency: emergency, today, this_week, flexible
+    - property_type: residential, commercial
+    
     Returns a dict with speak, action, and data.
     """
     request_id = generate_request_id()
     
     try:
-        # Combine user_text with conversation_context for better extraction
-        # The context contains structured info Riley collected (name, phone, address, etc.)
-        full_text = user_text
-        if conversation_context:
-            full_text = f"{user_text}\n\nContext: {conversation_context}"
+        # Extract structured parameters
+        request_type = parameters.get("request_type", "service_request")
+        customer_name = parameters.get("customer_name", "")
+        phone = parameters.get("phone", "")
+        email = parameters.get("email", "")
+        address = parameters.get("address", "")
+        issue_description = parameters.get("issue_description", "")
+        urgency = parameters.get("urgency", "flexible")
+        property_type = parameters.get("property_type", "residential")
         
-        # Extract intent and entities from combined text
+        # Also support legacy user_text/conversation_context format
+        user_text = parameters.get("user_text", "")
+        conversation_context = parameters.get("conversation_context", "")
+        
+        logger.info(f"hael_route params: type={request_type}, name={customer_name}, phone={phone}, address={address}")
+        
+        # Build a rich text representation for the extractor
+        # This combines structured data with any free-form text
+        text_parts = []
+        
+        if issue_description:
+            text_parts.append(issue_description)
+        if user_text:
+            text_parts.append(user_text)
+        if customer_name:
+            text_parts.append(f"Customer: {customer_name}")
+        if phone:
+            text_parts.append(f"Phone: {phone}")
+        if email:
+            text_parts.append(f"Email: {email}")
+        if address:
+            text_parts.append(f"Address: {address}")
+        if urgency:
+            text_parts.append(f"Urgency: {urgency}")
+        if property_type:
+            text_parts.append(f"Property: {property_type}")
+        if conversation_context:
+            text_parts.append(f"Context: {conversation_context}")
+        
+        full_text = ". ".join(text_parts) if text_parts else "general inquiry"
+        
+        # Extract intent and entities
         extractor = RuleBasedExtractor()
         extraction = extractor.extract(full_text)
+        
+        # Override entities with structured data (more reliable than extraction)
+        if customer_name:
+            extraction.entities.full_name = customer_name
+        if phone:
+            # Normalize phone format
+            clean_phone = "".join(c for c in phone if c.isdigit() or c == "+")
+            extraction.entities.phone = clean_phone
+        if email:
+            extraction.entities.email = email
+        if address:
+            extraction.entities.address = address
+            # Try to extract ZIP from address
+            import re
+            zip_match = re.search(r'\b(\d{5})(?:-\d{4})?\b', address)
+            if zip_match:
+                extraction.entities.zip_code = zip_match.group(1)
+        if issue_description:
+            extraction.entities.problem_description = issue_description
+        if property_type:
+            extraction.entities.property_type = property_type
+        
+        # Map urgency to UrgencyLevel
+        from src.hael.schema import UrgencyLevel
+        urgency_map = {
+            "emergency": UrgencyLevel.EMERGENCY,
+            "today": UrgencyLevel.HIGH,
+            "this_week": UrgencyLevel.MEDIUM,
+            "flexible": UrgencyLevel.LOW,
+        }
+        extraction.entities.urgency_level = urgency_map.get(urgency, UrgencyLevel.MEDIUM)
+        
+        # Map request_type to Intent if not already determined
+        from src.hael.schema import Intent
+        request_type_intent_map = {
+            "service_request": Intent.SERVICE_REQUEST,
+            "quote_request": Intent.QUOTE_REQUEST,
+            "schedule_appointment": Intent.SCHEDULE_APPOINTMENT,
+            "reschedule_appointment": Intent.RESCHEDULE_APPOINTMENT,
+            "cancel_appointment": Intent.CANCEL_APPOINTMENT,
+            "status_check": Intent.STATUS_UPDATE_REQUEST,
+            "billing_inquiry": Intent.BILLING_INQUIRY,
+            "general_inquiry": Intent.UNKNOWN,
+        }
+        if request_type in request_type_intent_map:
+            extraction.intent = request_type_intent_map[request_type]
         
         # Route to brain
         routing = route_command(extraction)
@@ -165,13 +255,13 @@ def execute_hael_route(
         command = build_hael_command(
             request_id=request_id,
             channel=Channel.VOICE,
-            raw_text=user_text,
+            raw_text=full_text,
             extraction=extraction,
             routing=routing,
             metadata={
                 "call_id": call_id,
                 "tool_call_id": tool_call_id,
-                "conversation_context": conversation_context,
+                "structured_params": parameters,
             },
         )
         
@@ -204,7 +294,6 @@ def execute_hael_route(
             action = "needs_human"
             data = {
                 "reason": "unknown_intent",
-                "raw_text": user_text,
             }
         
         return {
@@ -297,12 +386,8 @@ async def vapi_server_url(request: Request) -> dict[str, Any]:
                 logger.info(f"Processing tool: name={tool_name}, id={tool_call_id}")
                 
                 if tool_name == "hael_route":
-                    user_text = parameters.get("user_text", "")
-                    conversation_context = parameters.get("conversation_context")
-                    
                     result = execute_hael_route(
-                        user_text=user_text,
-                        conversation_context=conversation_context,
+                        parameters=parameters,
                         tool_call_id=tool_call_id,
                         call_id=call_id,
                     )
@@ -337,12 +422,8 @@ async def vapi_server_url(request: Request) -> dict[str, Any]:
                 logger.info(f"Processing tool (from toolCallList): name={tool_name}, id={tool_call_id}")
                 
                 if tool_name == "hael_route":
-                    user_text = parameters.get("user_text", "")
-                    conversation_context = parameters.get("conversation_context")
-                    
                     result = execute_hael_route(
-                        user_text=user_text,
-                        conversation_context=conversation_context,
+                        parameters=parameters,
                         tool_call_id=tool_call_id,
                         call_id=call_id,
                     )

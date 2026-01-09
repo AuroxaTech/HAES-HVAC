@@ -55,7 +55,7 @@ TECHNICIAN_ROSTER: dict[str, Technician] = {
             Certification.OSHA_10,
             Certification.COMMERCIAL,
         ],
-        service_areas=["787", "786", "785"],  # Austin area
+        service_areas=["787", "786", "785", "752", "750", "751"],  # Austin + Dallas area
         can_handle_emergency=True,
         can_handle_commercial=True,
     ),

@@ -25,20 +25,47 @@
     ],
     "function": {
       "name": "hael_route",
-      "description": "Routes customer requests through the HAES system for service scheduling, quotes, billing inquiries, and status updates. Call this tool after gathering required information from the customer.",
+      "description": "Submit a customer service request to the HAES system. Call this after collecting name, phone, address, and issue details from the customer.",
       "parameters": {
         "type": "object",
         "properties": {
-          "user_text": {
+          "request_type": {
             "type": "string",
-            "description": "The customer's request in their own words. Include key details like name, address, problem description, and urgency."
+            "enum": ["service_request", "quote_request", "schedule_appointment", "reschedule_appointment", "cancel_appointment", "status_check", "billing_inquiry", "general_inquiry"],
+            "description": "Type of request: service_request (repair/fix), quote_request (pricing for new system), schedule_appointment, reschedule_appointment, cancel_appointment, status_check, billing_inquiry, or general_inquiry"
           },
-          "conversation_context": {
+          "customer_name": {
             "type": "string",
-            "description": "Optional. Brief summary of information gathered so far (name, phone, address, issue type, urgency, etc.)."
+            "description": "Customer's full name"
+          },
+          "phone": {
+            "type": "string",
+            "description": "Customer's phone number for callback"
+          },
+          "email": {
+            "type": "string",
+            "description": "Customer's email address (optional)"
+          },
+          "address": {
+            "type": "string",
+            "description": "Full service address including street, city, state, and ZIP code"
+          },
+          "issue_description": {
+            "type": "string",
+            "description": "Description of the problem or request (e.g., 'heater not working', 'AC not cooling')"
+          },
+          "urgency": {
+            "type": "string",
+            "enum": ["emergency", "today", "this_week", "flexible"],
+            "description": "How urgent: emergency (safety issue), today, this_week, or flexible"
+          },
+          "property_type": {
+            "type": "string",
+            "enum": ["residential", "commercial"],
+            "description": "Type of property: residential or commercial"
           }
         },
-        "required": ["user_text"]
+        "required": ["request_type", "customer_name", "phone", "address", "issue_description"]
       }
     },
     "async": false,

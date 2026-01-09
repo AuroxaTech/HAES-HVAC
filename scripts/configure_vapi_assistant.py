@@ -20,6 +20,7 @@ Optional:
 import json
 import os
 import sys
+import argparse
 from pathlib import Path
 
 try:
@@ -83,20 +84,47 @@ def create_tool_definition() -> dict:
         ],
         "function": {
             "name": TOOL_NAME,
-            "description": "Routes customer requests through the HAES system for service scheduling, quotes, billing inquiries, and status updates. Call this tool after gathering required information from the customer.",
+            "description": "Submit a customer service request to the HAES system. Call this after collecting name, phone, address, and issue details.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "user_text": {
+                    "request_type": {
                         "type": "string",
-                        "description": "The customer's request in their own words. Include key details like name, address, problem description, and urgency."
+                        "enum": ["service_request", "quote_request", "schedule_appointment", "reschedule_appointment", "cancel_appointment", "status_check", "billing_inquiry", "general_inquiry"],
+                        "description": "Type of request: service_request (repair/fix), quote_request (pricing for new system), schedule_appointment, reschedule_appointment, cancel_appointment, status_check, billing_inquiry, or general_inquiry"
                     },
-                    "conversation_context": {
+                    "customer_name": {
                         "type": "string",
-                        "description": "Optional. Brief summary of information gathered so far (name, phone, address, issue type, urgency, etc.)."
+                        "description": "Customer's full name"
+                    },
+                    "phone": {
+                        "type": "string",
+                        "description": "Customer's phone number for callback"
+                    },
+                    "email": {
+                        "type": "string",
+                        "description": "Customer's email address (optional)"
+                    },
+                    "address": {
+                        "type": "string",
+                        "description": "Full service address including street, city, state, and ZIP code"
+                    },
+                    "issue_description": {
+                        "type": "string",
+                        "description": "Description of the problem or request (e.g., 'heater not working', 'AC not cooling')"
+                    },
+                    "urgency": {
+                        "type": "string",
+                        "enum": ["emergency", "today", "this_week", "flexible"],
+                        "description": "How urgent: emergency (safety issue), today, this_week, or flexible"
+                    },
+                    "property_type": {
+                        "type": "string",
+                        "enum": ["residential", "commercial"],
+                        "description": "Type of property: residential or commercial"
                     }
                 },
-                "required": ["user_text"]
+                "required": ["request_type", "customer_name", "phone", "address", "issue_description"]
             }
         },
         "server": {
@@ -132,20 +160,47 @@ def get_standalone_tool_payload() -> dict:
         ],
         "function": {
             "name": TOOL_NAME,
-            "description": "Routes customer requests through the HAES system for service scheduling, quotes, billing inquiries, and status updates. Call this tool after gathering required information from the customer.",
+            "description": "Submit a customer service request to the HAES system. Call this after collecting name, phone, address, and issue details.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "user_text": {
+                    "request_type": {
                         "type": "string",
-                        "description": "The customer's request in their own words. Include key details like name, address, problem description, and urgency."
+                        "enum": ["service_request", "quote_request", "schedule_appointment", "reschedule_appointment", "cancel_appointment", "status_check", "billing_inquiry", "general_inquiry"],
+                        "description": "Type of request: service_request (repair/fix), quote_request (pricing for new system), schedule_appointment, reschedule_appointment, cancel_appointment, status_check, billing_inquiry, or general_inquiry"
                     },
-                    "conversation_context": {
+                    "customer_name": {
                         "type": "string",
-                        "description": "Optional. Brief summary of information gathered so far (name, phone, address, issue type, urgency, etc.)."
+                        "description": "Customer's full name"
+                    },
+                    "phone": {
+                        "type": "string",
+                        "description": "Customer's phone number for callback"
+                    },
+                    "email": {
+                        "type": "string",
+                        "description": "Customer's email address (optional)"
+                    },
+                    "address": {
+                        "type": "string",
+                        "description": "Full service address including street, city, state, and ZIP code"
+                    },
+                    "issue_description": {
+                        "type": "string",
+                        "description": "Description of the problem or request (e.g., 'heater not working', 'AC not cooling')"
+                    },
+                    "urgency": {
+                        "type": "string",
+                        "enum": ["emergency", "today", "this_week", "flexible"],
+                        "description": "How urgent: emergency (safety issue), today, this_week, or flexible"
+                    },
+                    "property_type": {
+                        "type": "string",
+                        "enum": ["residential", "commercial"],
+                        "description": "Type of property: residential or commercial"
                     }
                 },
-                "required": ["user_text"]
+                "required": ["request_type", "customer_name", "phone", "address", "issue_description"]
             }
         },
         "server": {
@@ -187,50 +242,15 @@ def update_tool(api_key: str, tool_id: str, webhook_secret: str) -> dict:
     }
     
     # For PATCH, only include fields that can be updated (not name/type)
+    tool_def = get_standalone_tool_payload()
     payload = {
-        "async": False,
-        "messages": [
-            {
-                "type": "request-start",
-                "content": "Let me check that for you."
-            },
-            {
-                "type": "request-complete",
-                "content": ""
-            },
-            {
-                "type": "request-failed",
-                "content": "I'm having trouble processing that request. Let me try again."
-            },
-            {
-                "type": "request-response-delayed",
-                "content": "This is taking a moment. Please hold.",
-                "timingMilliseconds": 3000
-            }
-        ],
-        "function": {
-            "name": TOOL_NAME,
-            "description": "Routes customer requests through the HAES system for service scheduling, quotes, billing inquiries, and status updates. Call this tool after gathering required information from the customer.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "user_text": {
-                        "type": "string",
-                        "description": "The customer's request in their own words. Include key details like name, address, problem description, and urgency."
-                    },
-                    "conversation_context": {
-                        "type": "string",
-                        "description": "Optional. Brief summary of information gathered so far (name, phone, address, issue type, urgency, etc.)."
-                    }
-                },
-                "required": ["user_text"]
-            }
-        },
+        "async": tool_def.get("async", False),
+        "messages": tool_def.get("messages", []),
+        "function": tool_def.get("function", {}),
         "server": {
-            "url": SERVER_URL,
+            **tool_def.get("server", {}),
             "secret": webhook_secret,
-            "timeoutSeconds": 30
-        }
+        },
     }
     
     url = f"{VAPI_API_BASE}/tool/{tool_id}"
@@ -356,11 +376,121 @@ def verify_assistant(api_key: str, assistant_id: str) -> dict:
         return {}
 
 
+def upload_file(api_key: str, file_path: Path) -> str | None:
+    """Upload a file to Vapi and return file ID."""
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+    }
+    url = f"{VAPI_API_BASE}/file"
+
+    try:
+        with open(file_path, "rb") as f:
+            files = {"file": (file_path.name, f)}
+            resp = httpx.post(url, headers=headers, files=files, timeout=60.0)
+            resp.raise_for_status()
+            data = resp.json()
+            return data.get("id")
+    except Exception as e:
+        print(f"Warning: Failed to upload {file_path.name}: {e}")
+        return None
+
+
+def create_knowledge_base(api_key: str, name: str, file_ids: list[str]) -> str | None:
+    """Create a Vapi knowledge base and return knowledgeBaseId."""
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    url = f"{VAPI_API_BASE}/knowledge-base"
+
+    # Keep createPlan minimal — advanced chunking options can cause provider errors in some orgs.
+    payload = {
+        "name": name,
+        "provider": "trieve",
+        "searchPlan": {
+            "searchType": "semantic",
+            "topK": 3,
+            "removeStopWords": True,
+            "scoreThreshold": 0.7,
+        },
+        "createPlan": {
+            "type": "create",
+            "chunkPlans": [
+                {
+                    "fileIds": file_ids,
+                }
+            ],
+        },
+    }
+
+    try:
+        resp = httpx.post(url, headers=headers, json=payload, timeout=60.0)
+        resp.raise_for_status()
+        data = resp.json()
+        return data.get("id")
+    except Exception as e:
+        print(f"Warning: Failed to create knowledge base: {e}")
+        return None
+
+
+def attach_knowledge_base_to_assistant(api_key: str, assistant_id: str, knowledge_base_id: str) -> dict:
+    """Attach an existing knowledge base to an assistant while preserving current model settings."""
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    url = f"{VAPI_API_BASE}/assistant/{assistant_id}"
+    current = verify_assistant(api_key, assistant_id)
+    model = current.get("model", {}) if isinstance(current.get("model"), dict) else {}
+    if not model:
+        raise RuntimeError("Could not read current assistant model to attach knowledge base.")
+
+    # Vapi PATCH validates model.provider/model fields; send the full model object with only kb id changed.
+    model["knowledgeBaseId"] = knowledge_base_id
+    payload = {"model": model}
+
+    resp = httpx.patch(url, headers=headers, json=payload, timeout=60.0)
+    resp.raise_for_status()
+    return resp.json()
+
+
 def main():
     print("=" * 60)
     print("HAES HVAC - Vapi Assistant & Tool Configuration")
     print("=" * 60)
     print()
+
+    parser = argparse.ArgumentParser(description="Configure Vapi tool/assistant for HAES HVAC.")
+    parser.add_argument(
+        "--update-assistant",
+        action="store_true",
+        help="Update the assistant system prompt + inline tool definition. WARNING: may reset some assistant settings.",
+    )
+    parser.add_argument(
+        "--tool-only",
+        action="store_true",
+        help="Only update/create the standalone tool (recommended; will not touch assistant settings).",
+    )
+    parser.add_argument(
+        "--sync-kb",
+        action="store_true",
+        help="Upload local KB markdown files (doc/vapi/kb/*.md), create a Vapi knowledge base, and attach it to the assistant.",
+    )
+    parser.add_argument(
+        "--kb-name",
+        default="hvac-r-finest-kb",
+        help="Knowledge base name when using --sync-kb (default: hvac-r-finest-kb).",
+    )
+    parser.add_argument(
+        "--knowledge-base-id",
+        default=os.environ.get("VAPI_KNOWLEDGE_BASE_ID", ""),
+        help="Attach an existing knowledge base ID to the assistant (no upload). Can also be set via VAPI_KNOWLEDGE_BASE_ID.",
+    )
+    args = parser.parse_args()
+
+    # Default behavior: tool-only (safe). Assistant update must be explicitly requested.
+    if not args.update_assistant:
+        args.tool_only = True
     
     # Load environment variables
     api_key = get_env_var("VAPI_API_KEY")
@@ -369,9 +499,13 @@ def main():
     tool_id = os.environ.get("VAPI_TOOL_ID")  # Optional
     
     # Load system prompt
-    print("[1/4] Loading system prompt...")
-    system_prompt = load_system_prompt()
-    print(f"      Loaded {len(system_prompt)} characters")
+    system_prompt = ""
+    if args.update_assistant:
+        print("[1/4] Loading system prompt...")
+        system_prompt = load_system_prompt()
+        print(f"      Loaded {len(system_prompt)} characters")
+    else:
+        print("[1/4] Skipping system prompt load (tool-only mode)")
     
     # Find or create/update the standalone tool
     print("\n[2/4] Configuring standalone tool...")
@@ -399,10 +533,46 @@ def main():
         else:
             print("      ⚠ Tool creation failed (tool may need manual setup)")
     
-    # Update assistant
-    print("\n[3/4] Updating Vapi assistant...")
-    result = update_assistant(api_key, assistant_id, webhook_secret, system_prompt)
-    print("      ✓ Assistant updated successfully")
+    # Update assistant (optional; can reset settings because it overwrites model/tools)
+    if args.update_assistant:
+        print("\n[3/4] Updating Vapi assistant...")
+        _ = update_assistant(api_key, assistant_id, webhook_secret, system_prompt)
+        print("      ✓ Assistant updated successfully")
+    else:
+        print("\n[3/4] Skipping assistant update (tool-only mode)")
+
+    # Knowledge Base setup (optional)
+    if args.sync_kb or args.knowledge_base_id:
+        print("\n[KB] Configuring Knowledge Base...")
+        kb_id = args.knowledge_base_id.strip() if args.knowledge_base_id else ""
+
+        if args.sync_kb:
+            kb_dir = Path(__file__).parent.parent / "doc" / "vapi" / "kb"
+            kb_files = sorted(kb_dir.glob("*.md"))
+            if not kb_files:
+                print(f"Warning: No KB files found in {kb_dir}")
+            else:
+                print(f"Uploading {len(kb_files)} KB files...")
+                uploaded_ids: list[str] = []
+                for fp in kb_files:
+                    file_id = upload_file(api_key, fp)
+                    if file_id:
+                        print(f"  ✓ {fp.name} -> {file_id}")
+                        uploaded_ids.append(file_id)
+                if uploaded_ids:
+                    kb_id = create_knowledge_base(api_key, args.kb_name, uploaded_ids) or ""
+                    if kb_id:
+                        print(f"✓ Knowledge base created: {kb_id}")
+
+        if kb_id:
+            try:
+                attach_knowledge_base_to_assistant(api_key, assistant_id, kb_id)
+                print(f"✓ Attached knowledge base to assistant: {kb_id}")
+                print(f"  export VAPI_KNOWLEDGE_BASE_ID={kb_id}")
+            except Exception as e:
+                print(f"Warning: Failed to attach knowledge base: {e}")
+        else:
+            print("Warning: No knowledge base ID available to attach.")
     
     # Verify configuration
     print("\n[4/4] Verifying configuration...")
