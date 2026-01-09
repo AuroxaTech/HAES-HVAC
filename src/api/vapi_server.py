@@ -148,9 +148,15 @@ def execute_hael_route(
     request_id = generate_request_id()
     
     try:
-        # Extract intent and entities
+        # Combine user_text with conversation_context for better extraction
+        # The context contains structured info Riley collected (name, phone, address, etc.)
+        full_text = user_text
+        if conversation_context:
+            full_text = f"{user_text}\n\nContext: {conversation_context}"
+        
+        # Extract intent and entities from combined text
         extractor = RuleBasedExtractor()
-        extraction = extractor.extract(user_text)
+        extraction = extractor.extract(full_text)
         
         # Route to brain
         routing = route_command(extraction)
@@ -254,14 +260,41 @@ async def vapi_server_url(request: Request) -> dict[str, Any]:
         tool_call_list = message.get("toolCallList", [])
         tool_with_list = message.get("toolWithToolCallList", [])
         
+        # Debug: log the raw structure
+        logger.info(f"tool-calls payload: toolCallList={json.dumps(tool_call_list)[:500]}, toolWithToolCallList={json.dumps(tool_with_list)[:500]}")
+        
+        # Helper to extract tool name and parameters from various Vapi formats
+        def extract_tool_info(item: dict) -> tuple[str, str, dict]:
+            """Extract (tool_name, tool_call_id, parameters) from various Vapi formats."""
+            # Format 1: toolWithToolCallList item
+            tool_name = item.get("name", "")
+            tool_call = item.get("toolCall", {})
+            tool_call_id = tool_call.get("id", "") or item.get("id", "")
+            
+            # Parameters can be in multiple places
+            parameters = (
+                tool_call.get("parameters", {}) or
+                tool_call.get("arguments", {}) or
+                item.get("parameters", {}) or
+                item.get("arguments", {})
+            )
+            
+            # If toolCall has function.name, use that
+            func = tool_call.get("function", {})
+            if func:
+                tool_name = tool_name or func.get("name", "")
+                parameters = parameters or func.get("parameters", {}) or func.get("arguments", {})
+            
+            logger.debug(f"Extracted tool info: name={tool_name}, id={tool_call_id}, params={parameters}")
+            return tool_name, tool_call_id, parameters
+        
         # Prefer toolWithToolCallList if available
         if tool_with_list:
             results = []
             for item in tool_with_list:
-                tool_name = item.get("name", "")
-                tool_call = item.get("toolCall", {})
-                tool_call_id = tool_call.get("id", "")
-                parameters = tool_call.get("parameters", {})
+                tool_name, tool_call_id, parameters = extract_tool_info(item)
+                
+                logger.info(f"Processing tool: name={tool_name}, id={tool_call_id}")
                 
                 if tool_name == "hael_route":
                     user_text = parameters.get("user_text", "")
@@ -280,6 +313,7 @@ async def vapi_server_url(request: Request) -> dict[str, Any]:
                     ))
                 else:
                     # Unknown tool
+                    logger.warning(f"Unknown tool called: {tool_name}, full item: {json.dumps(item)[:300]}")
                     results.append(ToolCallResult(
                         toolCallId=tool_call_id,
                         result=json.dumps({
@@ -297,7 +331,10 @@ async def vapi_server_url(request: Request) -> dict[str, Any]:
             for tool_call in tool_call_list:
                 tool_call_id = tool_call.get("id", "")
                 tool_name = tool_call.get("name", "")
-                parameters = tool_call.get("parameters", {})
+                # Vapi uses "arguments" not "parameters" in toolCallList
+                parameters = tool_call.get("parameters", {}) or tool_call.get("arguments", {})
+                
+                logger.info(f"Processing tool (from toolCallList): name={tool_name}, id={tool_call_id}")
                 
                 if tool_name == "hael_route":
                     user_text = parameters.get("user_text", "")
@@ -315,6 +352,7 @@ async def vapi_server_url(request: Request) -> dict[str, Any]:
                         result=json.dumps(result),
                     ))
                 else:
+                    logger.warning(f"Unknown tool called: {tool_name}, full: {json.dumps(tool_call)[:300]}")
                     results.append(ToolCallResult(
                         toolCallId=tool_call_id,
                         result=json.dumps({

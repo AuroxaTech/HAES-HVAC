@@ -57,6 +57,9 @@ INTENT_KEYWORDS: dict[Intent, list[str]] = {
         "hvac problem", "ac problem", "heating problem", "furnace problem",
         "unit not working", "system down", "need help with",
         "my ac", "my hvac", "my furnace", "my heater",
+        "service request", "heater", "furnace", "ac ", "a/c", "air conditioner",
+        "not heating", "not cooling", "won't heat", "won't cool",
+        "requesting service", "request service", "schedule service",
     ],
 
     # REVENUE-BRAIN intents
