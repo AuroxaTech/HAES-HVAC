@@ -8,7 +8,9 @@
     "folder": "doc/",
     "files": [
       { "file": "doc/README.md", "purpose": "Project overview and quick start guide" },
+      { "file": "doc/PROJECT_FLOW.md", "purpose": "End-to-end project flow documentation - what HAES does and what happens step-by-step" },
       { "file": "doc/DEPLOYMENT.md", "purpose": "Fly.io deployment guide and configuration" },
+      { "file": "doc/VAPI_TROUBLESHOOTING.md", "purpose": "Vapi integration troubleshooting guide with common issues and solutions" },
       { "file": "doc/Requirements.md", "purpose": "High-level project requirements" },
       { "file": "doc/HAES - Requirement Discovery Document.md", "purpose": "Detailed RDD with business rules and policies" },
       { "file": "doc/vapi/system_prompt.md", "purpose": "Riley AI assistant system prompt" },
