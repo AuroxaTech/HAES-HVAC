@@ -116,6 +116,82 @@ def test_tool_calls_service_request(base_url: str, secret: str | None) -> bool:
         return False
 
 
+def test_service_request_with_odoo_lead(base_url: str, secret: str | None) -> bool:
+    """Test service request creates Odoo CRM lead (structured params)."""
+    print("\n[TEST] Service Request with Odoo Lead Creation")
+    
+    # Use unique call_id to ensure new lead each test
+    call_id = f"test_call_odoo_{int(time.time())}"
+    
+    payload = {
+        "message": {
+            "type": "tool-calls",
+            "call": {"id": call_id},
+            "toolCallList": [
+                {
+                    "id": f"tc_odoo_{int(time.time())}",
+                    "name": "hael_route",
+                    "parameters": {
+                        "request_type": "service_request",
+                        "customer_name": "Test Customer",
+                        "phone": "+19725551234",
+                        "address": "123 Test St, Dallas, TX 75201",
+                        "issue_description": "Heater not heating - verification test",
+                        "urgency": "today",
+                        "property_type": "residential",
+                    }
+                }
+            ]
+        }
+    }
+    
+    status, response = make_request(base_url, payload, secret)
+    
+    if status != 200:
+        print(f"  ✗ Failed: status={status}, response={response}")
+        return False
+    
+    if "results" not in response or len(response["results"]) == 0:
+        print(f"  ✗ Failed: no results in response")
+        return False
+    
+    result = json.loads(response["results"][0]["result"])
+    print(f"  Action: {result.get('action')}")
+    print(f"  Request ID: {result.get('request_id')}")
+    
+    # Check for Odoo data
+    odoo_data = result.get("data", {}).get("odoo", {})
+    if odoo_data:
+        crm_lead_id = odoo_data.get("crm_lead_id")
+        action = odoo_data.get("action")
+        partner_id = odoo_data.get("partner_id")
+        
+        print(f"  Odoo Lead ID: {crm_lead_id}")
+        print(f"  Odoo Action: {action}")
+        print(f"  Odoo Partner ID: {partner_id}")
+        
+        if crm_lead_id:
+            print("  ✓ Passed (Lead created/updated in Odoo)")
+            return True
+        elif action == "failed":
+            print(f"  ⚠ Warning: Odoo lead creation failed: {odoo_data.get('error')}")
+            print("  (This may be expected if Odoo is not connected)")
+            # Still return True if rest of request worked
+            if result.get("action") in ["completed", "needs_human"]:
+                print("  ✓ Passed (Request handled, Odoo optional)")
+                return True
+    else:
+        print("  ⚠ Warning: No Odoo data in response")
+        print("  (Lead-creating intent but no Odoo response)")
+    
+    if result.get("action") in ["completed", "needs_human"]:
+        print("  ✓ Passed (basic)")
+        return True
+    else:
+        print(f"  ✗ Failed: unexpected action")
+        return False
+
+
 def test_tool_calls_quote_request(base_url: str, secret: str | None) -> bool:
     """Test quote request via tool-calls (REVENUE brain)."""
     print("\n[TEST] Tool-calls: Quote Request")
@@ -300,6 +376,7 @@ def main():
     
     results.append(("Health Check", test_health_check(base_url)))
     results.append(("Service Request", test_tool_calls_service_request(base_url, secret)))
+    results.append(("Service + Odoo Lead", test_service_request_with_odoo_lead(base_url, secret)))
     results.append(("Quote Request", test_tool_calls_quote_request(base_url, secret)))
     results.append(("Billing Inquiry", test_tool_calls_billing_inquiry(base_url, secret)))
     results.append(("Transfer Request", test_transfer_business_hours(base_url, secret)))

@@ -2,6 +2,7 @@
 HAES HVAC - Vapi Webhooks
 
 Webhook handlers for Vapi call lifecycle events.
+Writes to audit_log for KPI tracking.
 """
 
 import logging
@@ -12,6 +13,8 @@ from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel, Field
 
 from src.utils.request_id import generate_request_id
+from src.utils.audit import log_vapi_webhook
+from src.db.session import get_session_factory
 
 logger = logging.getLogger(__name__)
 
@@ -54,25 +57,52 @@ async def vapi_webhook(request: Request) -> VapiWebhookResponse:
 
     logger.info(f"Vapi webhook: event={event_type}, call_id={call_id}")
 
-    # Log different event types
+    # Log different event types and write to audit_log
+    audit_event_type = None
+    summary = None
+    duration_seconds = None
+    ended_reason = None
+    
     if event_type in ["call_started", "call-started"]:
         logger.info(f"Call started: {call_id}")
-        # Could store call start in audit_log
+        audit_event_type = "call_started"
 
     elif event_type in ["call_ended", "call-ended"]:
         logger.info(f"Call ended: {call_id}")
-        # Could store call end and transcript summary
+        audit_event_type = "call_ended"
+        summary = body.get("summary", "")
+        duration_seconds = body.get("durationSeconds")
+        ended_reason = body.get("endedReason", "")
 
     elif event_type in ["transcript", "transcript_update"]:
         transcript = body.get("transcript", "")
         logger.debug(f"Transcript update for {call_id}: {transcript[:100]}...")
+        # Don't audit every transcript update - too noisy
 
     elif event_type in ["tool_called", "tool-called"]:
         tool_name = body.get("tool", {}).get("name", "unknown")
         logger.info(f"Tool called: {tool_name} for call {call_id}")
+        # Tool calls are audited in vapi_server.py, not here
 
-    # Note: Webhook verification would be done here if VAPI_WEBHOOK_SECRET is configured
-    # For now, we just log and acknowledge
+    # Write to audit_log for trackable events
+    if audit_event_type and call_id:
+        try:
+            session_factory = get_session_factory()
+            session = session_factory()
+            try:
+                log_vapi_webhook(
+                    session=session,
+                    call_id=call_id,
+                    event_type=audit_event_type,
+                    event_data=body,
+                    summary=summary,
+                    duration_seconds=duration_seconds,
+                    ended_reason=ended_reason,
+                )
+            finally:
+                session.close()
+        except Exception as audit_err:
+            logger.warning(f"Failed to audit webhook event: {audit_err}")
 
     return VapiWebhookResponse(status="ok")
 

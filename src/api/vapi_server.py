@@ -9,10 +9,16 @@ Server URL message types handled:
 - transfer-destination-request: Return transfer destination based on business hours
 - end-of-call-report: Log call summary to audit log
 - status-update: Log status changes
+
+Key behavior:
+- Service requests create/update a CRM lead in Odoo
+- One lead per call_id (idempotent)
+- Fail-closed: if Odoo fails, still respond but flag for human follow-up
 """
 
 import json
 import logging
+import re
 from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -27,12 +33,19 @@ from src.hael import (
     build_hael_command,
     route_command,
 )
+from src.hael.schema import Intent, UrgencyLevel
 from src.brains.ops import handle_ops_command
 from src.brains.core import handle_core_command
 from src.brains.revenue import handle_revenue_command
 from src.brains.people import handle_people_command
 from src.utils.request_id import generate_request_id
+from src.utils.idempotency import IdempotencyChecker, generate_key_hash
+from src.utils.audit import log_vapi_tool_call, log_vapi_webhook
+from src.db.session import get_session_factory
 from src.config.settings import get_settings
+
+# Idempotency scope for Vapi tool calls
+VAPI_TOOL_SCOPE = "vapi_tool"
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +147,35 @@ def get_transfer_destination() -> VapiTransferResponse:
 # Tool Execution
 # ============================================================================
 
-def execute_hael_route(
+# Urgency string to UrgencyLevel mapping
+URGENCY_MAP = {
+    "emergency": UrgencyLevel.EMERGENCY,
+    "today": UrgencyLevel.HIGH,
+    "this_week": UrgencyLevel.MEDIUM,
+    "flexible": UrgencyLevel.LOW,
+}
+
+# Request type to Intent mapping
+REQUEST_TYPE_INTENT_MAP = {
+    "service_request": Intent.SERVICE_REQUEST,
+    "quote_request": Intent.QUOTE_REQUEST,
+    "schedule_appointment": Intent.SCHEDULE_APPOINTMENT,
+    "reschedule_appointment": Intent.RESCHEDULE_APPOINTMENT,
+    "cancel_appointment": Intent.CANCEL_APPOINTMENT,
+    "status_check": Intent.STATUS_UPDATE_REQUEST,
+    "billing_inquiry": Intent.BILLING_INQUIRY,
+    "general_inquiry": Intent.UNKNOWN,
+}
+
+# Intents that should create/update a CRM lead in Odoo
+LEAD_CREATING_INTENTS = {
+    Intent.SERVICE_REQUEST,
+    Intent.QUOTE_REQUEST,
+    Intent.SCHEDULE_APPOINTMENT,
+}
+
+
+async def execute_hael_route(
     parameters: dict[str, Any],
     tool_call_id: str,
     call_id: str | None,
@@ -152,9 +193,15 @@ def execute_hael_route(
     - urgency: emergency, today, this_week, flexible
     - property_type: residential, commercial
     
-    Returns a dict with speak, action, and data.
+    Key behavior:
+    - For service/quote/schedule requests: creates/updates CRM lead in Odoo
+    - Returns crm_lead_id in data on success
+    - Fail-closed: if Odoo fails, returns needs_human with captured info
+    
+    Returns a dict with speak, action, data, and request_id.
     """
     request_id = generate_request_id()
+    odoo_result = None
     
     try:
         # Extract structured parameters
@@ -174,7 +221,6 @@ def execute_hael_route(
         logger.info(f"hael_route params: type={request_type}, name={customer_name}, phone={phone}, address={address}")
         
         # Build a rich text representation for the extractor
-        # This combines structured data with any free-form text
         text_parts = []
         
         if issue_description:
@@ -213,40 +259,25 @@ def execute_hael_route(
             extraction.entities.email = email
         if address:
             extraction.entities.address = address
-            # Try to extract ZIP from address
-            import re
+            # Try to extract ZIP and city from address
             zip_match = re.search(r'\b(\d{5})(?:-\d{4})?\b', address)
             if zip_match:
                 extraction.entities.zip_code = zip_match.group(1)
+            # Try to extract city (simple heuristic: word before state abbreviation or ZIP)
+            city_match = re.search(r',\s*([A-Za-z\s]+),?\s*[A-Z]{2}', address)
+            if city_match:
+                extraction.entities.city = city_match.group(1).strip()
         if issue_description:
             extraction.entities.problem_description = issue_description
         if property_type:
             extraction.entities.property_type = property_type
         
         # Map urgency to UrgencyLevel
-        from src.hael.schema import UrgencyLevel
-        urgency_map = {
-            "emergency": UrgencyLevel.EMERGENCY,
-            "today": UrgencyLevel.HIGH,
-            "this_week": UrgencyLevel.MEDIUM,
-            "flexible": UrgencyLevel.LOW,
-        }
-        extraction.entities.urgency_level = urgency_map.get(urgency, UrgencyLevel.MEDIUM)
+        extraction.entities.urgency_level = URGENCY_MAP.get(urgency, UrgencyLevel.MEDIUM)
         
         # Map request_type to Intent if not already determined
-        from src.hael.schema import Intent
-        request_type_intent_map = {
-            "service_request": Intent.SERVICE_REQUEST,
-            "quote_request": Intent.QUOTE_REQUEST,
-            "schedule_appointment": Intent.SCHEDULE_APPOINTMENT,
-            "reschedule_appointment": Intent.RESCHEDULE_APPOINTMENT,
-            "cancel_appointment": Intent.CANCEL_APPOINTMENT,
-            "status_check": Intent.STATUS_UPDATE_REQUEST,
-            "billing_inquiry": Intent.BILLING_INQUIRY,
-            "general_inquiry": Intent.UNKNOWN,
-        }
-        if request_type in request_type_intent_map:
-            extraction.intent = request_type_intent_map[request_type]
+        if request_type in REQUEST_TYPE_INTENT_MAP:
+            extraction.intent = REQUEST_TYPE_INTENT_MAP[request_type]
         
         # Route to brain
         routing = route_command(extraction)
@@ -276,15 +307,19 @@ def execute_hael_route(
         elif routing.brain == Brain.PEOPLE:
             result = handle_people_command(command)
         
+        # Determine response from brain result
         if result is not None:
             speak = result.message
             action = "completed" if result.status.value == "success" else "needs_human"
-            data = result.data
+            data = result.data.copy() if result.data else {}
             
             # Add missing fields if needs human
             if action == "needs_human" and hasattr(result, "missing_fields") and result.missing_fields:
                 speak += f" I'll need the following information: {', '.join(result.missing_fields)}."
                 data["missing_fields"] = result.missing_fields
+            
+            is_emergency = data.get("is_emergency", False)
+            emergency_reason = data.get("emergency_reason")
         else:
             # Unknown brain - needs human
             speak = (
@@ -292,9 +327,76 @@ def execute_hael_route(
                 "Let me connect you with a representative who can assist."
             )
             action = "needs_human"
-            data = {
-                "reason": "unknown_intent",
-            }
+            data = {"reason": "unknown_intent"}
+            is_emergency = False
+            emergency_reason = None
+        
+        # ---------------------------------------------------------------------
+        # Create/Update CRM Lead in Odoo (for lead-creating intents)
+        # ---------------------------------------------------------------------
+        # Use call_id if available, otherwise fall back to tool_call_id
+        lead_ref_id = call_id or tool_call_id
+        
+        if lead_ref_id and extraction.intent in LEAD_CREATING_INTENTS:
+            try:
+                from src.integrations.odoo_leads import upsert_lead_for_call
+                
+                logger.info(f"Creating Odoo lead for ref={lead_ref_id}, intent={extraction.intent}")
+                
+                odoo_result = await upsert_lead_for_call(
+                    call_id=lead_ref_id,  # Use call_id or tool_call_id as reference
+                    entities=extraction.entities,
+                    urgency=extraction.entities.urgency_level,
+                    is_emergency=is_emergency,
+                    emergency_reason=emergency_reason,
+                    raw_text=full_text,
+                    structured_params=parameters,
+                    request_id=request_id,
+                )
+                
+                if odoo_result.get("status") == "success":
+                    lead_id = odoo_result.get("lead_id")
+                    data["odoo"] = {
+                        "crm_lead_id": lead_id,
+                        "action": odoo_result.get("action"),  # created or updated
+                        "partner_id": odoo_result.get("partner_id"),
+                    }
+                    logger.info(f"Odoo lead {odoo_result.get('action')}: {lead_id} for ref {lead_ref_id}")
+                else:
+                    # Odoo failed - log but continue (fail-closed)
+                    logger.error(f"Odoo lead creation failed: {odoo_result.get('error')}")
+                    data["odoo"] = {
+                        "crm_lead_id": None,
+                        "action": "failed",
+                        "error": odoo_result.get("error", "Unknown error"),
+                    }
+                    # If action was "completed", downgrade to needs_human for follow-up
+                    if action == "completed":
+                        action = "needs_human"
+                        speak = (
+                            "I've captured your request. Our team will follow up shortly "
+                            "to confirm the details and schedule your service."
+                        )
+                        
+            except Exception as odoo_err:
+                logger.exception(f"Odoo lead upsert error: {odoo_err}")
+                data["odoo"] = {
+                    "crm_lead_id": None,
+                    "action": "error",
+                    "error": str(odoo_err),
+                }
+                # Fail-closed: still respond but flag for human
+                if action == "completed":
+                    action = "needs_human"
+                    speak = (
+                        "I've captured your request. Our team will follow up shortly "
+                        "to confirm the details."
+                    )
+        else:
+            if not lead_ref_id:
+                logger.warning("No call_id or tool_call_id available for lead creation")
+            elif extraction.intent not in LEAD_CREATING_INTENTS:
+                logger.debug(f"Intent {extraction.intent} not in lead-creating intents, skipping Odoo")
         
         return {
             "speak": speak,
@@ -337,8 +439,18 @@ async def vapi_server_url(request: Request) -> dict[str, Any]:
     
     message = body.get("message", {})
     message_type = message.get("type", "unknown")
+    
+    # Extract call_id from multiple possible locations
+    # Vapi sometimes puts it in message.call.id, sometimes in message.callId
     call_obj = message.get("call", {})
-    call_id = call_obj.get("id")
+    call_id = (
+        call_obj.get("id") or
+        message.get("callId") or
+        message.get("call_id") or
+        body.get("callId") or
+        body.get("call_id") or
+        body.get("call", {}).get("id")
+    )
     
     logger.info(f"Vapi server message: type={message_type}, call_id={call_id}")
     
@@ -355,27 +467,108 @@ async def vapi_server_url(request: Request) -> dict[str, Any]:
         # Helper to extract tool name and parameters from various Vapi formats
         def extract_tool_info(item: dict) -> tuple[str, str, dict]:
             """Extract (tool_name, tool_call_id, parameters) from various Vapi formats."""
-            # Format 1: toolWithToolCallList item
-            tool_name = item.get("name", "")
-            tool_call = item.get("toolCall", {})
-            tool_call_id = tool_call.get("id", "") or item.get("id", "")
+            tool_name = ""
+            tool_call_id = ""
+            parameters = {}
             
-            # Parameters can be in multiple places
-            parameters = (
-                tool_call.get("parameters", {}) or
-                tool_call.get("arguments", {}) or
-                item.get("parameters", {}) or
-                item.get("arguments", {})
+            # Format 1: toolWithToolCallList - {"name": "...", "toolCall": {"id": "...", "parameters": {...}}}
+            tool_call = item.get("toolCall", {})
+            if tool_call:
+                tool_name = item.get("name", "")
+                tool_call_id = tool_call.get("id", "")
+                parameters = tool_call.get("parameters", {}) or tool_call.get("arguments", {})
+                # Also check function nested in toolCall
+                func = tool_call.get("function", {})
+                if func:
+                    tool_name = tool_name or func.get("name", "")
+                    parameters = parameters or func.get("parameters", {}) or func.get("arguments", {})
+            
+            # Format 2: toolCallList - {"id": "...", "function": {"name": "...", "arguments": {...}}}
+            func = item.get("function", {})
+            if func:
+                tool_call_id = tool_call_id or item.get("id", "")
+                tool_name = tool_name or func.get("name", "")
+                parameters = parameters or func.get("arguments", {}) or func.get("parameters", {})
+            
+            # Format 3: Simple - {"id": "...", "name": "...", "parameters": {...}}
+            tool_call_id = tool_call_id or item.get("id", "")
+            tool_name = tool_name or item.get("name", "")
+            parameters = parameters or item.get("parameters", {}) or item.get("arguments", {})
+            
+            logger.info(f"Extracted tool info: name={tool_name}, id={tool_call_id}, params_keys={list(parameters.keys())}")
+            return tool_name, tool_call_id, parameters
+        
+        # Helper to process a single tool call with idempotency + audit
+        async def process_tool_call(
+            tool_name: str,
+            tool_call_id: str,
+            parameters: dict,
+        ) -> dict[str, Any]:
+            """Process a tool call with idempotency checking and audit logging."""
+            # Generate idempotency key
+            idempotency_key = generate_key_hash(
+                VAPI_TOOL_SCOPE,
+                [call_id or "", tool_call_id]
             )
             
-            # If toolCall has function.name, use that
-            func = tool_call.get("function", {})
-            if func:
-                tool_name = tool_name or func.get("name", "")
-                parameters = parameters or func.get("parameters", {}) or func.get("arguments", {})
+            # Get database session
+            session_factory = get_session_factory()
+            session = session_factory()
             
-            logger.debug(f"Extracted tool info: name={tool_name}, id={tool_call_id}, params={parameters}")
-            return tool_name, tool_call_id, parameters
+            try:
+                # Check idempotency
+                checker = IdempotencyChecker(session)
+                existing = checker.get_existing(VAPI_TOOL_SCOPE, idempotency_key)
+                
+                if existing and existing.get("_idempotency_status") != "in_progress":
+                    logger.info(f"Idempotency hit for {tool_call_id}, returning cached result")
+                    return existing
+                
+                # Mark as in progress
+                if not existing:
+                    checker.start(VAPI_TOOL_SCOPE, idempotency_key)
+                
+                # Execute tool
+                if tool_name == "hael_route":
+                    result = await execute_hael_route(
+                        parameters=parameters,
+                        tool_call_id=tool_call_id,
+                        call_id=call_id,
+                    )
+                else:
+                    result = {
+                        "speak": "I don't recognize that action. Let me help you another way.",
+                        "action": "error",
+                        "data": {"error": f"Unknown tool: {tool_name}"},
+                        "request_id": None,
+                    }
+                
+                # Write audit log
+                try:
+                    odoo_data = result.get("data", {}).get("odoo") if result.get("data") else None
+                    log_vapi_tool_call(
+                        session=session,
+                        request_id=result.get("request_id"),
+                        call_id=call_id,
+                        tool_call_id=tool_call_id,
+                        intent=parameters.get("request_type"),
+                        brain=None,  # Could extract from result
+                        parameters=parameters,
+                        result=result,
+                        odoo_result=odoo_data,
+                        status="processed" if result.get("action") != "error" else "error",
+                        error_message=result.get("data", {}).get("error") if result.get("action") == "error" else None,
+                    )
+                except Exception as audit_err:
+                    logger.warning(f"Failed to write audit log: {audit_err}")
+                
+                # Complete idempotency
+                checker.complete(VAPI_TOOL_SCOPE, idempotency_key, result)
+                
+                return result
+                
+            finally:
+                session.close()
         
         # Prefer toolWithToolCallList if available
         if tool_with_list:
@@ -385,28 +578,12 @@ async def vapi_server_url(request: Request) -> dict[str, Any]:
                 
                 logger.info(f"Processing tool: name={tool_name}, id={tool_call_id}")
                 
-                if tool_name == "hael_route":
-                    result = execute_hael_route(
-                        parameters=parameters,
-                        tool_call_id=tool_call_id,
-                        call_id=call_id,
-                    )
-                    
-                    results.append(ToolCallResult(
-                        toolCallId=tool_call_id,
-                        result=json.dumps(result),
-                    ))
-                else:
-                    # Unknown tool
-                    logger.warning(f"Unknown tool called: {tool_name}, full item: {json.dumps(item)[:300]}")
-                    results.append(ToolCallResult(
-                        toolCallId=tool_call_id,
-                        result=json.dumps({
-                            "speak": "I don't recognize that action. Let me help you another way.",
-                            "action": "error",
-                            "data": {"error": f"Unknown tool: {tool_name}"},
-                        }),
-                    ))
+                result = await process_tool_call(tool_name, tool_call_id, parameters)
+                
+                results.append(ToolCallResult(
+                    toolCallId=tool_call_id,
+                    result=json.dumps(result),
+                ))
             
             return {"results": [r.model_dump() for r in results]}
         
@@ -421,27 +598,12 @@ async def vapi_server_url(request: Request) -> dict[str, Any]:
                 
                 logger.info(f"Processing tool (from toolCallList): name={tool_name}, id={tool_call_id}")
                 
-                if tool_name == "hael_route":
-                    result = execute_hael_route(
-                        parameters=parameters,
-                        tool_call_id=tool_call_id,
-                        call_id=call_id,
-                    )
-                    
-                    results.append(ToolCallResult(
-                        toolCallId=tool_call_id,
-                        result=json.dumps(result),
-                    ))
-                else:
-                    logger.warning(f"Unknown tool called: {tool_name}, full: {json.dumps(tool_call)[:300]}")
-                    results.append(ToolCallResult(
-                        toolCallId=tool_call_id,
-                        result=json.dumps({
-                            "speak": "I don't recognize that action.",
-                            "action": "error",
-                            "data": {"error": f"Unknown tool: {tool_name}"},
-                        }),
-                    ))
+                result = await process_tool_call(tool_name, tool_call_id, parameters)
+                
+                results.append(ToolCallResult(
+                    toolCallId=tool_call_id,
+                    result=json.dumps(result),
+                ))
             
             return {"results": [r.model_dump() for r in results]}
         
@@ -478,7 +640,23 @@ async def vapi_server_url(request: Request) -> dict[str, Any]:
             f"reason={ended_reason}, summary={summary[:100]}..."
         )
         
-        # TODO: Store in audit_log for KPI reporting
+        # Store in audit_log for KPI reporting
+        try:
+            session_factory = get_session_factory()
+            session = session_factory()
+            try:
+                log_vapi_webhook(
+                    session=session,
+                    call_id=call_id,
+                    event_type="end-of-call-report",
+                    summary=summary,
+                    duration_seconds=duration,
+                    ended_reason=ended_reason,
+                )
+            finally:
+                session.close()
+        except Exception as audit_err:
+            logger.warning(f"Failed to audit end-of-call: {audit_err}")
         
         return {"status": "ok"}
     

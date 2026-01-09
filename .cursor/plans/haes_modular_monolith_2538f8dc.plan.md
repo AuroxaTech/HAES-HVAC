@@ -128,8 +128,6 @@ flowchart TD
   Jobs --> Odoo
 ```
 
-
-
 ## Module-by-module execution order
 
 We will build sequentially. Each module ends with **clear acceptance criteria** and a “freeze” point before moving on.
@@ -320,8 +318,6 @@ DATABASE_URL=
 ODOO_BASE_URL=
 ...
 ```
-
-
 
 #### 4) Logging & error envelope (exact behavior)
 

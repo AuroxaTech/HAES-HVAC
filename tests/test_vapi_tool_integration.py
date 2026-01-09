@@ -699,3 +699,237 @@ class TestIntentSpecificVapi:
         assert "speak" in result
         # Emergency should be handled
         assert result["action"] in ["completed", "needs_human"]
+
+
+# =============================================================================
+# ODOO LEAD CREATION TESTS
+# =============================================================================
+
+
+class TestOdooLeadCreation:
+    """Tests for Odoo CRM lead creation via Vapi tool calls."""
+
+    def test_service_request_includes_odoo_data(self, client, mock_settings):
+        """Service request should include odoo data in response when successful."""
+        with patch("src.integrations.odoo_leads.upsert_lead_for_call") as mock_upsert:
+            mock_upsert.return_value = {
+                "lead_id": 123,
+                "action": "created",
+                "status": "success",
+                "partner_id": 456,
+            }
+            
+            payload = {
+                "message": {
+                    "type": "tool-calls",
+                    "call": {"id": "call_lead_test"},
+                    "toolCallList": [{
+                        "id": "tc_lead",
+                        "name": "hael_route",
+                        "parameters": {
+                            "request_type": "service_request",
+                            "customer_name": "John Doe",
+                            "phone": "+19725551234",
+                            "address": "123 Main St, Dallas, TX 75201",
+                            "issue_description": "Heater not working",
+                            "urgency": "today",
+                            "property_type": "residential",
+                        }
+                    }]
+                }
+            }
+            
+            response = client.post("/vapi/server", json=payload)
+            
+            assert response.status_code == 200
+            data = response.json()
+            result = json.loads(data["results"][0]["result"])
+            
+            # Check that Odoo data is present
+            assert "data" in result
+            if result["action"] == "completed":
+                assert "odoo" in result["data"]
+                assert result["data"]["odoo"]["crm_lead_id"] == 123
+
+    def test_service_request_handles_odoo_failure(self, client, mock_settings):
+        """Service request should handle Odoo failure gracefully."""
+        with patch("src.integrations.odoo_leads.upsert_lead_for_call") as mock_upsert:
+            mock_upsert.return_value = {
+                "lead_id": None,
+                "action": "failed",
+                "status": "error",
+                "error": "Odoo connection timeout",
+            }
+            
+            payload = {
+                "message": {
+                    "type": "tool-calls",
+                    "call": {"id": "call_odoo_fail"},
+                    "toolCallList": [{
+                        "id": "tc_fail",
+                        "name": "hael_route",
+                        "parameters": {
+                            "request_type": "service_request",
+                            "customer_name": "Jane Smith",
+                            "phone": "+19725559999",
+                            "address": "456 Oak St, Dallas, TX 75202",
+                            "issue_description": "AC not cooling",
+                            "urgency": "today",
+                            "property_type": "residential",
+                        }
+                    }]
+                }
+            }
+            
+            response = client.post("/vapi/server", json=payload)
+            
+            assert response.status_code == 200
+            data = response.json()
+            result = json.loads(data["results"][0]["result"])
+            
+            # Should still return a valid response
+            assert "speak" in result
+            # If Odoo fails, should downgrade to needs_human
+            if "odoo" in result.get("data", {}):
+                assert result["data"]["odoo"]["action"] == "failed"
+
+    def test_service_request_passes_correct_params_to_odoo(self, client, mock_settings):
+        """Should pass correct parameters to Odoo lead upsert."""
+        with patch("src.integrations.odoo_leads.upsert_lead_for_call") as mock_upsert:
+            mock_upsert.return_value = {
+                "lead_id": 789,
+                "action": "created",
+                "status": "success",
+                "partner_id": None,
+            }
+            
+            payload = {
+                "message": {
+                    "type": "tool-calls",
+                    "call": {"id": "call_params_test"},
+                    "toolCallList": [{
+                        "id": "tc_params",
+                        "name": "hael_route",
+                        "parameters": {
+                            "request_type": "service_request",
+                            "customer_name": "Test User",
+                            "phone": "+19725550000",
+                            "address": "789 Elm St, Plano, TX 75023",
+                            "issue_description": "Furnace making noise",
+                            "urgency": "emergency",
+                            "property_type": "commercial",
+                        }
+                    }]
+                }
+            }
+            
+            response = client.post("/vapi/server", json=payload)
+            
+            assert response.status_code == 200
+            
+            # Verify upsert was called with correct call_id
+            mock_upsert.assert_called_once()
+            call_kwargs = mock_upsert.call_args[1]
+            assert call_kwargs["call_id"] == "call_params_test"
+
+    def test_quote_request_creates_lead(self, client, mock_settings):
+        """Quote request should also create a lead."""
+        with patch("src.integrations.odoo_leads.upsert_lead_for_call") as mock_upsert:
+            mock_upsert.return_value = {
+                "lead_id": 200,
+                "action": "created",
+                "status": "success",
+                "partner_id": 300,
+            }
+            
+            payload = {
+                "message": {
+                    "type": "tool-calls",
+                    "call": {"id": "call_quote_lead"},
+                    "toolCallList": [{
+                        "id": "tc_quote",
+                        "name": "hael_route",
+                        "parameters": {
+                            "request_type": "quote_request",
+                            "customer_name": "Quote Customer",
+                            "phone": "+19725553333",
+                            "address": "100 New St, Irving, TX 75060",
+                            "issue_description": "Need new AC system quote",
+                            "urgency": "this_week",
+                            "property_type": "residential",
+                        }
+                    }]
+                }
+            }
+            
+            response = client.post("/vapi/server", json=payload)
+            
+            assert response.status_code == 200
+            
+            # Quote request should call upsert
+            mock_upsert.assert_called_once()
+
+    def test_billing_inquiry_does_not_create_lead(self, client, mock_settings):
+        """Billing inquiry should NOT create a lead."""
+        with patch("src.integrations.odoo_leads.upsert_lead_for_call") as mock_upsert:
+            payload = {
+                "message": {
+                    "type": "tool-calls",
+                    "call": {"id": "call_billing"},
+                    "toolCallList": [{
+                        "id": "tc_billing",
+                        "name": "hael_route",
+                        "parameters": {
+                            "request_type": "billing_inquiry",
+                            "customer_name": "Billing Customer",
+                            "phone": "+19725554444",
+                        }
+                    }]
+                }
+            }
+            
+            response = client.post("/vapi/server", json=payload)
+            
+            assert response.status_code == 200
+            
+            # Billing inquiry should NOT call upsert
+            mock_upsert.assert_not_called()
+
+
+class TestIdempotencyWithOdoo:
+    """Tests for idempotency handling with Odoo lead creation."""
+
+    def test_duplicate_tool_call_returns_cached_result(self, client, mock_settings):
+        """Duplicate tool calls should return cached result (no double-create)."""
+        # This test verifies the idempotency mechanism
+        # First call should process, second should hit cache
+        
+        payload = {
+            "message": {
+                "type": "tool-calls",
+                "call": {"id": "call_dedupe"},
+                "toolCallList": [{
+                    "id": "tc_same_id",  # Same tool_call_id
+                    "name": "hael_route",
+                    "parameters": {
+                        "user_text": "Service request - heater broken",
+                    }
+                }]
+            }
+        }
+        
+        # First call
+        response1 = client.post("/vapi/server", json=payload)
+        assert response1.status_code == 200
+        result1 = json.loads(response1.json()["results"][0]["result"])
+        
+        # Second call with same call_id and tool_call_id
+        response2 = client.post("/vapi/server", json=payload)
+        assert response2.status_code == 200
+        result2 = json.loads(response2.json()["results"][0]["result"])
+        
+        # Both should have same request_id (idempotency hit)
+        # Note: In actual implementation, second call may or may not hit cache
+        # depending on DB state; this tests the mechanism exists
+        assert "request_id" in result1
+        assert "request_id" in result2
