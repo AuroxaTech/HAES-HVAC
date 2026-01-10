@@ -45,7 +45,9 @@
     { "module": "Module 9 - KPI + Reporting", "status": "done", "last_updated": "2026-01-08" },
     { "module": "Module 10 - Fly.io Deployment", "status": "done", "last_updated": "2026-01-08" },
     { "module": "Module 11 - QA + Hardening", "status": "done", "last_updated": "2026-01-08" },
-    { "module": "Vapi Full Setup", "status": "done", "last_updated": "2026-01-09" }
+    { "module": "Vapi Full Setup", "status": "done", "last_updated": "2026-01-09" },
+    { "module": "Email Notifications", "status": "done", "last_updated": "2026-01-09" },
+    { "module": "SMS Notifications", "status": "done", "last_updated": "2026-01-09" }
   ],
   "endpoints": [
     { "method": "GET", "path": "/", "purpose": "Service metadata" },
@@ -132,11 +134,14 @@
     "DATABASE_URL", "DB_POOL_SIZE", "DB_MAX_OVERFLOW", "DB_POOL_TIMEOUT",
     "ODOO_BASE_URL", "ODOO_DB", "ODOO_USERNAME", "ODOO_PASSWORD",
     "ODOO_TIMEOUT_SECONDS", "ODOO_AUTH_MODE", "ODOO_VERIFY_SSL",
-    "VAPI_API_KEY", "VAPI_WEBHOOK_SECRET",
-    "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER",
+    "ODOO_DISPATCH_USER_ID", "ODOO_LINDA_USER_ID", "ODOO_TECH_USER_IDS_JSON",
+    "VAPI_API_KEY", "VAPI_PUBLIC_KEY", "VAPI_WEBHOOK_SECRET", "VAPI_ASSISTANT_ID", "VAPI_TWILIO_PHONE_ID", "VAPI_TOOL_ID",
+    "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER", "TWILIO_DRY_RUN", "TWILIO_TEST_TO_NUMBER",
     "CHAT_SHARED_SECRET", "WEBHOOK_BASE_URL",
     "REPORT_TIMEZONE", "REPORT_RECIPIENTS_JSON",
-    "SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_FROM_EMAIL"
+    "SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_FROM_EMAIL", "SMTP_USE_TLS", "SMTP_DRY_RUN", "SMTP_TEST_TO_EMAIL",
+    "RATE_LIMIT_ENABLED", "RATE_LIMIT_REQUESTS_PER_WINDOW", "RATE_LIMIT_WINDOW_SECONDS",
+    "FEATURE_EMERGENCY_SMS", "FEATURE_ODOO_ACTIVITIES"
   ],
   "integrations": {
     "odoo": {
@@ -168,8 +173,19 @@
       "notes": "Signature verification enforced in production via VAPI_WEBHOOK_SECRET"
     },
     "twilio": {
-      "status": "placeholder",
-      "notes": "SMS delivery adapter pending"
+      "status": "implemented_and_configured",
+      "client": "src/integrations/twilio_sms.py",
+      "phone_number": "+18557683265",
+      "features": ["Emergency SMS notifications", "Service confirmation SMS", "Dry-run mode", "Test number override"],
+      "notes": "SMS client implemented using httpx (no SDK dependency). Configured in production. Note: International SMS requires enabling in Twilio console for non-US numbers."
+    },
+    "email": {
+      "status": "implemented_and_configured",
+      "client": "src/integrations/email_notifications.py",
+      "smtp_host": "smtp.gmail.com",
+      "from_email": "junior@hvacrfinest.com",
+      "features": ["Emergency email notifications", "Service confirmation emails", "HTML email templates", "Dry-run mode"],
+      "notes": "SMTP email service implemented using smtplib. Google Workspace (junior@hvacrfinest.com) configured and verified working in production."
     },
     "flyio": {
       "status": "configured",
@@ -192,6 +208,7 @@
     "rate_limiting": "src/utils/rate_limiter.py - Per-IP sliding window rate limiter",
     "webhook_verification": "src/utils/webhook_verify.py - HMAC signature verification for Vapi webhooks",
     "security_headers": "src/utils/security.py - Security headers middleware (HSTS, X-Frame-Options, CSP, etc.)",
+    "audit_logging": "src/utils/audit.py - Comprehensive audit trail for all actions",
     "production_checklist": "scripts/production_checklist.py - Automated deployment readiness check",
     "new_tests": [
       "tests/test_idempotency.py",
@@ -199,12 +216,20 @@
       "tests/test_webhook_verification.py",
       "tests/test_security.py",
       "tests/test_reports_api.py",
-      "tests/test_vapi_server_url.py"
+      "tests/test_vapi_server_url.py",
+      "tests/test_vapi_tool_integration.py",
+      "tests/test_odoo_lead_upsert.py"
     ],
     "new_settings": [
       "RATE_LIMIT_ENABLED",
       "RATE_LIMIT_REQUESTS_PER_WINDOW",
-      "RATE_LIMIT_WINDOW_SECONDS"
+      "RATE_LIMIT_WINDOW_SECONDS",
+      "FEATURE_EMERGENCY_SMS",
+      "FEATURE_ODOO_ACTIVITIES",
+      "TWILIO_DRY_RUN",
+      "TWILIO_TEST_TO_NUMBER",
+      "SMTP_DRY_RUN",
+      "SMTP_TEST_TO_EMAIL"
     ]
   },
   "closeout_blockers_resolved": {
@@ -213,7 +238,30 @@
     "discovery_file": ".cursor/odoo_discovery.json - 18 models discovered and accessible",
     "logger_fix": "src/utils/logger.py - Fixed StructuredFormatter.format() asctime error",
     "test_suite": "213 tests passing (including database tests)",
-    "remaining_action": "Rotate credentials before production deployment"
+    "remaining_action": "Rotate credentials before production deployment",
+    "notifications_implemented": {
+      "email": "src/integrations/email_notifications.py - SMTP email service with HTML templates",
+      "sms": "src/integrations/twilio_sms.py - Twilio SMS service with httpx client",
+      "production_status": "Both email and SMS configured and verified in production",
+      "test_scripts": [
+        "scripts/test_email_send.py",
+        "scripts/test_email_production.py",
+        "scripts/test_sms_production.py",
+        "scripts/verify_email_config.py"
+      ]
+    },
+    "odoo_lead_integration": {
+      "module": "src/integrations/odoo_leads.py",
+      "features": [
+        "CRM lead upsert with idempotency",
+        "Partner/contact management with name matching",
+        "Emergency priority tagging",
+        "HTML-formatted internal notes",
+        "Chatter messages and activity creation"
+      ],
+      "integrated_with": "src/api/vapi_server.py - Vapi Server URL endpoint",
+      "audit_logging": "Full audit trail for all Odoo operations"
+    }
   },
   "final_verification": {
     "verified_date": "2026-01-09",
@@ -232,7 +280,16 @@
       "twilio": {
         "status": "VERIFIED_WORKING",
         "account": "Twilio account configured (redacted)",
-        "phone": "[REDACTED]"
+        "phone": "+18557683265",
+        "sms_enabled": true,
+        "note": "SMS client verified working. International SMS requires account permission for non-US numbers."
+      },
+      "email": {
+        "status": "VERIFIED_WORKING",
+        "smtp_host": "smtp.gmail.com",
+        "from_email": "junior@hvacrfinest.com",
+        "verified_in_production": true,
+        "test_recipient": "hamsimirza1@gmail.com"
       },
       "postgresql": {
         "status": "VERIFIED_WORKING",
