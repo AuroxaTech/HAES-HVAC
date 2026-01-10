@@ -53,6 +53,14 @@ class Settings(BaseSettings):
         default="api_key", description="Authentication mode"
     )
     ODOO_VERIFY_SSL: bool = Field(default=True, description="Verify SSL certificates")
+    
+    # Odoo notification user IDs (for activity assignment)
+    ODOO_DISPATCH_USER_ID: int = Field(default=0, description="Odoo user ID for Dispatch")
+    ODOO_LINDA_USER_ID: int = Field(default=0, description="Odoo user ID for Linda")
+    ODOO_TECH_USER_IDS_JSON: str = Field(
+        default='{}',
+        description="JSON mapping of tech_id to Odoo user_id, e.g. {\"junior\": 123, \"bounthon\": 456}"
+    )
 
     # =========================================================================
     # Vapi.ai Voice Integration
@@ -69,6 +77,10 @@ class Settings(BaseSettings):
     TWILIO_ACCOUNT_SID: str = Field(default="", description="Twilio Account SID")
     TWILIO_AUTH_TOKEN: str = Field(default="", description="Twilio Auth Token")
     TWILIO_PHONE_NUMBER: str = Field(default="", description="Twilio phone number")
+    TWILIO_DRY_RUN: bool = Field(default=False, description="If true, log SMS instead of sending")
+    TWILIO_TEST_TO_NUMBER: str = Field(
+        default="", description="Override recipient number for testing (staging only)"
+    )
 
     # =========================================================================
     # Chat Integration
@@ -94,6 +106,11 @@ class Settings(BaseSettings):
     SMTP_USERNAME: str = Field(default="", description="SMTP username")
     SMTP_PASSWORD: str = Field(default="", description="SMTP password")
     SMTP_FROM_EMAIL: str = Field(default="", description="From email address")
+    SMTP_USE_TLS: bool = Field(default=True, description="Use TLS for SMTP connection")
+    SMTP_DRY_RUN: bool = Field(default=False, description="If true, log emails instead of sending")
+    SMTP_TEST_TO_EMAIL: str = Field(
+        default="", description="Override recipient email for testing (staging only)"
+    )
 
     # =========================================================================
     # Rate Limiting
@@ -104,6 +121,16 @@ class Settings(BaseSettings):
     )
     RATE_LIMIT_WINDOW_SECONDS: int = Field(
         default=60, description="Rate limit window in seconds"
+    )
+
+    # =========================================================================
+    # Feature Flags
+    # =========================================================================
+    FEATURE_EMERGENCY_SMS: bool = Field(
+        default=True, description="Enable customer SMS confirmation for emergencies"
+    )
+    FEATURE_ODOO_ACTIVITIES: bool = Field(
+        default=True, description="Enable Odoo mail.activity creation for emergencies"
     )
 
     @property

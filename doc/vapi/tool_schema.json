@@ -63,6 +63,15 @@
             "type": "string",
             "enum": ["residential", "commercial"],
             "description": "Type of property: residential or commercial"
+          },
+          "system_type": {
+            "type": "string",
+            "enum": ["furnace", "heat_pump", "boiler", "ac", "mini_split", "package_unit", "unknown"],
+            "description": "Type of HVAC system: furnace, heat_pump, boiler, ac, mini_split, package_unit, or unknown"
+          },
+          "indoor_temperature_f": {
+            "type": "integer",
+            "description": "Current indoor temperature in Fahrenheit (ask when no heat or no AC is reported)"
           }
         },
         "required": ["request_type", "customer_name", "phone", "address", "issue_description"]

@@ -933,3 +933,504 @@ class TestIdempotencyWithOdoo:
         # depending on DB state; this tests the mechanism exists
         assert "request_id" in result1
         assert "request_id" in result2
+
+
+# =============================================================================
+# Emergency Flow Tests
+# =============================================================================
+
+
+class TestEmergencyFlow:
+    """Tests for emergency service request flow including ETA, pricing, and tech assignment."""
+
+    def test_emergency_with_temperature_returns_critical_priority(self, client, mock_settings):
+        """Emergency with indoor temp below threshold should return CRITICAL priority."""
+        payload = {
+            "message": {
+                "type": "tool-calls",
+                "call": {"id": "call_emergency_temp"},
+                "toolCallList": [{
+                    "id": "tc_emerg_temp",
+                    "name": "hael_route",
+                    "parameters": {
+                        "request_type": "service_request",
+                        "customer_name": "Emergency Customer",
+                        "phone": "+19725559999",
+                        "address": "123 Cold St, DeSoto, TX 75115",
+                        "issue_description": "no heat at all",
+                        "urgency": "emergency",
+                        "property_type": "residential",
+                        "system_type": "furnace",
+                        "indoor_temperature_f": 54,  # Below 55°F threshold
+                    }
+                }]
+            }
+        }
+        
+        response = client.post("/vapi/server", json=payload)
+        
+        assert response.status_code == 200
+        result = json.loads(response.json()["results"][0]["result"])
+        
+        # Should be emergency
+        assert result["data"].get("is_emergency") is True
+        # Priority label should be CRITICAL
+        assert result["data"].get("priority_label") == "CRITICAL"
+
+    def test_emergency_returns_eta_window(self, client, mock_settings):
+        """Emergency service should include ETA window in response."""
+        payload = {
+            "message": {
+                "type": "tool-calls",
+                "call": {"id": "call_eta"},
+                "toolCallList": [{
+                    "id": "tc_eta",
+                    "name": "hael_route",
+                    "parameters": {
+                        "request_type": "service_request",
+                        "customer_name": "ETA Test",
+                        "phone": "+19725558888",
+                        "address": "456 Emergency Ln, DeSoto, TX 75115",
+                        "issue_description": "gas smell - emergency",
+                        "urgency": "emergency",
+                    }
+                }]
+            }
+        }
+        
+        response = client.post("/vapi/server", json=payload)
+        
+        assert response.status_code == 200
+        result = json.loads(response.json()["results"][0]["result"])
+        
+        # Should have ETA window
+        assert result["data"].get("eta_window_hours_min") is not None
+        assert result["data"].get("eta_window_hours_max") is not None
+        assert result["data"]["eta_window_hours_min"] == 1.5
+        assert result["data"]["eta_window_hours_max"] == 3.0
+
+    def test_emergency_includes_pricing_breakdown(self, client, mock_settings):
+        """Emergency service should include pricing breakdown."""
+        payload = {
+            "message": {
+                "type": "tool-calls",
+                "call": {"id": "call_pricing"},
+                "toolCallList": [{
+                    "id": "tc_pricing",
+                    "name": "hael_route",
+                    "parameters": {
+                        "request_type": "service_request",
+                        "customer_name": "Pricing Test",
+                        "phone": "+19725557777",
+                        "address": "789 Price St, DeSoto, TX 75115",
+                        "issue_description": "flooding from AC unit - emergency",
+                        "urgency": "emergency",
+                    }
+                }]
+            }
+        }
+        
+        response = client.post("/vapi/server", json=payload)
+        
+        assert response.status_code == 200
+        result = json.loads(response.json()["results"][0]["result"])
+        
+        # Should have pricing
+        pricing = result["data"].get("pricing")
+        assert pricing is not None
+        assert "tier" in pricing
+        assert "diagnostic_fee" in pricing
+        assert "emergency_premium" in pricing
+        assert "total_base_fee" in pricing
+        # Retail tier by default
+        assert pricing["tier"] == "retail"
+
+    def test_desoto_address_assigns_junior(self, client, mock_settings):
+        """Service request in DeSoto (75115) should assign Junior."""
+        payload = {
+            "message": {
+                "type": "tool-calls",
+                "call": {"id": "call_junior"},
+                "toolCallList": [{
+                    "id": "tc_junior",
+                    "name": "hael_route",
+                    "parameters": {
+                        "request_type": "service_request",
+                        "customer_name": "DeSoto Customer",
+                        "phone": "+19725556666",
+                        "address": "100 Junior Zone, DeSoto, TX 75115",
+                        "issue_description": "heater making noise",
+                        "urgency": "today",
+                    }
+                }]
+            }
+        }
+        
+        response = client.post("/vapi/server", json=payload)
+        
+        assert response.status_code == 200
+        result = json.loads(response.json()["results"][0]["result"])
+        
+        # Should have assigned technician
+        tech = result["data"].get("assigned_technician")
+        assert tech is not None
+        assert tech["id"] == "junior"
+        assert tech["name"] == "Junior"
+
+    def test_emergency_speak_includes_eta_and_pricing(self, client, mock_settings):
+        """Emergency speak message should include ETA and pricing info."""
+        payload = {
+            "message": {
+                "type": "tool-calls",
+                "call": {"id": "call_speak"},
+                "toolCallList": [{
+                    "id": "tc_speak",
+                    "name": "hael_route",
+                    "parameters": {
+                        "request_type": "service_request",
+                        "customer_name": "Speak Test",
+                        "phone": "+19725555555",
+                        "address": "111 Speak Ave, DeSoto, TX 75115",
+                        "issue_description": "carbon monoxide alarm going off",
+                        "urgency": "emergency",
+                    }
+                }]
+            }
+        }
+        
+        response = client.post("/vapi/server", json=payload)
+        
+        assert response.status_code == 200
+        result = json.loads(response.json()["results"][0]["result"])
+        
+        speak = result["speak"]
+        
+        # Should mention ETA window
+        assert "hour" in speak.lower() or "hours" in speak.lower()
+        # Should mention diagnostic fee
+        assert "$" in speak or "fee" in speak.lower()
+
+    def test_non_emergency_no_eta_window(self, client, mock_settings):
+        """Non-emergency requests should not include ETA window."""
+        payload = {
+            "message": {
+                "type": "tool-calls",
+                "call": {"id": "call_normal"},
+                "toolCallList": [{
+                    "id": "tc_normal",
+                    "name": "hael_route",
+                    "parameters": {
+                        "request_type": "service_request",
+                        "customer_name": "Normal Customer",
+                        "phone": "+19725554444",
+                        "address": "222 Normal St, DeSoto, TX 75115",
+                        "issue_description": "AC making slight noise",
+                        "urgency": "this_week",
+                    }
+                }]
+            }
+        }
+        
+        response = client.post("/vapi/server", json=payload)
+        
+        assert response.status_code == 200
+        result = json.loads(response.json()["results"][0]["result"])
+        
+        # Should NOT be emergency
+        assert result["data"].get("is_emergency") is False
+        # Should NOT have ETA window set
+        assert result["data"].get("eta_window_hours_min") is None
+
+
+class TestTwilioSMS:
+    """Tests for Twilio SMS integration."""
+
+    @patch("src.integrations.twilio_sms.TwilioSMSClient.send_sms")
+    def test_emergency_sms_message_format(self, mock_send):
+        """Test emergency SMS message format."""
+        from src.integrations.twilio_sms import build_emergency_confirmation_sms
+        
+        message = build_emergency_confirmation_sms(
+            customer_name="John Doe",
+            tech_name="Junior",
+            eta_hours_min=1.5,
+            eta_hours_max=3.0,
+            total_fee=187.50,
+        )
+        
+        # Should contain key info
+        assert "HVAC-R Finest" in message
+        assert "John Doe" in message
+        assert "Junior" in message
+        assert "1.5" in message
+        assert "3.0" in message
+        assert "187.50" in message
+        assert "STOP" in message  # Opt-out instruction
+
+    def test_twilio_dry_run_mode(self):
+        """Test that dry run mode logs instead of sending."""
+        from src.integrations.twilio_sms import TwilioSMSClient
+        import asyncio
+        
+        client = TwilioSMSClient(
+            account_sid="test_sid",
+            auth_token="test_token",
+            from_number="+15555555555",
+            dry_run=True,
+        )
+        
+        result = asyncio.get_event_loop().run_until_complete(
+            client.send_sms(to="+19725551234", body="Test message")
+        )
+        
+        assert result["status"] == "dry_run"
+        assert "message_sid" in result
+
+    @patch("src.config.settings.get_settings")
+    def test_twilio_client_not_created_without_credentials(self, mock_settings):
+        """Test client returns None if credentials missing."""
+        from src.integrations.twilio_sms import create_twilio_client_from_settings
+        
+        mock_settings.return_value.TWILIO_ACCOUNT_SID = ""
+        mock_settings.return_value.TWILIO_AUTH_TOKEN = ""
+        mock_settings.return_value.TWILIO_PHONE_NUMBER = ""
+        
+        client = create_twilio_client_from_settings()
+        
+        assert client is None
+
+
+class TestOdooEmergencyTagging:
+    """Tests for Odoo emergency tag and activity creation."""
+
+    @patch("src.integrations.odoo.OdooClient")
+    async def test_emergency_tag_creation(self, mock_client):
+        """Test that Emergency tag is found or created."""
+        from src.integrations.odoo_leads import LeadService
+        
+        mock_instance = MagicMock()
+        mock_instance.is_authenticated = False
+        mock_instance.authenticate.return_value = None
+        mock_instance.search_read.return_value = []  # Tag doesn't exist
+        mock_instance.create.return_value = 42  # New tag ID
+        
+        service = LeadService(mock_instance)
+        tag_id = await service.ensure_emergency_tag()
+        
+        assert tag_id == 42
+        mock_instance.create.assert_called_once()
+
+    @patch("src.integrations.odoo.OdooClient")
+    async def test_chatter_message_posted_for_emergency(self, mock_client):
+        """Test that chatter message is posted for emergencies."""
+        from src.integrations.odoo_leads import LeadService
+        
+        mock_instance = MagicMock()
+        mock_instance.is_authenticated = True
+        mock_instance.call.return_value = 123  # Message ID
+        
+        service = LeadService(mock_instance)
+        msg_id = await service.post_chatter_message(
+            lead_id=1,
+            body="<p>Test emergency message</p>",
+            subject="Emergency",
+        )
+        
+        assert msg_id == 123
+        mock_instance.call.assert_called_once()
+
+
+class TestEmailNotifications:
+    """Tests for email notification service."""
+
+    def test_emergency_email_template_format(self):
+        """Test emergency email template format."""
+        from src.integrations.email_notifications import build_emergency_notification_email
+        
+        html, text = build_emergency_notification_email(
+            customer_name="John Doe",
+            tech_name="Junior",
+            eta_hours_min=1.5,
+            eta_hours_max=3.0,
+            total_fee=204.00,
+            lead_id=1234,
+            address="123 Test St, DeSoto, TX 75115",
+            phone="+19725551234",
+        )
+        
+        # HTML should contain key info
+        assert "HVAC-R Finest" in html
+        assert "John Doe" in html
+        assert "Junior" in html
+        assert "1.5" in html
+        assert "3.0" in html
+        assert "204.00" in html or "$204.00" in html
+        
+        # Text should contain key info
+        assert "HVAC-R Finest" in text
+        assert "John Doe" in text
+        assert "Junior" in text
+        assert "1.5" in text
+        assert "3.0" in text
+        assert "204.00" in text or "$204.00" in text
+        
+        # HTML should be valid HTML
+        assert "<!DOCTYPE html>" in html or "<html>" in html
+        assert "<body>" in html or "</body>" in html
+
+    def test_service_confirmation_email_template(self):
+        """Test service confirmation email template."""
+        from src.integrations.email_notifications import build_service_confirmation_email
+        
+        html, text = build_service_confirmation_email(
+            customer_name="Jane Smith",
+            is_same_day=True,
+        )
+        
+        assert "HVAC-R Finest" in html
+        assert "Jane Smith" in html
+        assert "today" in html.lower()
+        
+        assert "HVAC-R Finest" in text
+        assert "Jane Smith" in text
+        assert "today" in text.lower()
+
+    def test_email_service_dry_run_mode(self):
+        """Test that dry run mode logs instead of sending."""
+        from src.integrations.email_notifications import EmailNotificationService
+        
+        service = EmailNotificationService(
+            host="smtp.example.com",
+            port=587,
+            username="test@example.com",
+            password="test_password",
+            from_email="noreply@example.com",
+            dry_run=True,
+        )
+        
+        result = service.send_email(
+            to="test@example.com",
+            subject="Test Email",
+            body_text="Test message body",
+        )
+        
+        assert result["status"] == "dry_run"
+        assert "message_id" in result
+
+    @patch("src.config.settings.get_settings")
+    def test_email_service_not_created_without_host(self, mock_settings):
+        """Test service returns None if SMTP_HOST missing."""
+        from src.integrations.email_notifications import create_email_service_from_settings
+        
+        mock_settings.return_value.SMTP_HOST = ""
+        mock_settings.return_value.SMTP_PORT = 587
+        mock_settings.return_value.SMTP_FROM_EMAIL = "test@example.com"
+        mock_settings.return_value.SMTP_USERNAME = ""
+        mock_settings.return_value.SMTP_PASSWORD = ""
+        mock_settings.return_value.SMTP_USE_TLS = True
+        mock_settings.return_value.SMTP_DRY_RUN = False
+        mock_settings.return_value.SMTP_TEST_TO_EMAIL = ""
+        
+        service = create_email_service_from_settings()
+        
+        assert service is None
+
+    @patch("src.config.settings.get_settings")
+    def test_email_service_not_created_without_from_email(self, mock_settings):
+        """Test service returns None if SMTP_FROM_EMAIL missing."""
+        from src.integrations.email_notifications import create_email_service_from_settings
+        
+        mock_settings.return_value.SMTP_HOST = "smtp.example.com"
+        mock_settings.return_value.SMTP_PORT = 587
+        mock_settings.return_value.SMTP_FROM_EMAIL = ""
+        mock_settings.return_value.SMTP_USERNAME = ""
+        mock_settings.return_value.SMTP_PASSWORD = ""
+        mock_settings.return_value.SMTP_USE_TLS = True
+        mock_settings.return_value.SMTP_DRY_RUN = False
+        mock_settings.return_value.SMTP_TEST_TO_EMAIL = ""
+        
+        service = create_email_service_from_settings()
+        
+        assert service is None
+
+    @patch("smtplib.SMTP")
+    def test_email_send_with_starttls(self, mock_smtp):
+        """Test email sending with STARTTLS."""
+        from src.integrations.email_notifications import EmailNotificationService
+        
+        mock_server = MagicMock()
+        mock_smtp.return_value = mock_server
+        
+        service = EmailNotificationService(
+            host="smtp.example.com",
+            port=587,
+            username="test@example.com",
+            password="test_password",
+            from_email="noreply@example.com",
+            use_tls=True,
+            dry_run=False,
+        )
+        
+        result = service.send_email(
+            to="recipient@example.com",
+            subject="Test",
+            body_text="Test body",
+        )
+        
+        assert result["status"] == "sent"
+        mock_smtp.assert_called_once_with("smtp.example.com", 587, timeout=30)
+        mock_server.starttls.assert_called_once()
+        mock_server.login.assert_called_once_with("test@example.com", "test_password")
+        mock_server.sendmail.assert_called_once()
+        mock_server.quit.assert_called_once()
+
+    @patch("smtplib.SMTP_SSL")
+    def test_email_send_with_ssl(self, mock_smtp_ssl):
+        """Test email sending with SSL (port 465)."""
+        from src.integrations.email_notifications import EmailNotificationService
+        
+        mock_server = MagicMock()
+        mock_smtp_ssl.return_value = mock_server
+        
+        service = EmailNotificationService(
+            host="smtp.example.com",
+            port=465,
+            username="test@example.com",
+            password="test_password",
+            from_email="noreply@example.com",
+            use_tls=True,
+            dry_run=False,
+        )
+        
+        result = service.send_email(
+            to="recipient@example.com",
+            subject="Test",
+            body_text="Test body",
+        )
+        
+        assert result["status"] == "sent"
+        mock_smtp_ssl.assert_called_once_with("smtp.example.com", 465, timeout=30)
+        mock_server.login.assert_called_once_with("test@example.com", "test_password")
+        mock_server.sendmail.assert_called_once()
+
+    def test_email_test_recipient_override(self):
+        """Test that test recipient override works."""
+        from src.integrations.email_notifications import EmailNotificationService
+        
+        service = EmailNotificationService(
+            host="smtp.example.com",
+            port=587,
+            username="test@example.com",
+            password="test_password",
+            from_email="noreply@example.com",
+            test_to_email="test-override@example.com",
+            dry_run=True,
+        )
+        
+        result = service.send_email(
+            to="original@example.com",  # Should be overridden
+            subject="Test",
+            body_text="Test body",
+        )
+        
+        assert result["to"] == ["test-override@example.com"]

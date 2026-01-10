@@ -80,9 +80,31 @@ python scripts/verify_vapi_server_url.py --prod
 
 - **Expected**
   - All tests show ✓
-  - The “Service Request with Odoo Lead Creation” test prints:
+  - The "Service Request with Odoo Lead Creation" test prints:
     - `Odoo Lead ID: <number>`
     - `Odoo Action: created|updated`
+
+### Test 0.2 — Run the emergency flow verification script
+
+- **Action**
+  - Run:
+
+```bash
+# Local
+python scripts/verify_emergency_flow.py
+
+# Against production
+BASE_URL=https://haes-hvac.fly.dev python scripts/verify_emergency_flow.py
+```
+
+- **Expected**
+  - All checks show ✅ PASS:
+    - Emergency detected
+    - Priority is CRITICAL
+    - ETA window 1.5-3 hours
+    - Pricing present
+    - Junior assigned for DeSoto
+    - Speak mentions ETA and pricing
 
 ---
 
@@ -186,13 +208,65 @@ python scripts/verify_vapi_server_url.py --prod
 ### Test 10 — Emergency service request sets emergency priority
 
 - **Call script**
-  - “I smell gas and my heater isn’t working.”
+  - "I smell gas and my heater isn't working."
 - **Expected**
   - Tool returns:
     - `data.is_emergency=true`
   - Odoo lead:
     - priority set to emergency (highest)
     - internal notes show emergency banner/section
+
+### Test 10a — Temperature-based emergency (no heat + cold indoor temp)
+
+- **Call script**
+  - "My heater isn't working."
+  - When Riley asks for indoor temperature: "52 degrees"
+- **Expected**
+  - Tool returns:
+    - `data.is_emergency=true`
+    - `data.priority_label="CRITICAL"`
+    - `data.eta_window_hours_min=1.5`
+    - `data.eta_window_hours_max=3.0`
+  - Riley mentions:
+    - Emergency ETA window (1.5-3 hours)
+    - Diagnostic fee with premiums
+
+### Test 10b — Emergency pricing shown correctly
+
+- **Expected**
+  - Tool response includes `data.pricing` with:
+    - `tier="retail"` (default)
+    - `diagnostic_fee`, `emergency_premium`, `total_base_fee`
+  - `data.pricing.total_base_fee` reflects premiums applied
+
+### Test 10c — DeSoto (75115) assigns Junior
+
+- **Call script**
+  - Provide address: "123 Main St, DeSoto, TX 75115"
+- **Expected**
+  - Tool returns:
+    - `data.assigned_technician.id="junior"`
+    - `data.assigned_technician.name="Junior"`
+
+### Test 10d — Emergency lead has Emergency tag in Odoo
+
+- **Action**
+  - Complete an emergency call, then check Odoo lead.
+- **Expected**
+  - Lead has "Emergency" tag attached (visible in Tags field)
+  - Chatter shows emergency notification post
+
+### Test 10e — Customer receives emergency SMS (if enabled)
+
+- **Precondition**
+  - `FEATURE_EMERGENCY_SMS=true` and Twilio configured
+- **Expected**
+  - Customer receives SMS with:
+    - Company name
+    - Tech name
+    - ETA window
+    - Base fee
+    - Opt-out instruction
 
 ### Test 11 — Internal notes are structured and readable
 
@@ -388,4 +462,16 @@ This verifies the fix for the “same phone but different name/email overwrites 
 - emergency route works
 - transfer/handoff works
 - KB answers are correct and not guessed
+
+### Closeout 4 — Confirm emergency flow features (new):
+
+- Temperature-based emergency triggers at <55°F for no heat
+- Emergency response includes:
+  - `priority_label="CRITICAL"`
+  - ETA window (1.5-3 hours)
+  - Pricing breakdown with premiums
+- DeSoto (751xx) assigns to Junior
+- Emergency leads get "Emergency" tag in Odoo
+- Chatter message posted with emergency details
+- Customer SMS sent (if FEATURE_EMERGENCY_SMS=true)
 

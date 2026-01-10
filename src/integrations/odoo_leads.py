@@ -204,6 +204,299 @@ class LeadService:
             logger.warning(f"Failed to ensure partner: {e}")
             return None
     
+    async def ensure_emergency_tag(self) -> int | None:
+        """
+        Find or create an 'Emergency' tag in crm.tag.
+        
+        Returns:
+            Tag ID if found/created, None on failure
+        """
+        try:
+            await self._ensure_authenticated()
+            
+            # Search for existing tag
+            tags = await self.client.search_read(
+                "crm.tag",
+                [("name", "=", "Emergency")],
+                fields=["id"],
+                limit=1,
+            )
+            
+            if tags:
+                logger.debug(f"Found existing Emergency tag: {tags[0]['id']}")
+                return tags[0]["id"]
+            
+            # Create new tag
+            tag_id = await self.client.create("crm.tag", {"name": "Emergency", "color": 1})
+            logger.info(f"Created Emergency tag: {tag_id}")
+            return tag_id
+            
+        except Exception as e:
+            logger.warning(f"Failed to ensure Emergency tag: {e}")
+            return None
+    
+    async def add_tag_to_lead(self, lead_id: int, tag_id: int) -> bool:
+        """
+        Add a tag to a lead using Odoo's Command API.
+        
+        Args:
+            lead_id: CRM lead ID
+            tag_id: Tag ID to add
+            
+        Returns:
+            True on success, False on failure
+        """
+        try:
+            await self._ensure_authenticated()
+            
+            # Use Command.link (4, tag_id, 0) to add tag to Many2many
+            await self.client.write("crm.lead", [lead_id], {
+                "tag_ids": [(4, tag_id, 0)]  # Command: link
+            })
+            logger.info(f"Added tag {tag_id} to lead {lead_id}")
+            return True
+            
+        except Exception as e:
+            logger.warning(f"Failed to add tag to lead: {e}")
+            return False
+    
+    async def post_chatter_message(
+        self,
+        lead_id: int,
+        body: str,
+        subject: str | None = None,
+    ) -> int | None:
+        """
+        Post a message to the lead's chatter (mail.message).
+        
+        Args:
+            lead_id: CRM lead ID
+            body: HTML body of the message
+            subject: Optional subject
+            
+        Returns:
+            Message ID on success, None on failure
+        """
+        try:
+            await self._ensure_authenticated()
+            
+            message_values = {
+                "model": "crm.lead",
+                "res_id": lead_id,
+                "body": body,
+                "message_type": "notification",
+            }
+            if subject:
+                message_values["subject"] = subject
+            
+            message_id = await self.client.call(
+                "crm.lead",
+                "message_post",
+                [lead_id],
+                body=body,
+                subject=subject or "",
+                message_type="notification",
+            )
+            logger.info(f"Posted chatter message to lead {lead_id}: {message_id}")
+            return message_id
+            
+        except Exception as e:
+            logger.warning(f"Failed to post chatter message: {e}")
+            return None
+    
+    async def create_activity(
+        self,
+        lead_id: int,
+        user_id: int,
+        summary: str,
+        note: str = "",
+        activity_type_id: int | None = None,
+        date_deadline: str | None = None,
+    ) -> int | None:
+        """
+        Create a mail.activity assigned to a user.
+        
+        Args:
+            lead_id: CRM lead ID
+            user_id: Odoo user ID to assign
+            summary: Activity summary/title
+            note: Activity note/description
+            activity_type_id: Activity type ID (defaults to "To Do" if None)
+            date_deadline: Deadline date (YYYY-MM-DD), defaults to today
+            
+        Returns:
+            Activity ID on success, None on failure
+        """
+        try:
+            await self._ensure_authenticated()
+            
+            # Get activity type ID if not provided (try to find "To Do")
+            if activity_type_id is None:
+                try:
+                    types = await self.client.search_read(
+                        "mail.activity.type",
+                        [("name", "ilike", "To Do")],
+                        fields=["id"],
+                        limit=1,
+                    )
+                    if types:
+                        activity_type_id = types[0]["id"]
+                    else:
+                        # Fall back to first available type
+                        types = await self.client.search_read(
+                            "mail.activity.type",
+                            [],
+                            fields=["id"],
+                            limit=1,
+                        )
+                        if types:
+                            activity_type_id = types[0]["id"]
+                except Exception:
+                    pass
+            
+            if not activity_type_id:
+                logger.warning("No activity type found, skipping activity creation")
+                return None
+            
+            # Default deadline to today
+            if not date_deadline:
+                date_deadline = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            
+            activity_values = {
+                "res_model": "crm.lead",
+                "res_model_id": await self._get_model_id("crm.lead"),
+                "res_id": lead_id,
+                "user_id": user_id,
+                "summary": summary,
+                "note": note,
+                "activity_type_id": activity_type_id,
+                "date_deadline": date_deadline,
+            }
+            
+            activity_id = await self.client.create("mail.activity", activity_values)
+            logger.info(f"Created activity {activity_id} for user {user_id} on lead {lead_id}")
+            return activity_id
+            
+        except Exception as e:
+            logger.warning(f"Failed to create activity: {e}")
+            return None
+    
+    async def _get_model_id(self, model_name: str) -> int | None:
+        """Get the ir.model ID for a model name."""
+        try:
+            models = await self.client.search_read(
+                "ir.model",
+                [("model", "=", model_name)],
+                fields=["id"],
+                limit=1,
+            )
+            return models[0]["id"] if models else None
+        except Exception:
+            return None
+    
+    async def _handle_emergency_notifications(
+        self,
+        lead_id: int,
+        emergency_reason: str | None,
+        entities: Entity,
+        structured_params: dict[str, Any] | None,
+    ) -> None:
+        """
+        Handle emergency-specific Odoo operations:
+        1. Add Emergency tag
+        2. Post chatter message with details
+        3. Create activities for Dispatch/Linda/Tech
+        """
+        from src.config.settings import get_settings
+        import json
+        
+        settings = get_settings()
+        
+        # 1. Add Emergency tag
+        if settings.FEATURE_ODOO_ACTIVITIES:
+            tag_id = await self.ensure_emergency_tag()
+            if tag_id:
+                await self.add_tag_to_lead(lead_id, tag_id)
+        
+        # 2. Post chatter message
+        tech_name = None
+        eta_info = ""
+        pricing_info = ""
+        
+        if structured_params:
+            # Try to get tech and pricing from structured params
+            if "assigned_technician" in structured_params:
+                tech_name = structured_params["assigned_technician"].get("name")
+            if "eta_window_hours_min" in structured_params:
+                eta_min = structured_params.get("eta_window_hours_min", 1.5)
+                eta_max = structured_params.get("eta_window_hours_max", 3.0)
+                eta_info = f"<br/><strong>ETA:</strong> {eta_min} - {eta_max} hours"
+            if "pricing" in structured_params:
+                pricing = structured_params["pricing"]
+                if isinstance(pricing, dict):
+                    pricing_info = f"<br/><strong>Base Fee:</strong> ${pricing.get('total_base_fee', 0):.2f}"
+        
+        chatter_body = (
+            f'<div style="background:#fee;border-left:4px solid #c00;padding:10px;margin:5px 0;">'
+            f'<strong style="color:#c00;">🚨 EMERGENCY SERVICE REQUEST</strong><br/>'
+            f'<strong>Reason:</strong> {emergency_reason or "Emergency service needed"}<br/>'
+            f'<strong>Customer:</strong> {entities.full_name or "Unknown"}<br/>'
+            f'<strong>Phone:</strong> {entities.phone or "Not provided"}<br/>'
+            f'<strong>Address:</strong> {entities.address or "Not provided"}'
+        )
+        if tech_name:
+            chatter_body += f'<br/><strong>Assigned Tech:</strong> {tech_name}'
+        chatter_body += eta_info
+        chatter_body += pricing_info
+        chatter_body += '</div>'
+        
+        await self.post_chatter_message(
+            lead_id=lead_id,
+            body=chatter_body,
+            subject="🚨 Emergency Service Request",
+        )
+        
+        # 3. Create activities (if feature enabled and IDs configured)
+        if not settings.FEATURE_ODOO_ACTIVITIES:
+            logger.debug("FEATURE_ODOO_ACTIVITIES disabled, skipping activity creation")
+            return
+        
+        activity_summary = f"🚨 EMERGENCY: {entities.problem_description or 'Service needed'}"
+        activity_note = (
+            f"Emergency service request from {entities.full_name or 'caller'}.\n"
+            f"Reason: {emergency_reason or 'Emergency service needed'}\n"
+            f"Phone: {entities.phone or 'Not provided'}\n"
+            f"Address: {entities.address or 'Not provided'}"
+        )
+        
+        user_ids_to_notify = []
+        
+        # Dispatch user
+        if settings.ODOO_DISPATCH_USER_ID and settings.ODOO_DISPATCH_USER_ID > 0:
+            user_ids_to_notify.append(("Dispatch", settings.ODOO_DISPATCH_USER_ID))
+        
+        # Linda user
+        if settings.ODOO_LINDA_USER_ID and settings.ODOO_LINDA_USER_ID > 0:
+            user_ids_to_notify.append(("Linda", settings.ODOO_LINDA_USER_ID))
+        
+        # Assigned tech user
+        if settings.ODOO_TECH_USER_IDS_JSON:
+            try:
+                tech_user_ids = json.loads(settings.ODOO_TECH_USER_IDS_JSON)
+                if tech_name and tech_name.lower() in tech_user_ids:
+                    user_ids_to_notify.append((tech_name, tech_user_ids[tech_name.lower()]))
+            except json.JSONDecodeError:
+                logger.warning("Failed to parse ODOO_TECH_USER_IDS_JSON")
+        
+        for name, user_id in user_ids_to_notify:
+            await self.create_activity(
+                lead_id=lead_id,
+                user_id=user_id,
+                summary=activity_summary,
+                note=f"[{name}] {activity_note}",
+            )
+            logger.info(f"Created activity for {name} (user {user_id}) on lead {lead_id}")
+    
     async def search_lead_by_ref(self, call_id: str) -> dict[str, Any] | None:
         """
         Search for an existing lead by call_id reference.
@@ -385,22 +678,30 @@ class LeadService:
                 lead_id = existing_lead["id"]
                 await self.client.write("crm.lead", [lead_id], lead_values)
                 logger.info(f"Updated existing lead: {lead_id}")
-                return {
-                    "lead_id": lead_id,
-                    "action": "updated",
-                    "status": "success",
-                    "partner_id": partner_id,
-                }
+                action = "updated"
             else:
                 # Create new lead
                 lead_id = await self.client.create("crm.lead", lead_values)
                 logger.info(f"Created new lead: {lead_id}")
-                return {
-                    "lead_id": lead_id,
-                    "action": "created",
-                    "status": "success",
-                    "partner_id": partner_id,
-                }
+                action = "created"
+            
+            # ---------------------------------------------------------------------
+            # Emergency handling: tag + chatter + activities
+            # ---------------------------------------------------------------------
+            if is_emergency and lead_id:
+                await self._handle_emergency_notifications(
+                    lead_id=lead_id,
+                    emergency_reason=emergency_reason,
+                    entities=entities,
+                    structured_params=structured_params,
+                )
+            
+            return {
+                "lead_id": lead_id,
+                "action": action,
+                "status": "success",
+                "partner_id": partner_id,
+            }
                 
         except OdooRPCError as e:
             logger.error(f"Odoo RPC error creating lead: {e}")

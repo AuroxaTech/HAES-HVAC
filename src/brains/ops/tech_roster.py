@@ -41,6 +41,7 @@ class Technician:
 
 
 # Technician roster from RDD Section 4
+# Zone assignment: DeSoto (751xx) → Junior
 TECHNICIAN_ROSTER: dict[str, Technician] = {
     "bounthon": Technician(
         id="bounthon",
@@ -55,7 +56,7 @@ TECHNICIAN_ROSTER: dict[str, Technician] = {
             Certification.OSHA_10,
             Certification.COMMERCIAL,
         ],
-        service_areas=["787", "786", "785", "752", "750", "751"],  # Austin + Dallas area
+        service_areas=["787", "786", "785", "752", "750"],  # Austin + North Dallas area (NOT DeSoto)
         can_handle_emergency=True,
         can_handle_commercial=True,
     ),
@@ -71,7 +72,7 @@ TECHNICIAN_ROSTER: dict[str, Technician] = {
             Certification.TDLR,
             Certification.COMMERCIAL,
         ],
-        service_areas=["787", "786", "785"],
+        service_areas=["787", "786", "785", "751"],  # Austin area + DeSoto zone (751xx)
         can_handle_emergency=True,
         can_handle_commercial=True,
     ),

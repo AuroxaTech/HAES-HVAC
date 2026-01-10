@@ -179,7 +179,26 @@ def _handle_service_request(command: HaelCommand) -> OpsResult:
             suggested_action="Manual technician assignment required",
         )
     
-    message = f"Service request created - Priority: {priority.value}"
+    # Build technician assignment data
+    tech_data = None
+    if technician:
+        tech_data = {
+            "id": technician.id,
+            "name": technician.name,
+            "phone": technician.phone,
+            "skill_level": technician.skill_level.value,
+        }
+    
+    # Emergency ETA window (default: 1.5 - 3 hours for emergency, 4-8 hours for urgent)
+    eta_window = None
+    priority_label = priority.value
+    if emergency.is_emergency:
+        eta_window = {"hours_min": 1.5, "hours_max": 3.0}
+        priority_label = "CRITICAL"
+    elif priority == ServicePriority.URGENT:
+        eta_window = {"hours_min": 4.0, "hours_max": 8.0}
+    
+    message = f"Service request created - Priority: {priority_label}"
     if emergency.is_emergency:
         message = f"EMERGENCY: {emergency.reason}. " + message
     
@@ -191,9 +210,13 @@ def _handle_service_request(command: HaelCommand) -> OpsResult:
         data={
             "is_emergency": emergency.is_emergency,
             "emergency_reason": emergency.reason if emergency.is_emergency else None,
+            "priority_label": priority_label,
+            "eta_window_hours_min": eta_window["hours_min"] if eta_window else None,
+            "eta_window_hours_max": eta_window["hours_max"] if eta_window else None,
             "service_type": service_type.name,
             "estimated_duration_min": service_type.duration_minutes_min,
             "estimated_duration_max": service_type.duration_minutes_max,
+            "assigned_technician": tech_data,
         },
     )
 

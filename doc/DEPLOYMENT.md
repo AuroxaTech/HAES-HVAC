@@ -65,6 +65,16 @@ If you prefer manual setup:
    fly secrets set TWILIO_ACCOUNT_SID="<your-twilio-account-sid>" --app haes-hvac
    fly secrets set TWILIO_AUTH_TOKEN="<your-twilio-auth-token>" --app haes-hvac
    fly secrets set TWILIO_PHONE_NUMBER="<your-twilio-phone-number>" --app haes-hvac
+   
+   # Email (SMTP) - Optional
+   fly secrets set SMTP_HOST="smtp.gmail.com" --app haes-hvac
+   fly secrets set SMTP_PORT="587" --app haes-hvac
+   fly secrets set SMTP_USERNAME="junior@hvacrfinest.com" --app haes-hvac
+   fly secrets set SMTP_PASSWORD="<app-password>" --app haes-hvac
+   fly secrets set SMTP_FROM_EMAIL="junior@hvacrfinest.com" --app haes-hvac
+   fly secrets set SMTP_USE_TLS="true" --app haes-hvac
+   fly secrets set SMTP_DRY_RUN="false" --app haes-hvac
+   fly secrets set SMTP_TEST_TO_EMAIL="hamsimirza1@gmail.com" --app haes-hvac
    ```
 
 4. Deploy:
@@ -193,6 +203,14 @@ fly scale vm shared-cpu-1x --memory 1024
 | TWILIO_ACCOUNT_SID | No | Twilio SID |
 | TWILIO_AUTH_TOKEN | No | Twilio token |
 | TWILIO_PHONE_NUMBER | No | Twilio number |
+| SMTP_HOST | No | SMTP server host (e.g., smtp.gmail.com) |
+| SMTP_PORT | No | SMTP port (default: 587) |
+| SMTP_USERNAME | No | SMTP username |
+| SMTP_PASSWORD | No | SMTP password/app password |
+| SMTP_FROM_EMAIL | No | From email address |
+| SMTP_USE_TLS | No | Use TLS (default: true) |
+| SMTP_DRY_RUN | No | Dry-run mode (default: false) |
+| SMTP_TEST_TO_EMAIL | No | Test recipient email |
 | REPORT_TIMEZONE | No | Default: America/Chicago |
 
 ### Troubleshooting
@@ -212,6 +230,18 @@ fly ssh console -C "python scripts/verify_db.py"
 **Check secrets are set:**
 ```bash
 fly secrets list
+```
+
+**Test email from production:**
+```bash
+# Test email sending from production
+fly ssh console -C "cd /app && SMTP_DRY_RUN=false SMTP_TEST_TO_EMAIL=hamsimirza1@gmail.com python scripts/test_email_send.py"
+```
+
+**Test email configuration (dry-run):**
+```bash
+# Check email configuration without sending
+fly ssh console -C "cd /app && python scripts/test_email_send.py"
 ```
 
 ### Rollback
@@ -245,6 +275,8 @@ fly ssh console -C "python scripts/production_checklist.py"
 - [ ] Odoo credentials configured and tested
 - [ ] Vapi API key configured
 - [ ] Twilio credentials configured (for SMS)
+- [ ] SMTP credentials configured (for email notifications)
+- [ ] Email sending tested from production
 
 #### Monitoring & Operations
 - [ ] Logging level appropriate (`INFO` or `WARNING`)
@@ -269,6 +301,14 @@ fly ssh console -C "python scripts/production_checklist.py"
 | `TWILIO_ACCOUNT_SID` | No | - | Twilio SID for SMS |
 | `TWILIO_AUTH_TOKEN` | No | - | Twilio auth token |
 | `TWILIO_PHONE_NUMBER` | No | - | Twilio phone number |
+| `SMTP_HOST` | No | - | SMTP server host |
+| `SMTP_PORT` | No | 587 | SMTP port |
+| `SMTP_USERNAME` | No | - | SMTP username |
+| `SMTP_PASSWORD` | No | - | SMTP password/app password |
+| `SMTP_FROM_EMAIL` | No | - | From email address |
+| `SMTP_USE_TLS` | No | true | Use TLS for SMTP |
+| `SMTP_DRY_RUN` | No | false | Dry-run mode (log only) |
+| `SMTP_TEST_TO_EMAIL` | No | - | Test recipient email |
 | `RATE_LIMIT_ENABLED` | No | true | Enable rate limiting |
 | `RATE_LIMIT_REQUESTS_PER_WINDOW` | No | 100 | Requests per window |
 | `RATE_LIMIT_WINDOW_SECONDS` | No | 60 | Window duration in seconds |

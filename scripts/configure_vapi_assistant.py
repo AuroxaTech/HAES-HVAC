@@ -48,6 +48,18 @@ def load_system_prompt() -> str:
         return f.read()
 
 
+def load_tool_schema() -> dict:
+    """Load the tool schema from doc/vapi/tool_schema.json"""
+    schema_path = Path(__file__).parent.parent / "doc" / "vapi" / "tool_schema.json"
+    
+    if not schema_path.exists():
+        print(f"Warning: Tool schema not found at {schema_path}, using defaults")
+        return {}
+    
+    with open(schema_path, "r") as f:
+        return json.load(f)
+
+
 def get_env_var(name: str, required: bool = True) -> str | None:
     """Get environment variable with error handling."""
     value = os.environ.get(name)
@@ -59,149 +71,82 @@ def get_env_var(name: str, required: bool = True) -> str | None:
 
 
 def create_tool_definition() -> dict:
-    """Create the hael_route tool definition for Vapi assistant."""
+    """Create the hael_route tool definition for Vapi assistant.
+    
+    Loads parameters from doc/vapi/tool_schema.json to ensure consistency.
+    """
+    # Try to load from schema file first
+    schema = load_tool_schema()
+    tool_def = schema.get("tool_definition", {})
+    
+    if tool_def:
+        # Use schema-defined tool but ensure server URL is correct
+        result = {
+            "type": tool_def.get("type", "function"),
+            "async": tool_def.get("async", False),
+            "messages": tool_def.get("messages", [
+                {"type": "request-start", "content": "Let me check that for you."},
+                {"type": "request-complete", "content": ""},
+                {"type": "request-failed", "content": "I'm having trouble processing that request. Let me try again."},
+                {"type": "request-response-delayed", "content": "This is taking a moment. Please hold.", "timingMilliseconds": 3000}
+            ]),
+            "function": tool_def.get("function", {}),
+            "server": {"url": SERVER_URL}
+        }
+        return result
+    
+    # Fallback to hardcoded default (should not normally be reached)
     return {
         "type": "function",
         "async": False,
         "messages": [
-            {
-                "type": "request-start",
-                "content": "Let me check that for you."
-            },
-            {
-                "type": "request-complete",
-                "content": ""
-            },
-            {
-                "type": "request-failed",
-                "content": "I'm having trouble processing that request. Let me try again."
-            },
-            {
-                "type": "request-response-delayed",
-                "content": "This is taking a moment. Please hold.",
-                "timingMilliseconds": 3000
-            }
+            {"type": "request-start", "content": "Let me check that for you."},
+            {"type": "request-complete", "content": ""},
+            {"type": "request-failed", "content": "I'm having trouble processing that request. Let me try again."},
+            {"type": "request-response-delayed", "content": "This is taking a moment. Please hold.", "timingMilliseconds": 3000}
         ],
         "function": {
             "name": TOOL_NAME,
             "description": "Submit a customer service request to the HAES system. Call this after collecting name, phone, address, and issue details.",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "request_type": {
-                        "type": "string",
-                        "enum": ["service_request", "quote_request", "schedule_appointment", "reschedule_appointment", "cancel_appointment", "status_check", "billing_inquiry", "general_inquiry"],
-                        "description": "Type of request: service_request (repair/fix), quote_request (pricing for new system), schedule_appointment, reschedule_appointment, cancel_appointment, status_check, billing_inquiry, or general_inquiry"
-                    },
-                    "customer_name": {
-                        "type": "string",
-                        "description": "Customer's full name"
-                    },
-                    "phone": {
-                        "type": "string",
-                        "description": "Customer's phone number for callback"
-                    },
-                    "email": {
-                        "type": "string",
-                        "description": "Customer's email address (optional)"
-                    },
-                    "address": {
-                        "type": "string",
-                        "description": "Full service address including street, city, state, and ZIP code"
-                    },
-                    "issue_description": {
-                        "type": "string",
-                        "description": "Description of the problem or request (e.g., 'heater not working', 'AC not cooling')"
-                    },
-                    "urgency": {
-                        "type": "string",
-                        "enum": ["emergency", "today", "this_week", "flexible"],
-                        "description": "How urgent: emergency (safety issue), today, this_week, or flexible"
-                    },
-                    "property_type": {
-                        "type": "string",
-                        "enum": ["residential", "commercial"],
-                        "description": "Type of property: residential or commercial"
-                    }
-                },
-                "required": ["request_type", "customer_name", "phone", "address", "issue_description"]
+                "properties": {},
+                "required": []
             }
         },
-        "server": {
-            "url": SERVER_URL
-        }
+        "server": {"url": SERVER_URL}
     }
 
 
 def get_standalone_tool_payload() -> dict:
-    """Create payload for standalone tool (PATCH /tool/{id})."""
+    """Create payload for standalone tool (PATCH /tool/{id}).
+    
+    Loads parameters from doc/vapi/tool_schema.json to ensure consistency.
+    """
+    # Load from schema file
+    schema = load_tool_schema()
+    tool_def = schema.get("tool_definition", {})
+    function_def = tool_def.get("function", {})
+    messages = tool_def.get("messages", [
+        {"type": "request-start", "content": "Let me check that for you."},
+        {"type": "request-complete", "content": ""},
+        {"type": "request-failed", "content": "I'm having trouble processing that request. Let me try again."},
+        {"type": "request-response-delayed", "content": "This is taking a moment. Please hold.", "timingMilliseconds": 3000}
+    ])
+    
     return {
         "name": TOOL_NAME,
         "type": "function",
         "async": False,
-        "messages": [
-            {
-                "type": "request-start",
-                "content": "Let me check that for you."
-            },
-            {
-                "type": "request-complete",
-                "content": ""
-            },
-            {
-                "type": "request-failed",
-                "content": "I'm having trouble processing that request. Let me try again."
-            },
-            {
-                "type": "request-response-delayed",
-                "content": "This is taking a moment. Please hold.",
-                "timingMilliseconds": 3000
-            }
-        ],
+        "messages": messages,
         "function": {
-            "name": TOOL_NAME,
-            "description": "Submit a customer service request to the HAES system. Call this after collecting name, phone, address, and issue details.",
-            "parameters": {
+            "name": function_def.get("name", TOOL_NAME),
+            "description": function_def.get("description", "Submit a customer service request to the HAES system."),
+            "parameters": function_def.get("parameters", {
                 "type": "object",
-                "properties": {
-                    "request_type": {
-                        "type": "string",
-                        "enum": ["service_request", "quote_request", "schedule_appointment", "reschedule_appointment", "cancel_appointment", "status_check", "billing_inquiry", "general_inquiry"],
-                        "description": "Type of request: service_request (repair/fix), quote_request (pricing for new system), schedule_appointment, reschedule_appointment, cancel_appointment, status_check, billing_inquiry, or general_inquiry"
-                    },
-                    "customer_name": {
-                        "type": "string",
-                        "description": "Customer's full name"
-                    },
-                    "phone": {
-                        "type": "string",
-                        "description": "Customer's phone number for callback"
-                    },
-                    "email": {
-                        "type": "string",
-                        "description": "Customer's email address (optional)"
-                    },
-                    "address": {
-                        "type": "string",
-                        "description": "Full service address including street, city, state, and ZIP code"
-                    },
-                    "issue_description": {
-                        "type": "string",
-                        "description": "Description of the problem or request (e.g., 'heater not working', 'AC not cooling')"
-                    },
-                    "urgency": {
-                        "type": "string",
-                        "enum": ["emergency", "today", "this_week", "flexible"],
-                        "description": "How urgent: emergency (safety issue), today, this_week, or flexible"
-                    },
-                    "property_type": {
-                        "type": "string",
-                        "enum": ["residential", "commercial"],
-                        "description": "Type of property: residential or commercial"
-                    }
-                },
-                "required": ["request_type", "customer_name", "phone", "address", "issue_description"]
-            }
+                "properties": {},
+                "required": []
+            })
         },
         "server": {
             "url": SERVER_URL,

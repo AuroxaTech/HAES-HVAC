@@ -1,0 +1,494 @@
+"""
+HAES HVAC - Email Notification Service
+
+Sends email notifications via SMTP using Python's built-in smtplib.
+Supports dry-run mode and test email override for safe staging testing.
+"""
+
+import logging
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from typing import Any
+
+from src.config.settings import get_settings
+
+logger = logging.getLogger(__name__)
+
+
+class EmailError(Exception):
+    """Exception raised when email sending fails."""
+    pass
+
+
+class EmailNotificationService:
+    """
+    Email notification service using SMTP.
+    
+    Supports:
+    - Sending HTML/text emails via SMTP
+    - Dry-run mode (logs instead of sending)
+    - Test email override for staging
+    - TLS/STARTTLS encryption
+    """
+    
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        username: str,
+        password: str,
+        from_email: str,
+        use_tls: bool = True,
+        dry_run: bool = False,
+        test_to_email: str | None = None,
+    ):
+        """
+        Initialize the email service.
+        
+        Args:
+            host: SMTP server hostname
+            port: SMTP server port (usually 587 for STARTTLS, 465 for SSL)
+            username: SMTP username
+            password: SMTP password
+            from_email: From email address
+            use_tls: Use STARTTLS (for port 587) or SSL (for port 465)
+            dry_run: If True, log instead of sending
+            test_to_email: Override recipient email for testing
+        """
+        self.host = host
+        self.port = port
+        self.username = username
+        self.password = password
+        self.from_email = from_email
+        self.use_tls = use_tls
+        self.dry_run = dry_run
+        self.test_to_email = test_to_email
+    
+    def send_email(
+        self,
+        to: str | list[str],
+        subject: str,
+        body_html: str | None = None,
+        body_text: str | None = None,
+        reply_to: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Send an email message.
+        
+        Args:
+            to: Recipient email address(es) (string or list of strings)
+            subject: Email subject line
+            body_html: HTML body (preferred if provided)
+            body_text: Plain text body (fallback if no HTML)
+            reply_to: Optional Reply-To header
+            
+        Returns:
+            Dict with status and message_id on success
+            
+        Raises:
+            EmailError: If sending fails
+        """
+        # Override recipient for testing
+        actual_to = self.test_to_email if self.test_to_email else to
+        if isinstance(actual_to, str):
+            actual_to = [actual_to]
+        
+        # Ensure at least one body format
+        if not body_html and not body_text:
+            body_text = ""  # Empty email
+        
+        # Dry run mode
+        if self.dry_run:
+            logger.info(
+                f"[DRY RUN] Email to {', '.join(actual_to)}: "
+                f"Subject: {subject}\n"
+                f"Body preview: {(body_html or body_text)[:100]}..."
+            )
+            return {
+                "status": "dry_run",
+                "to": actual_to,
+                "subject": subject,
+                "message_id": "dry_run_message_id",
+            }
+        
+        # Create message
+        msg = MIMEMultipart("alternative")
+        msg["From"] = self.from_email
+        msg["To"] = ", ".join(actual_to)
+        msg["Subject"] = subject
+        
+        if reply_to:
+            msg["Reply-To"] = reply_to
+        
+        # Add body parts
+        if body_text:
+            msg.attach(MIMEText(body_text, "plain"))
+        if body_html:
+            msg.attach(MIMEText(body_html, "html"))
+        
+        # Send via SMTP
+        try:
+            if self.use_tls and self.port == 587:
+                # STARTTLS (most common)
+                server = smtplib.SMTP(self.host, self.port, timeout=30)
+                server.starttls()
+            elif self.port == 465:
+                # SSL
+                server = smtplib.SMTP_SSL(self.host, self.port, timeout=30)
+            else:
+                # Plain SMTP (not recommended)
+                server = smtplib.SMTP(self.host, self.port, timeout=30)
+                if self.use_tls:
+                    server.starttls()
+            
+            # Authenticate
+            if self.username and self.password:
+                server.login(self.username, self.password)
+            
+            # Send message
+            text = msg.as_string()
+            server.sendmail(self.from_email, actual_to, text)
+            server.quit()
+            
+            logger.info(f"Email sent: '{subject}' to {', '.join(actual_to)}")
+            return {
+                "status": "sent",
+                "to": actual_to,
+                "subject": subject,
+                "message_id": msg["Message-ID"] if "Message-ID" in msg else "sent",
+            }
+            
+        except smtplib.SMTPException as e:
+            logger.error(f"SMTP error sending email: {e}")
+            raise EmailError(f"SMTP error: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error sending email: {e}")
+            raise EmailError(f"Email send failed: {e}")
+
+
+def create_email_service_from_settings() -> EmailNotificationService | None:
+    """
+    Create an EmailNotificationService from settings.
+    
+    Returns:
+        EmailNotificationService if configured, None if credentials missing
+    """
+    settings = get_settings()
+    
+    if not settings.SMTP_HOST:
+        logger.warning("SMTP_HOST not configured, email disabled")
+        return None
+    
+    if not settings.SMTP_FROM_EMAIL:
+        logger.warning("SMTP_FROM_EMAIL not configured, email disabled")
+        return None
+    
+    return EmailNotificationService(
+        host=settings.SMTP_HOST,
+        port=settings.SMTP_PORT,
+        username=settings.SMTP_USERNAME,
+        password=settings.SMTP_PASSWORD,
+        from_email=settings.SMTP_FROM_EMAIL,
+        use_tls=settings.SMTP_USE_TLS,
+        dry_run=settings.SMTP_DRY_RUN,
+        test_to_email=settings.SMTP_TEST_TO_EMAIL or None,
+    )
+
+
+# =============================================================================
+# Email Message Templates
+# =============================================================================
+
+
+def build_emergency_notification_email(
+    customer_name: str | None,
+    tech_name: str | None,
+    eta_hours_min: float,
+    eta_hours_max: float,
+    total_fee: float,
+    lead_id: int | None = None,
+    address: str | None = None,
+    phone: str | None = None,
+) -> tuple[str, str]:
+    """
+    Build emergency service notification email (HTML + text versions).
+    
+    Returns:
+        Tuple of (html_body, text_body)
+    """
+    greeting = f"Hi {customer_name}," if customer_name else "Hello,"
+    tech_info = f"Technician {tech_name}" if tech_name else "A technician"
+    
+    html_body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+            .header {{ background-color: #d32f2f; color: white; padding: 20px; text-align: center; }}
+            .content {{ padding: 20px; background-color: #f9f9f9; }}
+            .emergency {{ background-color: #ffebee; border-left: 4px solid #d32f2f; padding: 15px; margin: 15px 0; }}
+            .info-box {{ background-color: white; padding: 15px; margin: 10px 0; border-radius: 5px; }}
+            .footer {{ padding: 20px; text-align: center; font-size: 12px; color: #666; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>HVAC-R Finest</h1>
+                <h2>🚨 Emergency Service Request</h2>
+            </div>
+            <div class="content">
+                <p>{greeting}</p>
+                
+                <div class="emergency">
+                    <h3>Emergency Service Confirmation</h3>
+                    <p>Your emergency service request has been received and prioritized.</p>
+                </div>
+                
+                <div class="info-box">
+                    <h3>Service Details</h3>
+                    <p><strong>Assigned Technician:</strong> {tech_info}</p>
+                    <p><strong>Estimated Arrival:</strong> {eta_hours_min:.1f} to {eta_hours_max:.1f} hours</p>
+                    <p><strong>Base Diagnostic Fee:</strong> ${total_fee:.2f} (includes emergency premiums)</p>
+                    {"<p><strong>Service Address:</strong> " + address + "</p>" if address else ""}
+                    {"<p><strong>Contact Phone:</strong> " + phone + "</p>" if phone else ""}
+                    {"<p><strong>Lead ID:</strong> #" + str(lead_id) + "</p>" if lead_id else ""}
+                </div>
+                
+                <div class="info-box">
+                    <h3>What to Expect</h3>
+                    <ul>
+                        <li>Our technician will call you before arrival</li>
+                        <li>Please ensure someone is available at the service address</li>
+                        <li>Final repair costs will depend on the specific issue found</li>
+                    </ul>
+                </div>
+                
+                <p>If you have any questions or need to update your request, please call us at <strong>(972) 372-4458</strong>.</p>
+            </div>
+            <div class="footer">
+                <p>HVAC-R Finest | Licensed & Insured</p>
+                <p>This is an automated confirmation email. Please do not reply directly to this message.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    text_body = f"""
+    HVAC-R Finest - Emergency Service Request Confirmation
+    
+    {greeting}
+    
+    Your emergency service request has been received and prioritized.
+    
+    SERVICE DETAILS:
+    - Assigned Technician: {tech_info}
+    - Estimated Arrival: {eta_hours_min:.1f} to {eta_hours_max:.1f} hours
+    - Base Diagnostic Fee: ${total_fee:.2f} (includes emergency premiums)
+    {f"- Service Address: {address}" if address else ""}
+    {f"- Contact Phone: {phone}" if phone else ""}
+    {f"- Lead ID: #{lead_id}" if lead_id else ""}
+    
+    WHAT TO EXPECT:
+    - Our technician will call you before arrival
+    - Please ensure someone is available at the service address
+    - Final repair costs will depend on the specific issue found
+    
+    Questions? Call (972) 372-4458
+    
+    ---
+    HVAC-R Finest | Licensed & Insured
+    This is an automated confirmation email.
+    """
+    
+    return html_body.strip(), text_body.strip()
+
+
+def build_service_confirmation_email(
+    customer_name: str | None,
+    is_same_day: bool = False,
+    appointment_date: str | None = None,
+) -> tuple[str, str]:
+    """
+    Build standard service confirmation email.
+    
+    Returns:
+        Tuple of (html_body, text_body)
+    """
+    greeting = f"Hi {customer_name}," if customer_name else "Hello,"
+    timing = appointment_date or ("today" if is_same_day else "soon")
+    
+    html_body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+            .header {{ background-color: #1976d2; color: white; padding: 20px; text-align: center; }}
+            .content {{ padding: 20px; background-color: #f9f9f9; }}
+            .info-box {{ background-color: white; padding: 15px; margin: 10px 0; border-radius: 5px; }}
+            .footer {{ padding: 20px; text-align: center; font-size: 12px; color: #666; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>HVAC-R Finest</h1>
+                <h2>Service Request Confirmation</h2>
+            </div>
+            <div class="content">
+                <p>{greeting}</p>
+                <p>Your service request has been received! We'll reach out {timing} to confirm your appointment details.</p>
+                
+                <div class="info-box">
+                    <h3>Next Steps</h3>
+                    <ul>
+                        <li>A team member will contact you to confirm appointment time</li>
+                        <li>You'll receive a reminder before your scheduled visit</li>
+                        <li>If you need to make changes, call us at (972) 372-4458</li>
+                    </ul>
+                </div>
+                
+                <p>Thank you for choosing HVAC-R Finest!</p>
+            </div>
+            <div class="footer">
+                <p>HVAC-R Finest | Licensed & Insured</p>
+                <p>Questions? Call (972) 372-4458</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    text_body = f"""
+    HVAC-R Finest - Service Request Confirmation
+    
+    {greeting}
+    
+    Your service request has been received! We'll reach out {timing} to confirm your appointment details.
+    
+    NEXT STEPS:
+    - A team member will contact you to confirm appointment time
+    - You'll receive a reminder before your scheduled visit
+    - If you need to make changes, call us at (972) 372-4458
+    
+    Thank you for choosing HVAC-R Finest!
+    
+    ---
+    HVAC-R Finest | Licensed & Insured
+    Questions? Call (972) 372-4458
+    """
+    
+    return html_body.strip(), text_body.strip()
+
+
+# =============================================================================
+# Convenience Functions
+# =============================================================================
+
+
+async def send_emergency_email(
+    to_email: str,
+    customer_name: str | None,
+    tech_name: str | None,
+    eta_hours_min: float,
+    eta_hours_max: float,
+    total_fee: float,
+    lead_id: int | None = None,
+    address: str | None = None,
+    phone: str | None = None,
+) -> dict[str, Any]:
+    """
+    Send emergency service confirmation email.
+    
+    Handles service creation and error handling gracefully.
+    
+    Returns:
+        Dict with status and message_id on success, or error info
+    """
+    settings = get_settings()
+    
+    # Check feature flag (reuse emergency SMS flag for now)
+    if not settings.FEATURE_EMERGENCY_SMS:
+        logger.debug("FEATURE_EMERGENCY_SMS disabled, skipping email")
+        return {"status": "disabled", "reason": "feature_flag"}
+    
+    # Create service
+    service = create_email_service_from_settings()
+    if not service:
+        return {"status": "disabled", "reason": "not_configured"}
+    
+    # Build message
+    html_body, text_body = build_emergency_notification_email(
+        customer_name=customer_name,
+        tech_name=tech_name,
+        eta_hours_min=eta_hours_min,
+        eta_hours_max=eta_hours_max,
+        total_fee=total_fee,
+        lead_id=lead_id,
+        address=address,
+        phone=phone,
+    )
+    
+    # Send email (synchronous operation - typically fast < 1s, acceptable for async context)
+    try:
+        result = service.send_email(
+            to=to_email,
+            subject="🚨 Emergency Service Request - HVAC-R Finest",
+            body_html=html_body,
+            body_text=text_body,
+        )
+        return {"status": "sent", **result}
+    except EmailError as e:
+        logger.error(f"Failed to send emergency email: {e}")
+        return {"status": "failed", "error": str(e)}
+
+
+async def send_service_confirmation_email(
+    to_email: str,
+    customer_name: str | None,
+    is_same_day: bool = False,
+    appointment_date: str | None = None,
+) -> dict[str, Any]:
+    """
+    Send standard service confirmation email.
+    
+    Returns:
+        Dict with status and message_id on success, or error info
+    """
+    settings = get_settings()
+    
+    # Feature flag check
+    if not settings.FEATURE_EMERGENCY_SMS:
+        logger.debug("FEATURE_EMERGENCY_SMS disabled, skipping email")
+        return {"status": "disabled", "reason": "feature_flag"}
+    
+    service = create_email_service_from_settings()
+    if not service:
+        return {"status": "disabled", "reason": "not_configured"}
+    
+    html_body, text_body = build_service_confirmation_email(
+        customer_name=customer_name,
+        is_same_day=is_same_day,
+        appointment_date=appointment_date,
+    )
+    
+    # Send email (synchronous operation - typically fast < 1s, acceptable for async context)
+    try:
+        result = service.send_email(
+            to=to_email,
+            subject="Service Request Confirmation - HVAC-R Finest",
+            body_html=html_body,
+            body_text=text_body,
+        )
+        return {"status": "sent", **result}
+    except EmailError as e:
+        logger.error(f"Failed to send service email: {e}")
+        return {"status": "failed", "error": str(e)}

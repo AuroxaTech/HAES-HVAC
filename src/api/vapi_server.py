@@ -36,6 +36,7 @@ from src.hael import (
 from src.hael.schema import Intent, UrgencyLevel
 from src.brains.ops import handle_ops_command
 from src.brains.core import handle_core_command
+from src.brains.core.handlers import calculate_service_pricing
 from src.brains.revenue import handle_revenue_command
 from src.brains.people import handle_people_command
 from src.utils.request_id import generate_request_id
@@ -111,6 +112,23 @@ def is_business_hours() -> bool:
     
     # Check time
     return BUSINESS_HOURS_START <= now.hour < BUSINESS_HOURS_END
+
+
+def is_after_hours_or_weekend() -> tuple[bool, bool]:
+    """
+    Check if current time is after business hours or on a weekend.
+    
+    Returns:
+        Tuple of (is_after_hours, is_weekend)
+    """
+    now = datetime.now(BUSINESS_TZ)
+    
+    is_weekend = now.weekday() >= 5  # Saturday or Sunday
+    
+    # After hours: before 8 AM or 6 PM or later (we use 6 PM for after-hours premium)
+    is_after_hours = now.hour < BUSINESS_HOURS_START or now.hour >= 18  # 6 PM
+    
+    return is_after_hours, is_weekend
 
 
 def get_transfer_destination() -> VapiTransferResponse:
@@ -213,12 +231,14 @@ async def execute_hael_route(
         issue_description = parameters.get("issue_description", "")
         urgency = parameters.get("urgency", "flexible")
         property_type = parameters.get("property_type", "residential")
+        system_type = parameters.get("system_type", "")
+        indoor_temperature_f = parameters.get("indoor_temperature_f")
         
         # Also support legacy user_text/conversation_context format
         user_text = parameters.get("user_text", "")
         conversation_context = parameters.get("conversation_context", "")
         
-        logger.info(f"hael_route params: type={request_type}, name={customer_name}, phone={phone}, address={address}")
+        logger.info(f"hael_route params: type={request_type}, name={customer_name}, phone={phone}, address={address}, system={system_type}, indoor_temp={indoor_temperature_f}")
         
         # Build a rich text representation for the extractor
         text_parts = []
@@ -271,6 +291,14 @@ async def execute_hael_route(
             extraction.entities.problem_description = issue_description
         if property_type:
             extraction.entities.property_type = property_type
+        if system_type:
+            extraction.entities.system_type = system_type
+        if indoor_temperature_f is not None:
+            # Ensure it's an integer
+            try:
+                extraction.entities.temperature_mentioned = int(indoor_temperature_f)
+            except (ValueError, TypeError):
+                pass
         
         # Map urgency to UrgencyLevel
         extraction.entities.urgency_level = URGENCY_MAP.get(urgency, UrgencyLevel.MEDIUM)
@@ -320,6 +348,56 @@ async def execute_hael_route(
             
             is_emergency = data.get("is_emergency", False)
             emergency_reason = data.get("emergency_reason")
+            
+            # ---------------------------------------------------------------------
+            # Compute pricing for service requests (especially emergencies)
+            # ---------------------------------------------------------------------
+            if extraction.intent == Intent.SERVICE_REQUEST and action == "completed":
+                is_after_hours, is_weekend = is_after_hours_or_weekend()
+                
+                pricing = calculate_service_pricing(
+                    tier=None,  # Default to Retail
+                    is_emergency=is_emergency,
+                    is_after_hours=is_after_hours,
+                    is_weekend=is_weekend,
+                )
+                
+                # Add pricing to response data
+                data["pricing"] = {
+                    "tier": pricing.tier.value,
+                    "diagnostic_fee": pricing.diagnostic_fee,
+                    "emergency_premium": pricing.emergency_premium,
+                    "after_hours_premium": pricing.after_hours_premium,
+                    "weekend_premium": pricing.weekend_premium,
+                    "total_base_fee": pricing.total_base_fee,
+                    "notes": pricing.notes,
+                }
+                
+                # Add ETA + pricing info to speak for emergencies
+                if is_emergency:
+                    eta_min = data.get("eta_window_hours_min", 1.5)
+                    eta_max = data.get("eta_window_hours_max", 3.0)
+                    tech_name = None
+                    if data.get("assigned_technician"):
+                        tech_name = data["assigned_technician"].get("name")
+                    
+                    # Build enhanced speak message
+                    speak_parts = [speak]
+                    
+                    # Add tech assignment
+                    if tech_name:
+                        speak_parts.append(f"Technician {tech_name} has been assigned.")
+                    
+                    # Add ETA
+                    speak_parts.append(f"We can have a technician there within {eta_min} to {eta_max} hours.")
+                    
+                    # Add pricing disclaimer
+                    speak_parts.append(
+                        f"The base diagnostic fee for today will be ${pricing.total_base_fee:.2f}, "
+                        f"which includes any applicable premiums. Final repair costs will depend on the issue."
+                    )
+                    
+                    speak = " ".join(speak_parts)
         else:
             # Unknown brain - needs human
             speak = (
@@ -343,6 +421,16 @@ async def execute_hael_route(
                 
                 logger.info(f"Creating Odoo lead for ref={lead_ref_id}, intent={extraction.intent}")
                 
+                # Merge original params with enriched data (tech assignment, pricing, ETA)
+                enriched_params = parameters.copy()
+                if data.get("assigned_technician"):
+                    enriched_params["assigned_technician"] = data["assigned_technician"]
+                if data.get("pricing"):
+                    enriched_params["pricing"] = data["pricing"]
+                if data.get("eta_window_hours_min"):
+                    enriched_params["eta_window_hours_min"] = data["eta_window_hours_min"]
+                    enriched_params["eta_window_hours_max"] = data.get("eta_window_hours_max")
+                
                 odoo_result = await upsert_lead_for_call(
                     call_id=lead_ref_id,  # Use call_id or tool_call_id as reference
                     entities=extraction.entities,
@@ -350,7 +438,7 @@ async def execute_hael_route(
                     is_emergency=is_emergency,
                     emergency_reason=emergency_reason,
                     raw_text=full_text,
-                    structured_params=parameters,
+                    structured_params=enriched_params,
                     request_id=request_id,
                 )
                 
@@ -397,6 +485,58 @@ async def execute_hael_route(
                 logger.warning("No call_id or tool_call_id available for lead creation")
             elif extraction.intent not in LEAD_CREATING_INTENTS:
                 logger.debug(f"Intent {extraction.intent} not in lead-creating intents, skipping Odoo")
+        
+        # ---------------------------------------------------------------------
+        # Send SMS confirmation (background task - don't block response)
+        # ---------------------------------------------------------------------
+        if is_emergency and extraction.entities.phone and action == "completed":
+            import asyncio
+            from src.integrations.twilio_sms import send_emergency_sms
+            from src.utils.audit import log_event
+            
+            async def _send_sms_background():
+                try:
+                    tech_name = None
+                    if data.get("assigned_technician"):
+                        tech_name = data["assigned_technician"].get("name")
+                    
+                    eta_min = data.get("eta_window_hours_min", 1.5)
+                    eta_max = data.get("eta_window_hours_max", 3.0)
+                    total_fee = 0.0
+                    if data.get("pricing"):
+                        total_fee = data["pricing"].get("total_base_fee", 0)
+                    
+                    sms_result = await send_emergency_sms(
+                        to_phone=extraction.entities.phone,
+                        customer_name=extraction.entities.full_name,
+                        tech_name=tech_name,
+                        eta_hours_min=eta_min,
+                        eta_hours_max=eta_max,
+                        total_fee=total_fee,
+                    )
+                    
+                    logger.info(f"Emergency SMS result: {sms_result}")
+                    data["sms"] = sms_result
+                    
+                    # Log to audit
+                    try:
+                        log_event(
+                            request_id=request_id,
+                            channel="sms",
+                            intent="emergency_confirmation",
+                            brain="ops",
+                            command_json={"to": extraction.entities.phone},
+                            odoo_result_json=sms_result,
+                            status=sms_result.get("status", "unknown"),
+                        )
+                    except Exception as audit_err:
+                        logger.warning(f"Failed to log SMS audit: {audit_err}")
+                        
+                except Exception as sms_err:
+                    logger.error(f"Background SMS error: {sms_err}")
+            
+            # Fire and forget - don't await
+            asyncio.create_task(_send_sms_background())
         
         return {
             "speak": speak,
