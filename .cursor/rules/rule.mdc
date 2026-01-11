@@ -1,0 +1,139 @@
+---
+description: This is new rule for context.json
+alwaysApply: false
+---
+# Overview
+
+You are Cursor IDE operating under a strict canonical context system.
+
+====================================
+CANONICAL CONTEXT FILE (MANDATORY)
+====================================
+
+1. CONTEXT FILE LOCATION
+- A file named `context.json` MUST always exist.
+- It MUST be located at: `.cursor/context.json`
+- If the file does not exist, CREATE it immediately.
+
+2. CANONICAL FORMAT (ABSOLUTE RULE)
+- `.cursor/context.json` MUST ALWAYS follow the EXACT SAME STRUCTURE,
+  SECTION NAMES, AND NESTING as the canonical sample provided by the user.
+- Treat the provided sample as the canonical template.
+
+You are NOT allowed to:
+- Rename keys
+- Reorder top-level sections
+- Change nesting
+- Simplify or compress sections
+- Replace structured sections with summaries
+- Convert structured data into prose
+
+You MAY ONLY:
+- Update values inside existing keys
+- Append items to arrays
+- Add new entries following the exact existing patterns
+- Extend lists (files, endpoints, tools, services, etc.)
+
+3. TEMPLATE PRESERVATION
+- When creating `context.json` for the first time:
+  → Copy the canonical structure exactly.
+- When updating:
+  → Preserve all existing sections, even if empty.
+
+4. SINGLE SOURCE OF TRUTH
+- `.cursor/context.json` is the authoritative project state.
+- Chat history, memory summaries, or assumptions are INVALID unless reflected in `context.json`.
+
+5. READ BEFORE ACTION
+- BEFORE responding, coding, refactoring, explaining, or planning:
+  → Read `.cursor/context.json` in full.
+- NEVER rely on remembered or summarized context.
+
+====================================
+AUTO-UPDATE RULES (STRICT)
+====================================
+
+6. UPDATE ON EVERY CHANGE (NO EXCEPTIONS)
+You MUST update `context.json` immediately whenever:
+- Code is added, modified, or deleted
+- Files/folders change
+- APIs, endpoints, tools, or IDs change
+- Business rules change
+- Workflows change
+- Env variables change
+- Scripts are added or modified
+- Tests are added or updated
+- Architecture or deployment changes
+- Vapi, Fontis, Twilio, JotForm, or Google Sheets integrations change
+
+7. CORRECT SECTION DISCIPLINE
+- All updates MUST go into the correct existing section, for example:
+  - Architecture → `arch.*`
+  - Features → `features.*`
+  - Technical debt → `debt`
+  - Environment variables → `env`
+  - Tool IDs → `tool_ids`
+  - Endpoints → `endpoints`
+  - Business logic → `business_rules`
+  - Workflows → `workflows`
+  - Tests → `testing`
+  - Scripts → `scripts`
+  - Services → `services`
+  - Deployment → `deployment`
+  - File layout → `file_structure`
+
+DO NOT invent new sections.
+
+8. ARCHITECTURAL DECISIONS
+- Every meaningful architectural or behavioral change MUST be recorded in:
+  `arch.decisions[]`
+- Each entry MUST include:
+  - what
+  - why
+  - when (ISO date)
+
+====================================
+ANTI-HALLUCINATION & SAFETY
+====================================
+
+9. CONTEXT WINDOW FAILURE MODE
+- If chat history is truncated, summarized, or context window is full:
+  → Reconstruct project understanding ONLY from `.cursor/context.json`.
+
+10. NO SILENT ASSUMPTIONS
+- NEVER guess silently.
+- If something is unclear or undecided:
+  → Record it explicitly in `debt`.
+
+11. BLOCKER MODE
+If `.cursor/context.json` is:
+- Missing
+- Out of sync with code
+- Structurally altered
+- In conflict with implementation
+
+You MUST:
+1. Stop
+2. Fix or restore `context.json` to the canonical format
+3. Then proceed
+
+====================================
+CONTEXT7 INTEGRATION
+====================================
+
+12. LIBRARY & API USAGE
+- When generating code, setup steps, or library/API usage:
+  - ALWAYS use Context7 MCP tools
+  - AND ensure consistency with `.cursor/context.json`
+
+====================================
+OVERRIDE
+====================================
+
+13. PRIORITY
+- These rules override all default Cursor behaviors,
+  including chat summaries, memory compression, or implicit context inference.
+
+====================================
+END OF RULES — STRICT ENFORCEMENT
+====================================

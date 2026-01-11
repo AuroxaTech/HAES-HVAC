@@ -80,7 +80,7 @@ async def chat_message(request: ChatMessageRequest) -> ChatMessageResponse:
 
         # Route to brain handler
         if routing.brain == Brain.OPS:
-            result = handle_ops_command(command)
+            result = await handle_ops_command(command)
             reply = result.message
             action = "completed" if result.status.value == "success" else "needs_human"
             data = result.data

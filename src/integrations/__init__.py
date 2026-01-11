@@ -10,6 +10,7 @@ External service integrations:
 
 from src.integrations.odoo import OdooClient, create_odoo_client_from_settings
 from src.integrations.odoo_leads import LeadService, create_lead_service, upsert_lead_for_call
+from src.integrations.odoo_appointments import AppointmentService, create_appointment_service
 
 # Additional integrations will be exported as implemented:
 # from src.integrations.vapi_client import VapiClient  # Module 8
@@ -21,5 +22,7 @@ __all__ = [
     "LeadService",
     "create_lead_service",
     "upsert_lead_for_call",
+    "AppointmentService",
+    "create_appointment_service",
 ]
 

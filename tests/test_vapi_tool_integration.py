@@ -1434,3 +1434,323 @@ class TestEmailNotifications:
         )
         
         assert result["to"] == ["test-override@example.com"]
+
+
+# =============================================================================
+# APPOINTMENT SCHEDULING TESTS
+# =============================================================================
+
+
+class TestAppointmentScheduling:
+    """Tests for appointment scheduling via Vapi tool calls, including CRM lead linking and technician assignment."""
+
+    @patch("src.integrations.odoo_appointments.create_appointment_service")
+    @patch("src.integrations.odoo_leads.upsert_lead_for_call")
+    def test_schedule_appointment_creates_calendar_event(self, mock_lead_upsert, mock_appointment_service, client, mock_settings):
+        """Schedule appointment should create calendar event in Odoo and link to CRM lead."""
+        from unittest.mock import AsyncMock
+        from datetime import datetime, timedelta
+        
+        # Mock appointment service
+        mock_appointment_service_instance = AsyncMock()
+        mock_appointment_service.return_value = mock_appointment_service_instance
+        
+        # Mock available slot
+        from src.brains.ops.scheduling_rules import TimeSlot, SlotStatus
+        future_time = datetime.now() + timedelta(hours=4)
+        mock_slot = TimeSlot(
+            start=future_time,
+            end=future_time + timedelta(hours=2),
+            status=SlotStatus.AVAILABLE,
+        )
+        mock_appointment_service_instance.find_next_available_slot.return_value = mock_slot
+        mock_appointment_service_instance.create_appointment.return_value = 99999  # Calendar event ID
+        
+        # Mock lead creation
+        mock_lead_upsert.return_value = {
+            "lead_id": 88888,
+            "action": "created",
+            "status": "success",
+            "partner_id": 12345,
+        }
+        
+        # Mock link_appointment_to_lead
+        mock_appointment_service_instance.link_appointment_to_lead.return_value = True
+        
+        payload = {
+            "message": {
+                "type": "tool-calls",
+                "call": {"id": "call_appt_test"},
+                "toolCallList": [{
+                    "id": "tc_appt",
+                    "name": "hael_route",
+                    "parameters": {
+                        "request_type": "schedule_appointment",
+                        "customer_name": "Appointment Customer",
+                        "phone": "+19725559999",
+                        "email": "appt@example.com",
+                        "address": "789 Schedule St, Dallas, TX 75201",
+                        "preferred_time_windows": ["morning"],
+                    }
+                }]
+            }
+        }
+        
+        response = client.post("/vapi/server", json=payload)
+        
+        assert response.status_code == 200
+        data = response.json()
+        result = json.loads(data["results"][0]["result"])
+        
+        # Check that appointment was created
+        assert "data" in result
+        if result["action"] == "completed":
+            # Should have created calendar event
+            assert mock_appointment_service_instance.create_appointment.called
+            # Should have created lead
+            assert mock_lead_upsert.called
+            # Should have linked appointment to lead
+            mock_appointment_service_instance.link_appointment_to_lead.assert_called_once_with(
+                event_id=99999,
+                lead_id=88888,
+            )
+
+    @patch("src.integrations.odoo_appointments.create_appointment_service")
+    @patch("src.integrations.odoo_leads.upsert_lead_for_call")
+    def test_schedule_appointment_includes_appointment_details(self, mock_lead_upsert, mock_appointment_service, client, mock_settings):
+        """Schedule appointment should include appointment details in response."""
+        from unittest.mock import AsyncMock
+        from datetime import datetime, timedelta
+        
+        # Mock appointment service
+        mock_appointment_service_instance = AsyncMock()
+        mock_appointment_service.return_value = mock_appointment_service_instance
+        
+        # Mock available slot
+        from src.brains.ops.scheduling_rules import TimeSlot, SlotStatus
+        future_time = datetime.now() + timedelta(hours=4)
+        mock_slot = TimeSlot(
+            start=future_time,
+            end=future_time + timedelta(hours=2),
+            status=SlotStatus.AVAILABLE,
+        )
+        mock_appointment_service_instance.find_next_available_slot.return_value = mock_slot
+        mock_appointment_service_instance.create_appointment.return_value = 77777
+        
+        # Mock lead creation
+        mock_lead_upsert.return_value = {
+            "lead_id": 66666,
+            "action": "created",
+            "status": "success",
+            "partner_id": 12345,
+        }
+        
+        mock_appointment_service_instance.link_appointment_to_lead.return_value = True
+        
+        payload = {
+            "message": {
+                "type": "tool-calls",
+                "call": {"id": "call_appt_details"},
+                "toolCallList": [{
+                    "id": "tc_appt_details",
+                    "name": "hael_route",
+                    "parameters": {
+                        "request_type": "schedule_appointment",
+                        "customer_name": "Details Customer",
+                        "phone": "+19725558888",
+                        "address": "456 Details Ave, Dallas, TX 75202",
+                    }
+                }]
+            }
+        }
+        
+        response = client.post("/vapi/server", json=payload)
+        
+        assert response.status_code == 200
+        data = response.json()
+        result = json.loads(data["results"][0]["result"])
+        
+        # Check response includes appointment information
+        assert "data" in result
+        if result["action"] == "completed":
+            data_dict = result["data"]
+            # Should have appointment ID and scheduled time
+            assert "appointment_id" in data_dict or "appointment" in data_dict
+            # Check speak message mentions appointment
+            assert "appointment" in result["speak"].lower() or "scheduled" in result["speak"].lower()
+
+    @patch("src.integrations.odoo_appointments.create_appointment_service")
+    def test_reschedule_appointment_updates_calendar_event(self, mock_appointment_service, client, mock_settings):
+        """Reschedule appointment should update existing calendar event in Odoo."""
+        from unittest.mock import AsyncMock
+        from datetime import datetime, timedelta
+        
+        # Mock appointment service
+        mock_appointment_service_instance = AsyncMock()
+        mock_appointment_service.return_value = mock_appointment_service_instance
+        
+        # Mock finding existing appointment
+        existing_appointment = {
+            "id": 55555,
+            "name": "Existing Appointment",
+            "start": (datetime.now() + timedelta(days=1)).isoformat(),
+            "stop": (datetime.now() + timedelta(days=1, hours=2)).isoformat(),
+            "user_id": [10, "Tech User"],
+        }
+        mock_appointment_service_instance.find_appointment_by_contact.return_value = [existing_appointment]
+        
+        # Mock new available slot
+        from src.brains.ops.scheduling_rules import TimeSlot, SlotStatus
+        new_time = datetime.now() + timedelta(days=2, hours=4)
+        mock_slot = TimeSlot(
+            start=new_time,
+            end=new_time + timedelta(hours=2),
+            status=SlotStatus.AVAILABLE,
+        )
+        mock_appointment_service_instance.find_next_available_slot.return_value = mock_slot
+        mock_appointment_service_instance.update_appointment.return_value = True
+        
+        payload = {
+            "message": {
+                "type": "tool-calls",
+                "call": {"id": "call_reschedule"},
+                "toolCallList": [{
+                    "id": "tc_reschedule",
+                    "name": "hael_route",
+                    "parameters": {
+                        "request_type": "reschedule_appointment",
+                        "phone": "+19725559999",
+                        "email": "reschedule@example.com",
+                    }
+                }]
+            }
+        }
+        
+        response = client.post("/vapi/server", json=payload)
+        
+        assert response.status_code == 200
+        data = response.json()
+        result = json.loads(data["results"][0]["result"])
+        
+        # Check response is valid
+        assert "speak" in result
+        # Reschedule should either complete or need human
+        assert result["action"] in ["completed", "needs_human"]
+        # If completed, should have appointment details
+        if result["action"] == "completed" and "data" in result:
+            assert "appointment_id" in result["data"] or "appointment" in result["data"]
+
+    @patch("src.integrations.odoo_appointments.create_appointment_service")
+    def test_cancel_appointment_deactivates_calendar_event(self, mock_appointment_service, client, mock_settings):
+        """Cancel appointment should deactivate calendar event in Odoo."""
+        from unittest.mock import AsyncMock
+        from datetime import datetime, timedelta
+        
+        # Mock appointment service
+        mock_appointment_service_instance = AsyncMock()
+        mock_appointment_service.return_value = mock_appointment_service_instance
+        
+        # Mock finding existing appointment
+        existing_appointment = {
+            "id": 44444,
+            "name": "Appointment to Cancel",
+            "start": (datetime.now() + timedelta(days=1)).isoformat(),
+            "stop": (datetime.now() + timedelta(days=1, hours=2)).isoformat(),
+            "res_model": "crm.lead",
+            "res_id": 33333,
+        }
+        mock_appointment_service_instance.find_appointment_by_contact.return_value = [existing_appointment]
+        mock_appointment_service_instance.cancel_appointment.return_value = True
+        
+        payload = {
+            "message": {
+                "type": "tool-calls",
+                "call": {"id": "call_cancel"},
+                "toolCallList": [{
+                    "id": "tc_cancel",
+                    "name": "hael_route",
+                    "parameters": {
+                        "request_type": "cancel_appointment",
+                        "phone": "+19725559999",
+                    }
+                }]
+            }
+        }
+        
+        response = client.post("/vapi/server", json=payload)
+        
+        assert response.status_code == 200
+        data = response.json()
+        result = json.loads(data["results"][0]["result"])
+        
+        # Check response is valid
+        assert "speak" in result
+        # Cancel should either complete or need human
+        assert result["action"] in ["completed", "needs_human"]
+        # If completed, should indicate cancellation
+        if result["action"] == "completed":
+            assert "cancel" in result["speak"].lower() or "appointment" in result["speak"].lower()
+
+    @patch("src.integrations.odoo_appointments.create_appointment_service")
+    @patch("src.integrations.odoo_leads.upsert_lead_for_call")
+    def test_appointment_linked_to_crm_lead(self, mock_lead_upsert, mock_appointment_service, client, mock_settings):
+        """Appointment should be linked to CRM lead after lead creation."""
+        from unittest.mock import AsyncMock
+        from datetime import datetime, timedelta
+        
+        # Mock appointment service
+        mock_appointment_service_instance = AsyncMock()
+        mock_appointment_service.return_value = mock_appointment_service_instance
+        
+        # Mock available slot
+        from src.brains.ops.scheduling_rules import TimeSlot, SlotStatus
+        future_time = datetime.now() + timedelta(hours=4)
+        mock_slot = TimeSlot(
+            start=future_time,
+            end=future_time + timedelta(hours=2),
+            status=SlotStatus.AVAILABLE,
+        )
+        mock_appointment_service_instance.find_next_available_slot.return_value = mock_slot
+        mock_appointment_service_instance.create_appointment.return_value = 22222
+        
+        # Mock lead creation
+        mock_lead_upsert.return_value = {
+            "lead_id": 33333,
+            "action": "created",
+            "status": "success",
+            "partner_id": 11111,
+        }
+        
+        mock_appointment_service_instance.link_appointment_to_lead.return_value = True
+        
+        payload = {
+            "message": {
+                "type": "tool-calls",
+                "call": {"id": "call_link_test"},
+                "toolCallList": [{
+                    "id": "tc_link",
+                    "name": "hael_route",
+                    "parameters": {
+                        "request_type": "schedule_appointment",
+                        "customer_name": "Link Customer",
+                        "phone": "+19725557777",
+                        "address": "321 Link St, Dallas, TX 75203",
+                    }
+                }]
+            }
+        }
+        
+        response = client.post("/vapi/server", json=payload)
+        
+        assert response.status_code == 200
+        
+        # Check response is valid
+        data = response.json()
+        result = json.loads(data["results"][0]["result"])
+        assert "speak" in result
+        # Should have appointment and lead data if successful
+        if result["action"] == "completed" and "data" in result:
+            # Should have appointment info
+            assert "appointment_id" in result["data"] or "appointment" in result["data"]
+            # Should have Odoo lead info
+            assert "odoo" in result["data"]

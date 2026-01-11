@@ -25,14 +25,14 @@
     ],
     "function": {
       "name": "hael_route",
-      "description": "Submit a customer service request to the HAES system. Call this after collecting name, phone, address, and issue details from the customer.",
+      "description": "Submit a customer request to the HAES system. Use 'schedule_appointment' when customer asks about availability or wants to book an appointment. Use 'service_request' when customer reports a problem and wants it fixed. Use 'quote_request' for pricing on new systems. Call this after collecting name, phone, address, and issue details from the customer.",
       "parameters": {
         "type": "object",
         "properties": {
           "request_type": {
             "type": "string",
             "enum": ["service_request", "quote_request", "schedule_appointment", "reschedule_appointment", "cancel_appointment", "status_check", "billing_inquiry", "general_inquiry"],
-            "description": "Type of request: service_request (repair/fix), quote_request (pricing for new system), schedule_appointment, reschedule_appointment, cancel_appointment, status_check, billing_inquiry, or general_inquiry"
+            "description": "Type of request: schedule_appointment (when customer asks about availability or wants to book - use this if they ask 'what's your availability?' or 'when can you come?'), service_request (repair/fix when customer reports a problem), quote_request (pricing for new system), reschedule_appointment, cancel_appointment, status_check, billing_inquiry, or general_inquiry. IMPORTANT: If customer asks about availability or wants to book, use schedule_appointment, not service_request."
           },
           "customer_name": {
             "type": "string",

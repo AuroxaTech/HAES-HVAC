@@ -451,6 +451,228 @@ async def send_emergency_email(
         return {"status": "failed", "error": str(e)}
 
 
+def build_emergency_staff_notification_email(
+    customer_name: str | None,
+    address: str | None,
+    phone: str | None,
+    tech_name: str | None,
+    eta_hours_min: float,
+    eta_hours_max: float,
+    total_fee: float,
+    lead_id: int | None = None,
+    emergency_reason: str | None = None,
+) -> tuple[str, str]:
+    """
+    Build emergency staff notification email (HTML + text versions).
+    
+    This email is sent to Dispatch, Linda, and assigned technician.
+    
+    Returns:
+        Tuple of (html_body, text_body)
+    """
+    customer_info = customer_name or "Unknown"
+    tech_info = f"Technician {tech_name}" if tech_name else "Unassigned"
+    
+    html_body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+            .header {{ background-color: #d32f2f; color: white; padding: 20px; text-align: center; }}
+            .content {{ padding: 20px; background-color: #f9f9f9; }}
+            .emergency {{ background-color: #ffebee; border-left: 4px solid #d32f2f; padding: 15px; margin: 15px 0; }}
+            .info-box {{ background-color: white; padding: 15px; margin: 10px 0; border-radius: 5px; }}
+            .footer {{ padding: 20px; text-align: center; font-size: 12px; color: #666; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>🚨 EMERGENCY SERVICE REQUEST</h1>
+                <h2>HVAC-R Finest</h2>
+            </div>
+            <div class="content">
+                <div class="emergency">
+                    <h3>Action Required: Emergency Service Request</h3>
+                    {f"<p><strong>Reason:</strong> {emergency_reason}</p>" if emergency_reason else ""}
+                </div>
+                
+                <div class="info-box">
+                    <h3>Customer Information</h3>
+                    <p><strong>Name:</strong> {customer_info}</p>
+                    {f"<p><strong>Address:</strong> {address}</p>" if address else ""}
+                    {f"<p><strong>Phone:</strong> {phone}</p>" if phone else ""}
+                    {f"<p><strong>Lead ID:</strong> <a href='https://www.hvacrfinest.com/web#id={lead_id}&model=crm.lead&view_type=form'>#{lead_id}</a></p>" if lead_id else ""}
+                </div>
+                
+                <div class="info-box">
+                    <h3>Service Details</h3>
+                    <p><strong>Assigned Technician:</strong> {tech_info}</p>
+                    <p><strong>Estimated Arrival:</strong> {eta_hours_min:.1f} to {eta_hours_max:.1f} hours</p>
+                    <p><strong>Base Diagnostic Fee:</strong> ${total_fee:.2f} (includes emergency premiums)</p>
+                </div>
+                
+                <div class="info-box">
+                    <h3>Next Steps</h3>
+                    <ul>
+                        <li>Review customer information and emergency details</li>
+                        <li>Confirm technician assignment and ETA</li>
+                        <li>Monitor service progress in Odoo CRM</li>
+                        <li>Follow up with customer if needed</li>
+                    </ul>
+                </div>
+                
+                <p><strong>This is an automated notification from the HAES system.</strong></p>
+            </div>
+            <div class="footer">
+                <p>HVAC-R Finest | Emergency Dispatch System</p>
+                <p>Do not reply to this automated message</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    text_body = f"""
+    🚨 EMERGENCY SERVICE REQUEST - HVAC-R Finest
+    
+    Action Required: Emergency Service Request
+    
+    {f"Reason: {emergency_reason}" if emergency_reason else ""}
+    
+    CUSTOMER INFORMATION:
+    - Name: {customer_info}
+    {f"- Address: {address}" if address else ""}
+    {f"- Phone: {phone}" if phone else ""}
+    {f"- Lead ID: #{lead_id}" if lead_id else ""}
+    
+    SERVICE DETAILS:
+    - Assigned Technician: {tech_info}
+    - Estimated Arrival: {eta_hours_min:.1f} to {eta_hours_max:.1f} hours
+    - Base Diagnostic Fee: ${total_fee:.2f} (includes emergency premiums)
+    
+    NEXT STEPS:
+    - Review customer information and emergency details
+    - Confirm technician assignment and ETA
+    - Monitor service progress in Odoo CRM
+    - Follow up with customer if needed
+    
+    This is an automated notification from the HAES system.
+    
+    ---
+    HVAC-R Finest | Emergency Dispatch System
+    Do not reply to this automated message
+    """
+    
+    return html_body.strip(), text_body.strip()
+
+
+async def send_emergency_staff_notification(
+    lead_id: int | None,
+    customer_name: str | None,
+    address: str | None,
+    phone: str | None,
+    tech_id: str | None,
+    tech_name: str | None,
+    eta_hours_min: float,
+    eta_hours_max: float,
+    total_fee: float,
+    emergency_reason: str | None = None,
+) -> dict[str, Any]:
+    """
+    Send emergency notification emails to Dispatch, Linda, and assigned technician.
+    
+    Returns:
+        Dict with status and sent emails info
+    """
+    settings = get_settings()
+    
+    # Check if email is configured
+    if not settings.SMTP_HOST or not settings.SMTP_USERNAME:
+        logger.debug("SMTP not configured, skipping staff email notifications")
+        return {"status": "disabled", "reason": "not_configured"}
+    
+    # Create email service
+    try:
+        service = create_email_service_from_settings()
+        if not service:
+            return {"status": "disabled", "reason": "not_configured"}
+    except Exception as e:
+        logger.warning(f"Failed to create email service: {e}")
+        return {"status": "error", "error": str(e)}
+    
+    # Build message
+    html_body, text_body = build_emergency_staff_notification_email(
+        customer_name=customer_name,
+        address=address,
+        phone=phone,
+        tech_name=tech_name,
+        eta_hours_min=eta_hours_min,
+        eta_hours_max=eta_hours_max,
+        total_fee=total_fee,
+        lead_id=lead_id,
+        emergency_reason=emergency_reason,
+    )
+    
+    # Collect recipients
+    recipients = []
+    sent_results = {}
+    
+    # Add Dispatch email
+    if settings.DISPATCH_EMAIL:
+        recipients.append(("Dispatch", settings.DISPATCH_EMAIL))
+    
+    # Add Linda email
+    if settings.LINDA_EMAIL:
+        recipients.append(("Linda", settings.LINDA_EMAIL))
+    
+    # Add assigned technician email
+    if tech_id and settings.TECH_EMAILS_JSON:
+        try:
+            import json
+            tech_emails = json.loads(settings.TECH_EMAILS_JSON)
+            if tech_id.lower() in tech_emails:
+                recipients.append((tech_name or tech_id, tech_emails[tech_id.lower()]))
+        except json.JSONDecodeError:
+            logger.warning("Failed to parse TECH_EMAILS_JSON")
+    
+    if not recipients:
+        logger.warning("No staff email recipients configured for emergency notifications")
+        return {"status": "skipped", "reason": "no_recipients"}
+    
+    # Send emails
+    subject = f"🚨 Emergency Service Request - {customer_name or 'Customer'}"
+    for name, email in recipients:
+        try:
+            result = service.send_email(
+                to=email,
+                subject=subject,
+                body_html=html_body,
+                body_text=text_body,
+            )
+            sent_results[name] = {
+                "email": email,
+                "status": result.get("status", "unknown"),
+                "message_id": result.get("message_id"),
+            }
+            logger.info(f"Sent emergency notification email to {name} ({email})")
+        except Exception as e:
+            logger.error(f"Failed to send email to {name} ({email}): {e}")
+            sent_results[name] = {
+                "email": email,
+                "status": "error",
+                "error": str(e),
+            }
+    
+    return {
+        "status": "sent" if any(r.get("status") == "sent" or r.get("status") == "dry_run" for r in sent_results.values()) else "partial",
+        "recipients": sent_results,
+    }
+
+
 async def send_service_confirmation_email(
     to_email: str,
     customer_name: str | None,

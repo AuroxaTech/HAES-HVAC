@@ -327,7 +327,7 @@ async def execute_hael_route(
         # Route to brain handler
         result = None
         if routing.brain == Brain.OPS:
-            result = handle_ops_command(command)
+            result = await handle_ops_command(command)
         elif routing.brain == Brain.CORE:
             result = handle_core_command(command)
         elif routing.brain == Brain.REVENUE:
@@ -398,6 +398,32 @@ async def execute_hael_route(
                     )
                     
                     speak = " ".join(speak_parts)
+            
+            # ---------------------------------------------------------------------
+            # Handle appointment scheduling/rescheduling/cancellation results
+            # ---------------------------------------------------------------------
+            if extraction.intent in (Intent.SCHEDULE_APPOINTMENT, Intent.RESCHEDULE_APPOINTMENT, Intent.CANCEL_APPOINTMENT) and action == "completed":
+                # Appointment operations already include appointment details in data
+                appointment_id = data.get("appointment_id")
+                scheduled_time = data.get("scheduled_time")
+                technician_name = None
+                if data.get("assigned_technician"):
+                    technician_name = data["assigned_technician"].get("name")
+                
+                # Include appointment info in response
+                if appointment_id:
+                    data["appointment"] = {
+                        "id": appointment_id,
+                        "scheduled_time": scheduled_time,
+                        "scheduled_time_end": data.get("scheduled_time_end"),
+                        "technician_name": technician_name,
+                    }
+                
+                # If appointment was created/rescheduled, try to link to lead if one exists
+                if appointment_id and extraction.intent in (Intent.SCHEDULE_APPOINTMENT, Intent.RESCHEDULE_APPOINTMENT):
+                    # Check if we'll create a lead below
+                    # Link will be handled after lead creation
+                    pass
         else:
             # Unknown brain - needs human
             speak = (
@@ -450,6 +476,19 @@ async def execute_hael_route(
                         "partner_id": odoo_result.get("partner_id"),
                     }
                     logger.info(f"Odoo lead {odoo_result.get('action')}: {lead_id} for ref {lead_ref_id}")
+                    
+                    # Link appointment to lead if appointment was created
+                    if extraction.intent == Intent.SCHEDULE_APPOINTMENT and data.get("appointment_id"):
+                        try:
+                            from src.integrations.odoo_appointments import create_appointment_service
+                            appointment_service = create_appointment_service()
+                            await appointment_service.link_appointment_to_lead(
+                                event_id=data["appointment_id"],
+                                lead_id=lead_id,
+                            )
+                            logger.info(f"Linked appointment {data['appointment_id']} to lead {lead_id}")
+                        except Exception as link_err:
+                            logger.warning(f"Failed to link appointment to lead: {link_err}")
                 else:
                     # Odoo failed - log but continue (fail-closed)
                     logger.error(f"Odoo lead creation failed: {odoo_result.get('error')}")
@@ -487,14 +526,17 @@ async def execute_hael_route(
                 logger.debug(f"Intent {extraction.intent} not in lead-creating intents, skipping Odoo")
         
         # ---------------------------------------------------------------------
-        # Send SMS confirmation (background task - don't block response)
+        # Send SMS confirmation to customer (for emergencies)
         # ---------------------------------------------------------------------
         if is_emergency and extraction.entities.phone and action == "completed":
-            import asyncio
             from src.integrations.twilio_sms import send_emergency_sms
             from src.utils.audit import log_event
+            from src.config.settings import get_settings
             
-            async def _send_sms_background():
+            settings = get_settings()
+            
+            # Only send SMS if feature is enabled
+            if settings.FEATURE_EMERGENCY_SMS:
                 try:
                     tech_name = None
                     if data.get("assigned_technician"):
@@ -506,6 +548,7 @@ async def execute_hael_route(
                     if data.get("pricing"):
                         total_fee = data["pricing"].get("total_base_fee", 0)
                     
+                    # Send SMS and await result to include in response
                     sms_result = await send_emergency_sms(
                         to_phone=extraction.entities.phone,
                         customer_name=extraction.entities.full_name,
@@ -531,12 +574,61 @@ async def execute_hael_route(
                         )
                     except Exception as audit_err:
                         logger.warning(f"Failed to log SMS audit: {audit_err}")
-                        
                 except Exception as sms_err:
-                    logger.error(f"Background SMS error: {sms_err}")
+                    logger.error(f"Emergency SMS error: {sms_err}")
+                    data["sms"] = {"status": "error", "error": str(sms_err)}
+            else:
+                logger.debug("FEATURE_EMERGENCY_SMS disabled, skipping SMS")
+                data["sms"] = {"status": "disabled", "reason": "feature_flag_disabled"}
+        
+        # ---------------------------------------------------------------------
+        # Send email notifications to Dispatch, Linda, and assigned technician
+        # ---------------------------------------------------------------------
+        if is_emergency and action == "completed" and data.get("odoo", {}).get("crm_lead_id"):
+            from src.integrations.email_notifications import send_emergency_staff_notification
+            from src.utils.audit import log_event
             
-            # Fire and forget - don't await
-            asyncio.create_task(_send_sms_background())
+            try:
+                lead_id = data["odoo"].get("crm_lead_id")
+                tech_id = None
+                tech_name = None
+                if data.get("assigned_technician"):
+                    tech_id = data["assigned_technician"].get("id")
+                    tech_name = data["assigned_technician"].get("name")
+                
+                # Send staff notifications (await so errors are caught)
+                staff_email_result = await send_emergency_staff_notification(
+                    lead_id=lead_id,
+                    customer_name=extraction.entities.full_name,
+                    address=extraction.entities.address,
+                    phone=extraction.entities.phone,
+                    tech_id=tech_id,
+                    tech_name=tech_name,
+                    eta_hours_min=data.get("eta_window_hours_min", 1.5),
+                    eta_hours_max=data.get("eta_window_hours_max", 3.0),
+                    total_fee=data.get("pricing", {}).get("total_base_fee", 0),
+                    emergency_reason=emergency_reason,
+                )
+                
+                logger.info(f"Emergency staff email notifications result: {staff_email_result}")
+                data["staff_notifications"] = staff_email_result
+                
+                # Log to audit
+                try:
+                    log_event(
+                        request_id=request_id,
+                        channel="email",
+                        intent="emergency_staff_notification",
+                        brain="ops",
+                        command_json={"lead_id": lead_id},
+                        odoo_result_json=staff_email_result,
+                        status=staff_email_result.get("status", "unknown"),
+                    )
+                except Exception as audit_err:
+                    logger.warning(f"Failed to log email audit: {audit_err}")
+            except Exception as email_err:
+                logger.error(f"Emergency staff email error: {email_err}")
+                data["staff_notifications"] = {"status": "error", "error": str(email_err)}
         
         return {
             "speak": speak,

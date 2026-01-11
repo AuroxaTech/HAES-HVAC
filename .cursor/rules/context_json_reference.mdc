@@ -1,0 +1,72 @@
+---
+description: Mandatory context.json reference rule - prevents hallucination and ensures accurate project state
+alwaysApply: true
+---
+
+# Context.json Reference Rule (MANDATORY)
+
+## CRITICAL: Always Read `.cursor/context.json` Automatically
+
+**You MUST automatically read `.cursor/context.json` in these scenarios WITHOUT asking the user:**
+
+1. **When context window fills or gets truncated** - Read context.json FIRST to refresh project state
+2. **When uncertain about implementation status** - Check `modules_status`, `integrations`, `closeout_blockers_resolved` sections
+3. **Before making architectural suggestions** - Verify current architecture, modules, data flow from context.json
+4. **When hallucinating or making assumptions** - STOP immediately and read context.json to verify actual state
+5. **Before suggesting new features** - Check if feature already exists in `modules_status` or `integrations`
+6. **When answering questions about project structure** - Reference context.json sections (architecture, endpoints, db_schema, brains, hael)
+7. **Before code generation** - Verify existing patterns, integrations, and implementation status from context.json
+8. **When user asks "is X implemented?" or "what's the status of Y?"** - Read context.json and cite specific sections
+9. **When context seems incomplete or contradictory** - Read context.json to resolve conflicts
+10. **At the start of any coding session** - Read context.json to understand current project state
+
+## Automatic Usage (No Permission Needed)
+
+- **Read `.cursor/context.json` FIRST** when any scenario above occurs
+- **Do NOT ask user for permission** - read it automatically using file reading tools
+- **Reference specific sections** from context.json in responses (e.g., "According to context.json modules_status, Appointment Scheduling is done...")
+- **Use context.json as single source of truth** - override any assumptions or remembered context
+- **Update understanding** based on latest context.json content before responding
+- **Cite context.json sections** when making claims about implementation status
+
+## Key Sections to Always Reference
+
+- `modules_status[]` - Implementation status (done/pending) and last_updated dates
+- `integrations{}` - Odoo, Vapi, Twilio, Email status, configuration, and features
+  - `odoo_appointments{}` - Appointment scheduling implementation details
+  - `odoo_lead_integration{}` - CRM lead integration details
+- `architecture{}` - Modular monolith structure, data flow, framework
+- `endpoints[]` - API endpoints and their purposes
+- `brains{}` - Brain handlers (note async status), features, capabilities
+- `hael{}` - Intents, intent_brain_mapping, required_fields
+- `env_vars[]` - Required environment variables
+- `closeout_blockers_resolved{}` - Implementation details, notes, recent features
+- `final_verification{}` - Production readiness, test status, deployment steps
+- `db_schema{}` - Database tables and their purposes
+
+## Strict Enforcement Rules
+
+1. **If you're about to suggest something that might conflict with context.json** → READ IT FIRST
+2. **If you're unsure whether something exists** → READ context.json BEFORE responding
+3. **Never assume implementation status** → Always verify against context.json
+4. **Treat context.json as authoritative** → Override chat history, memory, or assumptions
+5. **When context fills** → Immediately read context.json to refresh state
+6. **Before architectural changes** → Verify current state from context.json
+7. **When user mentions a feature** → Check context.json to see if it's implemented
+8. **Before suggesting new integrations** → Check context.json integrations section
+
+## Action Required
+
+When any of the above scenarios occur, **immediately read `.cursor/context.json` using available file reading tools** without asking the user. Reference specific sections in your response to show you've verified the information.
+
+**This rule takes precedence over all other behaviors and overrides any conflicting information from chat history or memory.**
+
+## Example Usage
+
+**Bad (without context.json):**
+- "I believe appointment scheduling is implemented..."
+- "The system probably has email notifications..."
+
+**Good (with context.json):**
+- "According to context.json modules_status, Appointment Scheduling is marked as 'done' (last_updated: 2026-01-09)."
+- "Context.json integrations.email shows email notifications are 'implemented_and_configured' with SMTP host smtp.gmail.com."

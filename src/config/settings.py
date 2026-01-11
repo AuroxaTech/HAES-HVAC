@@ -61,6 +61,14 @@ class Settings(BaseSettings):
         default='{}',
         description="JSON mapping of tech_id to Odoo user_id, e.g. {\"junior\": 123, \"bounthon\": 456}"
     )
+    
+    # Staff email addresses for emergency notifications
+    DISPATCH_EMAIL: str = Field(default="", description="Email address for Dispatch notifications")
+    LINDA_EMAIL: str = Field(default="", description="Email address for Linda notifications")
+    TECH_EMAILS_JSON: str = Field(
+        default='{}',
+        description="JSON mapping of tech_id to email, e.g. {\"junior\": \"junior@example.com\", \"bounthon\": \"bounthon@example.com\"}"
+    )
 
     # =========================================================================
     # Vapi.ai Voice Integration

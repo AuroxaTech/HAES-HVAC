@@ -80,7 +80,7 @@ async def hael_route(request: VapiToolRequest) -> VapiToolResponse:
 
         # Route to brain handler
         if routing.brain == Brain.OPS:
-            result = handle_ops_command(command)
+            result = await handle_ops_command(command)
             speak = result.message
             action = "completed" if result.status.value == "success" else "needs_human"
             data = result.data

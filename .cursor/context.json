@@ -47,7 +47,8 @@
     { "module": "Module 11 - QA + Hardening", "status": "done", "last_updated": "2026-01-08" },
     { "module": "Vapi Full Setup", "status": "done", "last_updated": "2026-01-09" },
     { "module": "Email Notifications", "status": "done", "last_updated": "2026-01-09" },
-    { "module": "SMS Notifications", "status": "done", "last_updated": "2026-01-09" }
+    { "module": "SMS Notifications", "status": "done", "last_updated": "2026-01-09" },
+    { "module": "Appointment Scheduling", "status": "done", "last_updated": "2026-01-09" }
   ],
   "endpoints": [
     { "method": "GET", "path": "/", "purpose": "Service metadata" },
@@ -113,8 +114,8 @@
   },
   "brains": {
     "ops": {
-      "handlers": "handle_ops_command",
-      "features": ["Emergency qualification", "Service catalog", "Tech roster", "Scheduling rules"]
+      "handlers": "handle_ops_command (async)",
+      "features": ["Emergency qualification", "Service catalog", "Tech roster", "Scheduling rules", "Appointment scheduling (create/reschedule/cancel)"]
     },
     "core": {
       "handlers": "handle_core_command", 
@@ -140,6 +141,7 @@
     "CHAT_SHARED_SECRET", "WEBHOOK_BASE_URL",
     "REPORT_TIMEZONE", "REPORT_RECIPIENTS_JSON",
     "SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_FROM_EMAIL", "SMTP_USE_TLS", "SMTP_DRY_RUN", "SMTP_TEST_TO_EMAIL",
+    "DISPATCH_EMAIL", "LINDA_EMAIL", "TECH_EMAILS_JSON",
     "RATE_LIMIT_ENABLED", "RATE_LIMIT_REQUESTS_PER_WINDOW", "RATE_LIMIT_WINDOW_SECONDS",
     "FEATURE_EMERGENCY_SMS", "FEATURE_ODOO_ACTIVITIES"
   ],
@@ -177,15 +179,15 @@
       "client": "src/integrations/twilio_sms.py",
       "phone_number": "+18557683265",
       "features": ["Emergency SMS notifications", "Service confirmation SMS", "Dry-run mode", "Test number override"],
-      "notes": "SMS client implemented using httpx (no SDK dependency). Configured in production. Note: International SMS requires enabling in Twilio console for non-US numbers."
+      "notes": "SMS client implemented using httpx (no SDK dependency). Configured in production. SMS results are now included in emergency response data. Note: International SMS requires enabling in Twilio console for non-US numbers."
     },
     "email": {
       "status": "implemented_and_configured",
       "client": "src/integrations/email_notifications.py",
       "smtp_host": "smtp.gmail.com",
       "from_email": "junior@hvacrfinest.com",
-      "features": ["Emergency email notifications", "Service confirmation emails", "HTML email templates", "Dry-run mode"],
-      "notes": "SMTP email service implemented using smtplib. Google Workspace (junior@hvacrfinest.com) configured and verified working in production."
+      "features": ["Emergency email notifications", "Service confirmation emails", "Staff emergency notifications (Dispatch, Linda, technicians)", "HTML email templates", "Dry-run mode"],
+      "notes": "SMTP email service implemented using smtplib. Google Workspace (junior@hvacrfinest.com) configured and verified working in production. Staff notifications sent to Dispatch, Linda, and assigned technician for emergency requests."
     },
     "flyio": {
       "status": "configured",
@@ -218,7 +220,8 @@
       "tests/test_reports_api.py",
       "tests/test_vapi_server_url.py",
       "tests/test_vapi_tool_integration.py",
-      "tests/test_odoo_lead_upsert.py"
+      "tests/test_odoo_lead_upsert.py",
+      "tests/test_ops_handlers_comprehensive.py (appointment tests updated to async)"
     ],
     "new_settings": [
       "RATE_LIMIT_ENABLED",
@@ -240,9 +243,13 @@
     "test_suite": "213 tests passing (including database tests)",
     "remaining_action": "Rotate credentials before production deployment",
     "notifications_implemented": {
-      "email": "src/integrations/email_notifications.py - SMTP email service with HTML templates",
-      "sms": "src/integrations/twilio_sms.py - Twilio SMS service with httpx client",
+      "email": "src/integrations/email_notifications.py - SMTP email service with HTML templates. Includes customer emergency notifications and staff notifications (Dispatch, Linda, technicians).",
+      "sms": "src/integrations/twilio_sms.py - Twilio SMS service with httpx client. SMS results included in response data for emergencies.",
       "production_status": "Both email and SMS configured and verified in production",
+      "emergency_notifications": {
+        "customer_sms": "Sent to customer phone with tech assignment, ETA, and pricing. Result included in response data.",
+        "staff_emails": "Sent to Dispatch (DISPATCH_EMAIL), Linda (LINDA_EMAIL), and assigned technician (TECH_EMAILS_JSON). Includes lead ID, customer info, tech assignment, and ETA. Note: SMTP_TEST_TO_EMAIL redirects all emails to test address for safe testing."
+      },
       "test_scripts": [
         "scripts/test_email_send.py",
         "scripts/test_email_production.py",
@@ -261,6 +268,26 @@
       ],
       "integrated_with": "src/api/vapi_server.py - Vapi Server URL endpoint",
       "audit_logging": "Full audit trail for all Odoo operations"
+    },
+    "odoo_appointments": {
+      "module": "src/integrations/odoo_appointments.py",
+      "features": [
+        "Calendar event creation in Odoo",
+        "Appointment lookup by contact (phone/email)",
+        "Appointment rescheduling with slot validation",
+        "Appointment cancellation",
+        "Technician availability checking",
+        "Next available slot finding",
+        "CRM lead linking for appointments",
+        "Integration with scheduling rules and tech roster"
+      ],
+      "integrated_with": [
+        "src/brains/ops/handlers.py - Schedule/reschedule/cancel handlers",
+        "src/api/vapi_server.py - Vapi Server URL endpoint",
+        "src/brains/ops/scheduling_rules.py - Business hours and slot calculation",
+        "src/brains/ops/tech_roster.py - Technician assignment and availability"
+      ],
+      "notes": "Full appointment scheduling lifecycle with Odoo calendar events. Handlers are async."
     }
   },
   "final_verification": {
