@@ -72,6 +72,22 @@
           "indoor_temperature_f": {
             "type": "integer",
             "description": "Current indoor temperature in Fahrenheit (ask when no heat or no AC is reported)"
+          },
+          "square_footage": {
+            "type": "integer",
+            "description": "Square footage of the property (for quote requests)"
+          },
+          "system_age_years": {
+            "type": "integer",
+            "description": "Age of current system in years (for quote requests)"
+          },
+          "budget_range": {
+            "type": "string",
+            "description": "Customer's budget range (e.g., 'under $5000', '$5000-$10000', 'over $10000') (for quote requests)"
+          },
+          "timeline": {
+            "type": "string",
+            "description": "Preferred timeline for installation/service (e.g., '2 weeks', 'within 30 days', 'flexible', 'urgent') (for quote requests)"
           }
         },
         "required": ["request_type", "customer_name", "phone", "address", "issue_description"]

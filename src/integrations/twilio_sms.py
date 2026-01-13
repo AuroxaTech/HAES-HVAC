@@ -230,6 +230,31 @@ def build_service_confirmation_sms(
     )
 
 
+def build_reschedule_confirmation_sms(
+    customer_name: str | None,
+    new_time_str: str,
+    tech_name: str | None,
+) -> str:
+    """
+    Build appointment reschedule confirmation SMS.
+    
+    Args:
+        customer_name: Customer name
+        new_time_str: Formatted new appointment time (e.g., "Tuesday, January 14 at 2:00 PM")
+        tech_name: Assigned technician name
+        
+    Returns:
+        SMS message body
+    """
+    greeting = f"Hi {customer_name}, " if customer_name else ""
+    tech_info = f" with {tech_name}" if tech_name else ""
+    
+    return (
+        f"HVAC-R Finest: {greeting}Your appointment has been rescheduled to {new_time_str}{tech_info}. "
+        f"Reply CONFIRM or call (972) 372-4458 if you need to change it. Reply STOP to opt out."
+    )
+
+
 # =============================================================================
 # Convenience Functions
 # =============================================================================
@@ -313,4 +338,66 @@ async def send_service_confirmation_sms(
         return {"status": "sent", **result}
     except TwilioSMSError as e:
         logger.error(f"Failed to send service SMS: {e}")
+        return {"status": "failed", "error": str(e)}
+
+
+def build_reschedule_confirmation_sms(
+    customer_name: str | None,
+    new_time_str: str,
+    tech_name: str | None,
+) -> str:
+    """
+    Build appointment reschedule confirmation SMS.
+    
+    Args:
+        customer_name: Customer name
+        new_time_str: Formatted new appointment time (e.g., "Tuesday, January 14 at 2:00 PM")
+        tech_name: Assigned technician name
+        
+    Returns:
+        SMS message body
+    """
+    greeting = f"Hi {customer_name}, " if customer_name else ""
+    tech_info = f" with {tech_name}" if tech_name else ""
+    
+    return (
+        f"HVAC-R Finest: {greeting}Your appointment has been rescheduled to {new_time_str}{tech_info}. "
+        f"Reply CONFIRM or call (972) 372-4458 if you need to change it. Reply STOP to opt out."
+    )
+
+
+async def send_reschedule_confirmation_sms(
+    to_phone: str,
+    customer_name: str | None,
+    new_time_str: str,
+    tech_name: str | None,
+) -> dict[str, Any]:
+    """
+    Send appointment reschedule confirmation SMS.
+    
+    Returns:
+        Dict with status and message_sid on success, or error info
+    """
+    settings = get_settings()
+    
+    # Feature flag check
+    if not settings.FEATURE_EMERGENCY_SMS:
+        logger.debug("FEATURE_EMERGENCY_SMS disabled, skipping SMS")
+        return {"status": "disabled", "reason": "feature_flag"}
+    
+    client = create_twilio_client_from_settings()
+    if not client:
+        return {"status": "disabled", "reason": "not_configured"}
+    
+    body = build_reschedule_confirmation_sms(
+        customer_name=customer_name,
+        new_time_str=new_time_str,
+        tech_name=tech_name,
+    )
+    
+    try:
+        result = await client.send_sms(to=to_phone, body=body)
+        return {"status": "sent", **result}
+    except TwilioSMSError as e:
+        logger.error(f"Failed to send reschedule SMS: {e}")
         return {"status": "failed", "error": str(e)}

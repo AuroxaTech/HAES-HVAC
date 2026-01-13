@@ -63,7 +63,7 @@ REQUIRED_FIELDS: dict[Intent, dict[str, list[str]]] = {
         "location": ["address", "zip_code"],  # At least one
     },
     Intent.SCHEDULE_APPOINTMENT: {
-        "required": ["identity", "location", "problem_description", "urgency_level"],
+        "required": [],  # No required fields - handler can work with minimal info for availability checks
         "identity": ["phone", "email", "full_name"],
         "location": ["address", "zip_code"],
     },

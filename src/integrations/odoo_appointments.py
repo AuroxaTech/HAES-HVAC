@@ -144,9 +144,14 @@ class AppointmentService:
             # Build partner search domain
             partner_domain = []
             if phone:
-                clean_phone = re.sub(r"[^\d+]", "", phone)
+                # Normalize phone: remove all non-digits, then use last 10 digits
+                clean_phone = re.sub(r"[^\d]", "", phone)  # Remove all non-digits (including +)
                 if clean_phone:
-                    partner_domain.append(("phone", "ilike", clean_phone[-10:]))
+                    # Use last 10 digits for matching (US numbers, or last 10 of international)
+                    phone_suffix = clean_phone[-10:] if len(clean_phone) >= 10 else clean_phone
+                    # Search for phone containing these last 10 digits (handles +1, country codes, etc.)
+                    partner_domain.append(("phone", "ilike", f"%{phone_suffix}"))
+                    logger.info(f"Searching for partner with phone suffix: {phone_suffix} (from {phone})")
             if email:
                 partner_domain.append(("email", "=ilike", email))
             
@@ -159,10 +164,12 @@ class AppointmentService:
                     limit=10,
                 )
                 partner_ids = partners
+                logger.info(f"Found {len(partner_ids)} partner(s) matching contact info (phone={bool(phone)}, email={bool(email)})")
                 if partner_ids:
                     domain.append(("partner_ids", "in", partner_ids))
                 else:
                     # No partners found, return empty
+                    logger.warning(f"No partners found for phone={phone}, email={email}")
                     return []
             
             # Add date filters

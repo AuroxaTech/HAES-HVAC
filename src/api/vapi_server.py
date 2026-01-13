@@ -233,6 +233,11 @@ async def execute_hael_route(
         property_type = parameters.get("property_type", "residential")
         system_type = parameters.get("system_type", "")
         indoor_temperature_f = parameters.get("indoor_temperature_f")
+        # Quote-specific fields
+        square_footage = parameters.get("square_footage")
+        system_age_years = parameters.get("system_age_years")
+        budget_range = parameters.get("budget_range")
+        timeline = parameters.get("timeline")
         
         # Also support legacy user_text/conversation_context format
         user_text = parameters.get("user_text", "")
@@ -259,6 +264,14 @@ async def execute_hael_route(
             text_parts.append(f"Urgency: {urgency}")
         if property_type:
             text_parts.append(f"Property: {property_type}")
+        if square_footage:
+            text_parts.append(f"Square footage: {square_footage} square feet")
+        if system_age_years:
+            text_parts.append(f"System age: {system_age_years} years old")
+        if budget_range:
+            text_parts.append(f"Budget: {budget_range}")
+        if timeline:
+            text_parts.append(f"Timeline: {timeline}")
         if conversation_context:
             text_parts.append(f"Context: {conversation_context}")
         
@@ -299,6 +312,21 @@ async def execute_hael_route(
                 extraction.entities.temperature_mentioned = int(indoor_temperature_f)
             except (ValueError, TypeError):
                 pass
+        # Quote-specific fields
+        if square_footage is not None:
+            try:
+                extraction.entities.square_footage = int(square_footage)
+            except (ValueError, TypeError):
+                pass
+        if system_age_years is not None:
+            try:
+                extraction.entities.system_age_years = int(system_age_years)
+            except (ValueError, TypeError):
+                pass
+        if budget_range:
+            extraction.entities.budget_range = budget_range
+        if timeline:
+            extraction.entities.timeline = timeline
         
         # Map urgency to UrgencyLevel
         extraction.entities.urgency_level = URGENCY_MAP.get(urgency, UrgencyLevel.MEDIUM)
@@ -306,6 +334,8 @@ async def execute_hael_route(
         # Map request_type to Intent if not already determined
         if request_type in REQUEST_TYPE_INTENT_MAP:
             extraction.intent = REQUEST_TYPE_INTENT_MAP[request_type]
+            # When intent is explicitly provided via request_type, set high confidence
+            extraction.confidence = 0.9
         
         # Route to brain
         routing = route_command(extraction)

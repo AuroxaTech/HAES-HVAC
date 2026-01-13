@@ -127,6 +127,25 @@ Service call pricing depends on customer type and timing:
 ### Do you offer financing?
 Yes, financing options are available for equipment installations and major repairs. Ask our team for details.
 
+### Do you offer maintenance plans?
+Yes! HVAC-R Finest offers maintenance plans to help keep your HVAC system running efficiently year-round:
+
+- **Basic Plan:** $279/year - Includes VIP contract benefits
+- **Commercial Plan:** $379/year - Includes commercial contract benefits
+
+Maintenance plan members receive priority scheduling, regular tune-ups, and discounted service rates. Ask about membership when scheduling your next service call.
+
+### What does the maintenance plan include?
+Our VIP contract (Basic Plan) and Commercial contract include:
+
+- **Priority Scheduling:** Members get priority over non-members for appointment slots
+- **Regular Maintenance:** Seasonal tune-ups to keep your system running efficiently
+- **Discounted Service Rates:** Members receive preferred pricing on repairs and service calls
+- **Extended System Life:** Regular maintenance helps prevent major breakdowns and extends equipment lifespan
+- **Peace of Mind:** Catch small issues before they become expensive repairs
+
+Specific benefits may vary by plan. Our team can provide detailed information when you enroll.
+
 ### When is payment due?
 - **Residential:** Payment is due at completion of service
 - **Commercial:** Net 30 terms available for approved accounts
