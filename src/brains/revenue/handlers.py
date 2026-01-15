@@ -72,7 +72,8 @@ def handle_revenue_command(command: HaelCommand) -> RevenueResult:
                 requires_human=True,
             )
     except Exception as e:
-        logger.exception(f"Error handling REVENUE command: {e}")
+        import traceback
+        logger.exception(f"Error handling REVENUE command: {e}\n{traceback.format_exc()}")
         return RevenueResult(
             status=RevenueStatus.ERROR,
             message=f"Internal error: {str(e)}",
@@ -117,8 +118,8 @@ def _handle_quote_request(command: HaelCommand) -> RevenueResult:
         budget_range=entities.budget_range,
     )
     
-    # Low confidence qualification should flag for human
-    if confidence < 0.6:
+    # Very low confidence qualification should flag for human
+    if confidence < 0.5:
         return RevenueResult(
             status=RevenueStatus.NEEDS_HUMAN,
             message=f"Lead qualification uncertain ({qual_reason})",
@@ -187,11 +188,11 @@ def _handle_quote_request(command: HaelCommand) -> RevenueResult:
     # Determine pricing tier based on property type
     property_type_lower = (entities.property_type or "").lower()
     if property_type_lower in ["commercial", "business", "office", "industrial"]:
-        pricing_tier = PricingTier.COMMERCIAL
+        pricing_tier = PricingTier.COM
     elif property_type_lower in ["property_management", "pm", "rental", "lessen"]:
-        pricing_tier = PricingTier.PROPERTY_MANAGEMENT
+        pricing_tier = PricingTier.DEFAULT_PM
     else:
-        pricing_tier = PricingTier.RESIDENTIAL
+        pricing_tier = PricingTier.RETAIL  # Residential defaults to RETAIL
     
     # Determine system type
     system_type = entities.system_type

@@ -93,8 +93,12 @@ def qualify_lead(
     if urgency_level == UrgencyLevel.MEDIUM:
         return LeadQualification.WARM, 0.65, "Medium urgency level"
     
-    # Default to warm with low confidence (requires human follow-up)
-    return LeadQualification.WARM, 0.5, "Default classification - needs follow-up"
+    # Default to warm with moderate confidence (timeline-based)
+    # If timeline mentions "week" or "weeks", it's likely warm
+    if timeline and "week" in timeline.lower():
+        return LeadQualification.WARM, 0.65, "Timeline-based classification (weeks)"
+    # Default to warm with moderate confidence
+    return LeadQualification.WARM, 0.6, "Default classification"
 
 
 def get_response_time_goal(qualification: LeadQualification) -> int:

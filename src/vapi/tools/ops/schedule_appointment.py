@@ -175,7 +175,17 @@ async def handle_schedule_appointment(
                 
                 appointment_id = result.data["appointment_id"]
                 scheduled_time_str = result.data["scheduled_time"]
-                scheduled_time = datetime.fromisoformat(scheduled_time_str.replace("Z", "+00:00"))
+                # Parse datetime and ensure it's timezone-aware
+                if scheduled_time_str.endswith("Z"):
+                    scheduled_time = datetime.fromisoformat(scheduled_time_str.replace("Z", "+00:00"))
+                elif "+" in scheduled_time_str or scheduled_time_str.count("-") > 2:
+                    # Already has timezone info
+                    scheduled_time = datetime.fromisoformat(scheduled_time_str)
+                else:
+                    # Naive datetime, assume local timezone (CST/CDT)
+                    from datetime import timezone, timedelta
+                    cst = timezone(timedelta(hours=-6))  # CST is UTC-6
+                    scheduled_time = datetime.fromisoformat(scheduled_time_str).replace(tzinfo=cst)
                 
                 # Get database session
                 session_factory = get_session_factory()
