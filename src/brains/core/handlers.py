@@ -130,6 +130,8 @@ def _handle_payment_terms_inquiry(command: HaelCommand) -> CoreResult:
         segment = "commercial"
     elif entities.property_type == "residential":
         segment = "residential"
+    elif entities.property_type == "property_management":
+        segment = "property_management"
     
     # Get payment terms
     terms = get_payment_terms(segment)
@@ -159,12 +161,21 @@ def _handle_invoice_request(command: HaelCommand) -> CoreResult:
             missing_fields=["phone or email"],
         )
     
+    # Build appropriate message based on available contact info
+    if entities.email:
+        message = f"I'll send a copy of your invoice to {entities.email}."
+    elif entities.phone:
+        message = "I'll look up your invoice and send it to the email address we have on file. If you'd like it sent to a different email, please provide it."
+    else:
+        message = "I'll send a copy of your invoice to your email on file."
+    
     return CoreResult(
         status=CoreStatus.SUCCESS,
-        message="I'll send a copy of your invoice to your email on file.",
+        message=message,
         requires_human=False,
         data={
             "contact_email": entities.email,
+            "contact_phone": entities.phone,
             "action": "send_invoice",
         },
     )

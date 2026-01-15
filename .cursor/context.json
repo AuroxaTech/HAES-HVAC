@@ -15,6 +15,7 @@
       { "file": "doc/HAES - Requirement Discovery Document.md", "purpose": "Detailed RDD with business rules and policies" },
       { "file": "doc/vapi/system_prompt.md", "purpose": "Riley AI assistant system prompt" },
       { "file": "doc/vapi/tool_schema.json", "purpose": "Vapi hael_route tool definition" },
+      { "file": "doc/vapi/tools/README.md", "purpose": "Vapi tools organization documentation by integration type" },
       { "file": "doc/vapi/kb/customer_faq.md", "purpose": "Vapi Knowledge Base - Customer FAQ" },
       { "file": "doc/vapi/kb/policies.md", "purpose": "Vapi Knowledge Base - Policies & Disclosures" },
       { "file": "doc/vapi/kb/ops_intake_and_call_policy.md", "purpose": "Vapi Knowledge Base - Intake checklists, emergency rules, prohibited phrases, terminology" }
@@ -32,7 +33,7 @@
       "PEOPLE-BRAIN (HR/Onboarding/Payroll)"
     ],
     "data_flow_summary": "Voice/Chat -> API -> Direct Vapi Tools OR HAEL -> Brain -> Odoo",
-    "vapi_architecture": "Direct tool-based integration - 23 granular tools that bypass HAEL for faster, more precise routing"
+    "vapi_architecture": "Direct tool-based integration - 22 granular tools that bypass HAEL for faster, more precise routing"
   },
   "modules_status": [
     { "module": "Module 1 - Foundation", "status": "done", "last_updated": "2026-01-08" },
@@ -168,9 +169,9 @@
       "integration_mode": "Server URL (direct tool-calls)",
       "production_endpoint": "/vapi/server",
       "legacy_endpoints": ["/vapi/tools/hael_route", "/webhooks/vapi"],
-      "tool_architecture": "Direct granular tools (23 tools) + legacy HAEL fallback",
+      "tool_architecture": "Direct granular tools (22 tools) + legacy HAEL fallback",
       "assistant_name": "Riley",
-      "tools_implemented": 23,
+      "tools_implemented": 22,
       "tool_categories": {
         "ops": 6,
         "revenue": 3,
@@ -180,6 +181,52 @@
       },
       "tool_registry": "src/vapi/tools/register_tools.py",
       "base_handler": "src/vapi/tools/base.py",
+      "tool_organization": {
+        "structure": "Organized by integration type in doc/vapi/tools/",
+        "odoo": {
+          "folder": "doc/vapi/tools/odoo/",
+          "count": 10,
+          "description": "Direct Odoo integration tools that create, update, or query data",
+          "tools": [
+            "create_service_request",
+            "create_complaint",
+            "check_lead_status",
+            "request_quote",
+            "request_membership_enrollment",
+            "schedule_appointment",
+            "reschedule_appointment",
+            "cancel_appointment",
+            "check_appointment_status",
+            "check_availability"
+          ]
+        },
+        "brain_handlers": {
+          "folder": "doc/vapi/tools/brain_handlers/",
+          "count": 8,
+          "description": "Tools that use brain handlers (OPS/CORE/REVENUE/PEOPLE) which may query Odoo or use business logic",
+          "tools": [
+            "billing_inquiry",
+            "invoice_request",
+            "payment_terms_inquiry",
+            "inventory_inquiry",
+            "purchase_request",
+            "hiring_inquiry",
+            "onboarding_inquiry",
+            "payroll_inquiry"
+          ]
+        },
+        "static": {
+          "folder": "doc/vapi/tools/static/",
+          "count": 4,
+          "description": "Static or calculated utility tools without Odoo integration",
+          "tools": [
+            "get_pricing",
+            "get_maintenance_plans",
+            "get_service_area_info",
+            "check_business_hours"
+          ]
+        }
+      },
       "transfer_policy": {
         "business_hours": "8 AM - 5 PM America/Chicago, Mon-Fri",
         "transfer_number": "+19723724458",
@@ -187,7 +234,8 @@
       },
       "documentation": {
         "system_prompt": "doc/vapi/system_prompt.md",
-        "tool_schemas": "doc/vapi/tools/*.json (23 tool JSON schemas)",
+        "tool_schemas": "doc/vapi/tools/ (organized in odoo/, brain_handlers/, static/ folders)",
+        "tool_organization_guide": "doc/vapi/tools/README.md",
         "kb_docs": [
           "doc/vapi/kb/customer_faq.md",
           "doc/vapi/kb/policies.md",
@@ -232,13 +280,30 @@
   },
   "assumptions_and_open_questions": [
     "Odoo 18 Enterprise is accessible via JSON-RPC",
-    "Vapi.ai tool endpoint design: 23 direct granular tools (primary) with HAEL fallback",
+    "Vapi.ai tool endpoint design: 22 direct granular tools (primary) with HAEL fallback, organized by integration type (odoo/brain_handlers/static)",
     "Weather API not integrated - emergency rules use explicit temperature statements",
     "Time tracking integration unspecified - payroll excludes hourly calculations"
   ],
   "vapi_tools": {
-    "total_tools": 23,
+    "total_tools": 22,
     "base_handler": "src/vapi/tools/base.py",
+    "organization": {
+      "odoo_integration": {
+        "folder": "doc/vapi/tools/odoo/",
+        "count": 10,
+        "description": "Tools with direct Odoo API integration (create/update/query leads, appointments)"
+      },
+      "brain_handlers": {
+        "folder": "doc/vapi/tools/brain_handlers/",
+        "count": 8,
+        "description": "Tools that use brain handlers which may query Odoo or use business logic"
+      },
+      "static_utility": {
+        "folder": "doc/vapi/tools/static/",
+        "count": 4,
+        "description": "Static or calculated utility tools without Odoo integration"
+      }
+    },
     "tool_categories": {
       "ops": {
         "tools": [
