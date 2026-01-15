@@ -31,7 +31,8 @@
       "REVENUE-BRAIN (Leads/Quoting/Sales)",
       "PEOPLE-BRAIN (HR/Onboarding/Payroll)"
     ],
-    "data_flow_summary": "Voice/Chat -> API -> HAEL -> Brain -> Odoo"
+    "data_flow_summary": "Voice/Chat -> API -> Direct Vapi Tools OR HAEL -> Brain -> Odoo",
+    "vapi_architecture": "Direct tool-based integration - 23 granular tools that bypass HAEL for faster, more precise routing"
   },
   "modules_status": [
     { "module": "Module 1 - Foundation", "status": "done", "last_updated": "2026-01-08" },
@@ -48,7 +49,11 @@
     { "module": "Vapi Full Setup", "status": "done", "last_updated": "2026-01-09" },
     { "module": "Email Notifications", "status": "done", "last_updated": "2026-01-09" },
     { "module": "SMS Notifications", "status": "done", "last_updated": "2026-01-09" },
-    { "module": "Appointment Scheduling", "status": "done", "last_updated": "2026-01-09" }
+    { "module": "Appointment Scheduling", "status": "done", "last_updated": "2026-01-09" },
+    { "module": "Direct Vapi Tools Architecture", "status": "done", "last_updated": "2026-01-10" },
+    { "module": "Chat Integration", "status": "done", "last_updated": "2026-01-10" },
+    { "module": "Follow-up Automation", "status": "done", "last_updated": "2026-01-10" },
+    { "module": "Call Metrics Tracking", "status": "done", "last_updated": "2026-01-10" }
   ],
   "endpoints": [
     { "method": "GET", "path": "/", "purpose": "Service metadata" },
@@ -60,6 +65,8 @@
     { "method": "POST", "path": "/webhooks/vapi", "purpose": "Vapi call lifecycle webhooks (legacy)" },
     { "method": "GET", "path": "/webhooks/vapi/health", "purpose": "Webhook health check" },
     { "method": "POST", "path": "/chat/message", "purpose": "Website chat message processing" },
+    { "method": "POST", "path": "/chat/pre-qualification", "purpose": "Chat pre-qualification form submission" },
+    { "method": "GET", "path": "/monitoring/call-metrics", "purpose": "Call performance metrics summary (Test 9.1-9.5)" },
     { "method": "GET", "path": "/reports/latest", "purpose": "Get latest report by type" },
     { "method": "POST", "path": "/reports/run-once", "purpose": "Generate report on-demand" },
     { "method": "GET", "path": "/reports/runs", "purpose": "List stored report runs" }
@@ -90,6 +97,11 @@
         "name": "report_deliveries",
         "columns": ["id (INT PK)", "created_at", "report_run_id (FK)", "channel", "recipient", "status", "provider_message_id", "error_message"],
         "purpose": "Report delivery tracking"
+      },
+      {
+        "name": "call_metrics",
+        "columns": ["id (INT PK)", "created_at", "call_id", "request_id", "channel", "call_start_time", "greeting_time", "greeting_duration_seconds", "user_input_times", "average_response_time_seconds", "pauses_over_3_seconds", "call_completed", "call_end_time", "completion_reason", "fields_collected", "fields_correct", "fields_incorrect", "accuracy_rate", "validation_errors", "satisfaction_rating", "satisfaction_feedback", "issues_detected", "prohibited_phrases_detected", "metadata"],
+        "purpose": "Call performance metrics tracking (Test 9.1-9.5)"
       }
     ]
   },
@@ -153,11 +165,21 @@
     },
     "vapi": {
       "status": "fully_configured",
-      "integration_mode": "Server URL (tool-calls)",
+      "integration_mode": "Server URL (direct tool-calls)",
       "production_endpoint": "/vapi/server",
       "legacy_endpoints": ["/vapi/tools/hael_route", "/webhooks/vapi"],
-      "tool_name": "hael_route",
+      "tool_architecture": "Direct granular tools (23 tools) + legacy HAEL fallback",
       "assistant_name": "Riley",
+      "tools_implemented": 23,
+      "tool_categories": {
+        "ops": 6,
+        "revenue": 3,
+        "core": 7,
+        "people": 3,
+        "utils": 3
+      },
+      "tool_registry": "src/vapi/tools/register_tools.py",
+      "base_handler": "src/vapi/tools/base.py",
       "transfer_policy": {
         "business_hours": "8 AM - 5 PM America/Chicago, Mon-Fri",
         "transfer_number": "+19723724458",
@@ -165,14 +187,23 @@
       },
       "documentation": {
         "system_prompt": "doc/vapi/system_prompt.md",
-        "tool_schema": "doc/vapi/tool_schema.json",
+        "tool_schemas": "doc/vapi/tools/*.json (23 tool JSON schemas)",
         "kb_docs": [
           "doc/vapi/kb/customer_faq.md",
           "doc/vapi/kb/policies.md",
           "doc/vapi/kb/ops_intake_and_call_policy.md"
         ]
       },
-      "notes": "Signature verification enforced in production via VAPI_WEBHOOK_SECRET"
+      "features": [
+        "Wrong number detection",
+        "Profanity/abuse detection",
+        "Unclear speech handling",
+        "Duplicate call detection",
+        "Long call context tracking",
+        "Multi-request handling",
+        "Odoo error graceful degradation"
+      ],
+      "notes": "Signature verification enforced in production via VAPI_WEBHOOK_SECRET. Direct tool integration provides faster, more precise routing compared to HAEL-only approach."
     },
     "twilio": {
       "status": "implemented_and_configured",
@@ -201,10 +232,73 @@
   },
   "assumptions_and_open_questions": [
     "Odoo 18 Enterprise is accessible via JSON-RPC",
-    "Vapi.ai tool endpoint design: single hael_route tool",
+    "Vapi.ai tool endpoint design: 23 direct granular tools (primary) with HAEL fallback",
     "Weather API not integrated - emergency rules use explicit temperature statements",
     "Time tracking integration unspecified - payroll excludes hourly calculations"
   ],
+  "vapi_tools": {
+    "total_tools": 23,
+    "base_handler": "src/vapi/tools/base.py",
+    "tool_categories": {
+      "ops": {
+        "tools": [
+          "create_service_request",
+          "schedule_appointment",
+          "check_availability",
+          "reschedule_appointment",
+          "cancel_appointment",
+          "check_appointment_status"
+        ],
+        "features": ["Warranty handling", "Service area validation", "Business hours checks", "Appointment reminders", "Duplicate call detection"]
+      },
+      "revenue": {
+        "tools": [
+          "request_quote",
+          "check_lead_status",
+          "request_membership_enrollment"
+        ],
+        "features": ["Financing presentation", "Lead qualification routing", "Follow-up automation", "Membership enrollment with contracts"]
+      },
+      "core": {
+        "tools": [
+          "billing_inquiry",
+          "payment_terms_inquiry",
+          "invoice_request",
+          "inventory_inquiry",
+          "purchase_request",
+          "get_pricing",
+          "create_complaint"
+        ],
+        "features": ["Pricing tiers", "Payment terms by segment", "Escalation notifications"]
+      },
+      "people": {
+        "tools": [
+          "hiring_inquiry",
+          "onboarding_inquiry",
+          "payroll_inquiry"
+        ],
+        "features": ["Hiring requirements", "Onboarding checklists", "Payroll inquiries"]
+      },
+      "utils": {
+        "tools": [
+          "check_business_hours",
+          "get_service_area_info",
+          "get_maintenance_plans"
+        ],
+        "features": ["Business hours checking", "Service area validation", "Maintenance plan information"]
+      }
+    },
+    "common_features": [
+      "Idempotency checking",
+      "Audit logging",
+      "Odoo error handling",
+      "Context tracking",
+      "Wrong number detection",
+      "Profanity/abuse detection",
+      "Unclear speech handling",
+      "Duplicate call detection"
+    ]
+  },
   "module_11_qa_hardening": {
     "idempotency": "src/utils/idempotency.py - Database-backed request deduplication",
     "rate_limiting": "src/utils/rate_limiter.py - Per-IP sliding window rate limiter",
@@ -288,6 +382,48 @@
         "src/brains/ops/tech_roster.py - Technician assignment and availability"
       ],
       "notes": "Full appointment scheduling lifecycle with Odoo calendar events. Handlers are async."
+    },
+    "chat_integration": {
+      "module": "src/api/chat.py",
+      "features": [
+        "Pre-qualification form submission endpoint",
+        "After-hours handling with offline message",
+        "Live handoff to customer service (business hours)",
+        "Chat lead creation with 'Website Chat' source",
+        "Business hours detection and messaging"
+      ],
+      "endpoints": [
+        "/chat/message - Process chat messages",
+        "/chat/pre-qualification - Handle pre-qualification forms"
+      ],
+      "integrated_with": [
+        "src/integrations/odoo_leads.py - Chat lead creation",
+        "src/integrations/email_notifications.py - Chat lead notifications",
+        "src/vapi/tools/utils/check_business_hours.py - Business hours detection"
+      ]
+    },
+    "followup_automation": {
+      "module": "src/brains/revenue/followups.py",
+      "features": [
+        "Quote sent: Immediate thank-you with financing options and scheduling link",
+        "2-day reminder: Auto reminder + CSR call task creation",
+        "Maybe response sequence: Day 1 education, Day 3 testimonial, Day 7 financing",
+        "Lost deal reactivation: Day 30 check-in, Day 60 seasonal promo, Day 90 rebate"
+      ],
+      "test_coverage": "Test 5.5 - All follow-up sequences implemented"
+    },
+    "call_metrics_tracking": {
+      "module": "src/monitoring/call_metrics.py",
+      "database_table": "call_metrics",
+      "features": [
+        "Response time tracking (Test 9.1): Call start to greeting, user input to response, pauses >3s",
+        "Call completion tracking (Test 9.2): Completion rate with alerts if below 90%",
+        "Data accuracy tracking (Test 9.3): Field validation, accuracy rate (target 95%+)",
+        "User satisfaction tracking (Test 9.4): 1-5 scale ratings (target 4.0+)",
+        "Issue tracking (Test 9.5): Common issues by category, prohibited phrase logging"
+      ],
+      "endpoint": "/monitoring/call-metrics",
+      "integrated_with": "src/api/vapi_server.py - Metrics tracking in tool calls"
     }
   },
   "final_verification": {
@@ -320,7 +456,7 @@
       },
       "postgresql": {
         "status": "VERIFIED_WORKING",
-        "tables": ["alembic_version", "audit_log", "idempotency_keys", "jobs", "report_deliveries", "report_runs"]
+        "tables": ["alembic_version", "audit_log", "idempotency_keys", "jobs", "report_deliveries", "report_runs", "call_metrics"]
       }
     },
     "tests": {

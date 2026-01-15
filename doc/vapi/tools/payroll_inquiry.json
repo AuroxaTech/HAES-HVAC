@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Payroll Inquiry Tool",
+  "description": "Get payroll/commission information",
+  "tool_definition": {
+    "type": "function",
+    "function": {
+      "name": "payroll_inquiry",
+      "description": "Get payroll and commission information. Use this when employee asks about payroll, commission, or pay information.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "employee_email": {
+            "type": "string",
+            "description": "Employee email (required)"
+          },
+          "employee_name": {
+            "type": "string",
+            "description": "Employee name"
+          }
+        },
+        "required": ["employee_email"]
+      }
+    },
+    "async": false,
+    "server": {
+      "url": "https://haes-hvac.fly.dev/vapi/server"
+    }
+  }
+}

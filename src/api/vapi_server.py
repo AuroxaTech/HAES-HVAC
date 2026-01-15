@@ -45,6 +45,9 @@ from src.utils.audit import log_vapi_tool_call, log_vapi_webhook
 from src.db.session import get_session_factory
 from src.config.settings import get_settings
 
+# Import tool registration to ensure tools are registered
+import src.vapi.tools.register_tools  # noqa: F401
+
 # Idempotency scope for Vapi tool calls
 VAPI_TOOL_SCOPE = "vapi_tool"
 
@@ -790,19 +793,162 @@ async def vapi_server_url(request: Request) -> dict[str, Any]:
                 if not existing:
                     checker.start(VAPI_TOOL_SCOPE, idempotency_key)
                 
+                # Check for wrong number and profanity/abuse detection early
+                from src.vapi.tools.base import BaseToolHandler
+                base_handler = BaseToolHandler(tool_name)
+                conversation_context = parameters.get("conversation_context") or parameters.get("user_text") or ""
+                
+                # Check for wrong number first
+                if base_handler.detect_wrong_number(
+                    conversation_context=conversation_context,
+                    user_text=parameters.get("user_text"),
+                ):
+                    # Wrong number detected - respond gracefully, do NOT create lead
+                    logger.info(f"Wrong number detected in call {call_id}")
+                    
+                    # Log as non-actionable
+                    try:
+                        log_vapi_webhook(
+                            session=session,
+                            call_id=call_id,
+                            event_type="wrong_number",
+                            summary="Wrong number/misdial detected",
+                        )
+                    except Exception:
+                        pass
+                    
+                    return {
+                        "speak": "No problem! Have a great day.",
+                        "action": "completed",
+                        "data": {
+                            "wrong_number": True,
+                            "non_actionable": True,
+                        },
+                    }
+                
+                # Check for profanity/abuse
+                if base_handler.detect_profanity_abuse(
+                    conversation_context=conversation_context,
+                    user_text=parameters.get("user_text"),
+                ):
+                    # Profanity/abuse detected - respond professionally, offer escalation
+                    logger.info(f"Profanity/abuse detected in call {call_id}")
+                    
+                    # Log for tracking
+                    try:
+                        log_vapi_webhook(
+                            session=session,
+                            call_id=call_id,
+                            event_type="profanity_abuse",
+                            summary="Profanity or abusive language detected",
+                        )
+                    except Exception:
+                        pass
+                    
+                    return {
+                        "speak": (
+                            "I understand you're frustrated. Let me help resolve this. "
+                            "Would you like me to connect you with a manager who can better assist you?"
+                        ),
+                        "action": "needs_human",
+                        "data": {
+                            "profanity_abuse_detected": True,
+                            "escalation_offered": True,
+                            "professional_response": True,
+                        },
+                    }
+                
+                # Check for unclear speech (low confidence)
+                confidence = parameters.get("confidence") or parameters.get("speech_confidence")
+                retry_count = parameters.get("unclear_retry_count", 0)
+                if confidence is not None:
+                    unclear_response = base_handler.handle_unclear_speech(
+                        confidence=float(confidence),
+                        retry_count=int(retry_count),
+                    )
+                    if unclear_response:
+                        # Log unclear speech
+                        try:
+                            log_vapi_webhook(
+                                session=session,
+                                call_id=call_id,
+                                event_type="unclear_speech",
+                                summary=f"Unclear speech detected (confidence: {confidence})",
+                            )
+                        except Exception:
+                            pass
+                        
+                        return {
+                            "speak": unclear_response.speak,
+                            "action": unclear_response.action,
+                            "data": unclear_response.data,
+                        }
+                
+                # Check for multiple intents (only if this is the first tool call in conversation)
+                # Skip if we're already processing a prioritized request
+                if not parameters.get("_prioritized_request"):
+                    multiple_intents = base_handler.detect_multiple_intents(
+                        conversation_context=conversation_context,
+                        user_text=parameters.get("user_text"),
+                    )
+                    if multiple_intents:
+                        logger.info(f"Multiple intents detected in call {call_id}: {multiple_intents}")
+                        multi_response = base_handler.format_multi_request_response(multiple_intents)
+                        return multi_response.to_dict()
+                
                 # Execute tool
-                if tool_name == "hael_route":
+                # Import tool registry and handler
+                from src.vapi.tools import get_tool_handler
+                from src.vapi.tools.base import handle_tool_call_with_base
+                
+                # Check if it's a direct tool (not hael_route)
+                tool_handler = get_tool_handler(tool_name)
+                
+                if tool_handler:
+                    # Direct tool call
+                    result = await handle_tool_call_with_base(
+                        tool_name=tool_name,
+                        tool_call_id=tool_call_id,
+                        parameters=parameters,
+                        call_id=call_id,
+                        conversation_context=parameters.get("conversation_context"),
+                    )
+                elif tool_name == "hael_route":
+                    # Legacy hael_route tool (backward compatibility)
                     result = await execute_hael_route(
                         parameters=parameters,
                         tool_call_id=tool_call_id,
                         call_id=call_id,
                     )
                 else:
+                    # Unknown tool
+                    logger.warning(f"Unknown tool: {tool_name}")
                     result = {
-                        "speak": "I don't recognize that action. Let me help you another way.",
+                        "speak": f"I don't recognize the '{tool_name}' tool. Please try again.",
                         "action": "error",
                         "data": {"error": f"Unknown tool: {tool_name}"},
                         "request_id": None,
+                    }
+                
+                # Ensure result is a dict (not ToolResponse or other type)
+                if not isinstance(result, dict):
+                    logger.warning(f"Tool {tool_name} returned non-dict result: {type(result)}")
+                    if hasattr(result, "to_dict"):
+                        result = result.to_dict()
+                    else:
+                        result = {
+                            "speak": "I encountered an error processing your request.",
+                            "action": "error",
+                            "data": {"error": f"Invalid response type: {type(result)}"},
+                        }
+                
+                # Validate result has required fields
+                if "speak" not in result:
+                    logger.error(f"Tool {tool_name} result missing 'speak' field: {result}")
+                    result = {
+                        "speak": "I encountered an error processing your request.",
+                        "action": "error",
+                        "data": {"error": "Missing 'speak' field in response"},
                     }
                 
                 # Write audit log
@@ -896,6 +1042,7 @@ async def vapi_server_url(request: Request) -> dict[str, Any]:
         summary = message.get("summary", "")
         duration = message.get("durationSeconds", 0)
         ended_reason = message.get("endedReason", "")
+        transcript = message.get("transcript", "")
         
         logger.info(
             f"Call ended: call_id={call_id}, duration={duration}s, "
@@ -919,6 +1066,113 @@ async def vapi_server_url(request: Request) -> dict[str, Any]:
                 session.close()
         except Exception as audit_err:
             logger.warning(f"Failed to audit end-of-call: {audit_err}")
+        
+        # Detect incomplete calls and send SMS fallback
+        incomplete_reasons = [
+            "hangup",
+            "disconnected",
+            "failed",
+            "busy",
+            "no-answer",
+            "canceled",
+        ]
+        is_incomplete = (
+            ended_reason.lower() in incomplete_reasons
+            or duration < 30  # Very short calls (< 30 seconds)
+            or (duration < 120 and not summary)  # Short calls with no summary
+        )
+        
+        if is_incomplete:
+            try:
+                # Extract phone number from call data
+                call_data = message.get("call", {})
+                customer_phone = call_data.get("customer", {}).get("number") or call_data.get("from")
+                
+                if customer_phone:
+                    # Extract partial data from transcript/summary
+                    partial_data = {
+                        "call_id": call_id,
+                        "duration": duration,
+                        "ended_reason": ended_reason,
+                        "transcript": transcript[:500] if transcript else "",
+                        "summary": summary[:500] if summary else "",
+                    }
+                    
+                    # Try to extract customer name and other info from transcript
+                    name_match = re.search(r'(?:name|i\'m|this is|my name is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)', transcript, re.IGNORECASE)
+                    if name_match:
+                        partial_data["customer_name"] = name_match.group(1)
+                    
+                    phone_match = re.search(r'(\+?1?\d{10,11})', transcript)
+                    if phone_match and not customer_phone:
+                        customer_phone = phone_match.group(1)
+                    
+                    address_match = re.search(r'(\d+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s+(?:Street|St|Avenue|Ave|Road|Rd|Drive|Dr|Lane|Ln|Boulevard|Blvd|Court|Ct|Place|Pl)[^,]*,\s*[A-Z][a-z]+\s+[A-Z]{2}\s+\d{5})', transcript, re.IGNORECASE)
+                    if address_match:
+                        partial_data["address"] = address_match.group(1)
+                    
+                    # Create partial lead with "Incomplete" status
+                    try:
+                        from src.integrations.odoo_leads import create_lead_service
+                        from src.hael.schema import Entity, Intent
+                        from src.utils.request_id import generate_request_id
+                        
+                        lead_service = await create_lead_service()
+                        
+                        # Build minimal entity for incomplete lead
+                        entities = Entity(
+                            full_name=partial_data.get("customer_name"),
+                            phone=customer_phone,
+                            address=partial_data.get("address"),
+                            problem_description=f"Incomplete call - {ended_reason}. Duration: {duration}s. {summary[:200] if summary else ''}",
+                        )
+                        
+                        # Create lead with "Incomplete" tag/status
+                        lead_result = await lead_service.upsert_service_lead(
+                            entities=entities,
+                            urgency_level=None,
+                            is_emergency=False,
+                            service_type=None,
+                            request_id=generate_request_id(),
+                            conversation_context=f"Incomplete call: {transcript[:500] if transcript else summary[:500]}",
+                            structured_params={
+                                "call_status": "Incomplete",
+                                "ended_reason": ended_reason,
+                                "duration_seconds": duration,
+                                "call_id": call_id,
+                            },
+                        )
+                        
+                        if lead_result.get("lead_id"):
+                            logger.info(f"Created incomplete lead {lead_result['lead_id']} for call {call_id}")
+                            
+                            # Create callback task in Odoo (as an activity)
+                            try:
+                                await lead_service.client.create("mail.activity", {
+                                    "res_id": lead_result["lead_id"],
+                                    "res_model": "crm.lead",
+                                    "activity_type_id": await lead_service._get_activity_type_id("Call"),
+                                    "summary": f"Callback needed - Incomplete call ({ended_reason})",
+                                    "note": f"Call ended prematurely. Duration: {duration}s. Reason: {ended_reason}. Please call customer back.",
+                                    "user_id": await lead_service._get_user_id("dispatch"),
+                                })
+                            except Exception as task_err:
+                                logger.warning(f"Failed to create callback task: {task_err}")
+                        
+                    except Exception as lead_err:
+                        logger.warning(f"Failed to create incomplete lead: {lead_err}")
+                    
+                    # Send SMS fallback
+                    try:
+                        from src.integrations.twilio_sms import send_incomplete_call_sms
+                        sms_result = await send_incomplete_call_sms(to_phone=customer_phone)
+                        if sms_result.get("status") == "sent":
+                            logger.info(f"Sent incomplete call SMS to {customer_phone}")
+                    except Exception as sms_err:
+                        logger.warning(f"Failed to send incomplete call SMS: {sms_err}")
+                
+            except Exception as incomplete_err:
+                logger.warning(f"Error handling incomplete call: {incomplete_err}")
         
         return {"status": "ok"}
     

@@ -80,7 +80,8 @@ All HVAC-R Finest technicians hold:
 ## Warranty Policies
 
 ### Labor Warranty
-- Standard labor warranty applies to all repairs (terms vary by service type).
+- **Repairs:** 30-day labor warranty on all repair work
+- **Equipment:** 1-year labor warranty on equipment installations
 - Labor warranty is voided if equipment is tampered with by unauthorized parties.
 
 ### Equipment Warranty
@@ -90,9 +91,10 @@ All HVAC-R Finest technicians hold:
 
 ### Warranty Claim Process
 1. Contact our office with your service history and issue description.
-2. A technician will assess the system.
+2. A technician will assess the system (same technician who did original work when possible).
 3. If covered under warranty, repair or replacement is provided per warranty terms.
-4. **Warranty coverage is determined case by case—coverage is not guaranteed until assessed.**
+4. **Warranty service requests are prioritized (2nd highest priority) and diagnostic fees are waived.**
+5. **Warranty coverage is determined case by case—coverage is not guaranteed until assessed.**
 
 ---
 

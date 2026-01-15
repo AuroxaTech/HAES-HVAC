@@ -25,23 +25,28 @@ def route_lead(
     qualification: LeadQualification = LeadQualification.WARM,
 ) -> tuple[list[str], str]:
     """
-    Route a lead to the appropriate assignees.
+    Route a lead to the appropriate assignees based on qualification and property type.
     
-    Rules from RDD:
-    - Residential leads → Bounthon and Aubry
-    - Commercial leads → Junior and Bounthon
-    - High-value leads (>$10k) → Junior
+    Rules from RDD (Test 5.3):
+    - Hot leads → Senior tech/sales immediately (Junior)
+    - Warm leads → Standard production, follow-up automation (based on property type)
+    - Cold leads → Nurture drip, review building (standard assignment but trigger nurture automation)
+    
+    Additional rules:
+    - Residential leads → Bounthon and Aubry (warm/cold)
+    - Commercial leads → Junior and Bounthon (warm/cold)
+    - High-value leads (>$10k) → Junior (overrides qualification)
     
     Args:
         property_type: residential or commercial
         budget_range: Budget range string
         estimated_value: Estimated deal value
-        qualification: Lead qualification level
+        qualification: Lead qualification level (HOT, WARM, COLD)
         
     Returns:
         Tuple of (list of assignees, routing reason)
     """
-    # Check for high-value override
+    # Check for high-value override (highest priority)
     is_high_value = False
     if estimated_value and estimated_value > HIGH_VALUE_THRESHOLD:
         is_high_value = True
@@ -60,22 +65,51 @@ def route_lead(
         except (ValueError, AttributeError):
             pass
     
-    # High-value routing takes precedence
+    # High-value routing takes precedence (overrides qualification)
     if is_high_value:
-        return HIGH_VALUE_ASSIGNEES, f"High-value lead (>${HIGH_VALUE_THRESHOLD})"
+        return HIGH_VALUE_ASSIGNEES, f"High-value lead (>${HIGH_VALUE_THRESHOLD}) - immediate assignment"
     
-    # Route by property type
+    # HOT leads → Senior tech/sales immediately (Junior)
+    if qualification == LeadQualification.HOT:
+        return ["Junior"], "Hot lead - immediate assignment to senior tech/sales"
+    
+    # WARM leads → Standard production, follow-up automation (route by property type)
+    if qualification == LeadQualification.WARM:
+        property_type_lower = (property_type or "").lower()
+        
+        if property_type_lower in ["commercial", "business", "office", "industrial"]:
+            return COMMERCIAL_ASSIGNEES, "Warm commercial lead - standard production routing"
+        
+        if property_type_lower in ["residential", "home", "house", "apartment", "condo"]:
+            return RESIDENTIAL_ASSIGNEES, "Warm residential lead - standard production routing"
+        
+        # Unknown property type - route to residential by default
+        return RESIDENTIAL_ASSIGNEES, "Warm lead - default routing (property type unknown)"
+    
+    # COLD leads → Nurture drip (route by property type but will trigger nurture automation)
+    if qualification == LeadQualification.COLD:
+        property_type_lower = (property_type or "").lower()
+        
+        if property_type_lower in ["commercial", "business", "office", "industrial"]:
+            return COMMERCIAL_ASSIGNEES, "Cold commercial lead - nurture drip routing"
+        
+        if property_type_lower in ["residential", "home", "house", "apartment", "condo"]:
+            return RESIDENTIAL_ASSIGNEES, "Cold residential lead - nurture drip routing"
+        
+        # Unknown property type - route to residential by default
+        return RESIDENTIAL_ASSIGNEES, "Cold lead - default routing (property type unknown)"
+    
+    # Fallback: Route by property type (if qualification not provided or unknown)
     property_type_lower = (property_type or "").lower()
     
     if property_type_lower in ["commercial", "business", "office", "industrial"]:
-        return COMMERCIAL_ASSIGNEES, "Commercial property routing"
+        return COMMERCIAL_ASSIGNEES, "Commercial property routing (qualification unknown)"
     
     if property_type_lower in ["residential", "home", "house", "apartment", "condo"]:
-        return RESIDENTIAL_ASSIGNEES, "Residential property routing"
+        return RESIDENTIAL_ASSIGNEES, "Residential property routing (qualification unknown)"
     
     # Unknown property type - route to residential by default
-    # but flag for human review
-    return RESIDENTIAL_ASSIGNEES, "Default routing (property type unknown)"
+    return RESIDENTIAL_ASSIGNEES, "Default routing (property type and qualification unknown)"
 
 
 def get_primary_assignee(assignees: list[str]) -> str | None:

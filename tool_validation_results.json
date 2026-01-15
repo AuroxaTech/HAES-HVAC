@@ -1,0 +1,332 @@
+[
+  {
+    "tool_name": "create_service_request",
+    "http_code": 200,
+    "response_time": 6.748226,
+    "response": {
+      "results": [
+        {
+          "toolCallId": "test-tool-call-create_service_request-1768439491",
+          "result": "{\"speak\": \"Service request created - Priority: urgent We're currently outside business hours. After-hours service may be available with additional premiums.\", \"action\": \"completed\", \"data\": {\"is_emergency\": false, \"emergency_reason\": null, \"priority_label\": \"urgent\", \"eta_window_hours_min\": 4.0, \"eta_window_hours_max\": 8.0, \"service_type\": \"Minor Repair\", \"estimated_duration_min\": 60, \"estimated_duration_max\": 120, \"assigned_technician\": {\"id\": \"bounthon\", \"name\": \"Bounthon\", \"phone\": \"512-555-0001\", \"skill_level\": \"master\"}, \"request_id\": \"18d8c75b-630b-437b-a693-303b7907658a\", \"lead_id\": {\"lead_id\": 2704, \"action\": \"created\", \"status\": \"success\", \"partner_id\": 21828, \"customer_type\": \"Retail\", \"pricing_tier\": \"Retail Pricing\"}, \"is_weekend\": false, \"is_after_hours\": true, \"premium_applies\": true}}"
+        }
+      ]
+    },
+    "success": true,
+    "error": null
+  },
+  {
+    "tool_name": "schedule_appointment",
+    "http_code": 200,
+    "response_time": 4.400847,
+    "response": {
+      "results": [
+        {
+          "toolCallId": "test-tool-call-schedule_appointment-1768439501",
+          "result": "{\"speak\": \"Appointment scheduled for Thursday, January 15 at 08:00 AM. Residential Preventive Maintenance visit confirmed. We're currently outside business hours. Weekend appointments may have additional premiums.\", \"action\": \"completed\", \"data\": {\"appointment_id\": 5189, \"scheduled_time\": \"2026-01-15T08:00:00\", \"scheduled_time_end\": \"2026-01-15T10:34:00\", \"service_type\": \"Residential Preventive Maintenance\", \"duration_minutes\": 90, \"assigned_technician\": null, \"partner_id\": 21829, \"lead_id\": null, \"request_id\": \"6ff379eb-35d0-4c64-a04f-9db241d7b229\", \"is_weekend\": false, \"is_after_hours\": true, \"premium_applies\": true}}"
+        }
+      ]
+    },
+    "success": true,
+    "error": null
+  },
+  {
+    "tool_name": "check_availability",
+    "http_code": 200,
+    "response_time": 2.309161,
+    "response": {
+      "results": [
+        {
+          "toolCallId": "test-tool-call-check_availability-1768439507",
+          "result": "{\"speak\": \"The next available slot for residential diagnostic is Thursday, January 15 at 08:00 AM. Would you like me to schedule this appointment?\", \"action\": \"needs_human\", \"data\": {\"availability_check\": true, \"next_available_slot\": {\"start\": \"2026-01-15T08:00:00\", \"end\": \"2026-01-15T10:34:00\", \"technician_id\": \"junior\"}, \"service_type\": \"Residential Diagnostic\", \"duration_minutes\": 90}}"
+        }
+      ]
+    },
+    "success": true,
+    "error": null
+  },
+  {
+    "tool_name": "reschedule_appointment",
+    "http_code": 200,
+    "response_time": 2.475736,
+    "response": {
+      "results": [
+        {
+          "toolCallId": "test-tool-call-reschedule_appointment-1768439511",
+          "result": "{\"speak\": \"Your current appointment is on Thursday, January 15 at 08:00 AM. The next available slot is Friday, January 16 at 08:00 AM. Would you like me to reschedule your appointment to this time?\", \"action\": \"needs_human\", \"data\": {\"existing_appointment_id\": 5189, \"current_appointment_time\": \"2026-01-15T08:00:00\", \"availability_check\": true, \"next_available_slot\": {\"start\": \"2026-01-16T08:00:00\", \"end\": \"2026-01-16T11:38:00\", \"technician_id\": null, \"technician_name\": null}, \"contact_phone\": \"+1234567890\"}}"
+        }
+      ]
+    },
+    "success": true,
+    "error": null
+  },
+  {
+    "tool_name": "cancel_appointment",
+    "http_code": 200,
+    "response_time": 2.466562,
+    "response": {
+      "results": [
+        {
+          "toolCallId": "test-tool-call-cancel_appointment-1768439516",
+          "result": "{\"speak\": \"Your appointment has been cancelled. You will receive a confirmation shortly. As a reminder, we request 24 hours notice for cancellations. Thank you for letting us know in advance.\", \"action\": \"completed\", \"data\": {\"appointment_id\": 5189, \"cancelled\": true, \"lead_id\": null, \"request_id\": \"5afea818-3145-4e7e-ac90-272d4a791acb\", \"cancellation_policy\": {\"notice_required_hours\": 24, \"policy_text\": \"We request 24 hours notice for cancellations or reschedules. No-show appointments may be subject to a trip charge.\", \"applies\": true}}}"
+        }
+      ]
+    },
+    "success": true,
+    "error": null
+  },
+  {
+    "tool_name": "check_appointment_status",
+    "http_code": 200,
+    "response_time": 1.936474,
+    "response": {
+      "results": [
+        {
+          "toolCallId": "test-tool-call-check_appointment_status-1768439520",
+          "result": "{\"speak\": \"Looking up your service status. A representative will provide an update shortly.\", \"action\": \"completed\", \"data\": {\"contact_phone\": \"+1234567890\", \"contact_email\": null, \"request_id\": \"4fdbe5bf-0363-45c3-adba-43177d1fa12c\"}}"
+        }
+      ]
+    },
+    "success": true,
+    "error": null
+  },
+  {
+    "tool_name": "request_quote",
+    "http_code": 200,
+    "response_time": 1.573458,
+    "response": {
+      "results": [
+        {
+          "toolCallId": "test-tool-call-request_quote-1768439524",
+          "result": "{\"speak\": \"To provide a quote, I need: timeline.\", \"action\": \"needs_human\", \"data\": {\"missing_fields\": [\"timeline\"]}}"
+        }
+      ]
+    },
+    "success": true,
+    "error": null
+  },
+  {
+    "tool_name": "check_lead_status",
+    "http_code": 200,
+    "response_time": 2.130279,
+    "response": {
+      "results": [
+        {
+          "toolCallId": "test-tool-call-check_lead_status-1768439528",
+          "result": "{\"speak\": \"Your quote request is in the New stage.\", \"action\": \"completed\", \"data\": {\"lead_id\": 2702, \"lead_name\": \"Service Request - 7890\", \"stage\": \"New\", \"probability\": 13.57, \"expected_revenue\": 0.0}}"
+        }
+      ]
+    },
+    "success": true,
+    "error": null
+  },
+  {
+    "tool_name": "request_membership_enrollment",
+    "http_code": 200,
+    "response_time": 1.558872,
+    "response": {
+      "results": [
+        {
+          "toolCallId": "test-tool-call-request_membership_enrollment-1768439532",
+          "result": "{\"speak\": \"To enroll in a maintenance membership, I need: membership_type.\", \"action\": \"needs_human\", \"data\": {\"missing_fields\": [\"membership_type\"]}}"
+        }
+      ]
+    },
+    "success": true,
+    "error": null
+  },
+  {
+    "tool_name": "billing_inquiry",
+    "http_code": 200,
+    "response_time": 1.722381,
+    "response": {
+      "results": [
+        {
+          "toolCallId": "test-tool-call-billing_inquiry-1768439536",
+          "result": "{\"speak\": \"I can help you with billing information. Let me look up your account.\", \"action\": \"completed\", \"data\": {\"contact_phone\": \"+1234567890\", \"contact_email\": null, \"action\": \"lookup_billing\", \"request_id\": \"8c16b080-5003-4076-b9a0-0c4935da7bea\", \"payment_terms\": {\"segment\": \"default\", \"due_days\": 0, \"due_text\": \"Due upon receipt\", \"late_fee_percent\": 1.0, \"late_fee_text\": \"1.0% per month after due date\", \"accepted_methods\": [\"cash\", \"card\", \"check\"], \"formatted_text\": \"Payment Terms: Due upon receipt\\nLate Fee: 1.0% per month after due date\\nAccepted Methods: cash, card, check\"}}}"
+        }
+      ]
+    },
+    "success": true,
+    "error": null
+  },
+  {
+    "tool_name": "payment_terms_inquiry",
+    "http_code": 200,
+    "response_time": 1.573288,
+    "response": {
+      "results": [
+        {
+          "toolCallId": "test-tool-call-payment_terms_inquiry-1768439540",
+          "result": "{\"speak\": \"Payment Terms: Due upon receipt\\nLate Fee: 1.0% per month after due date\\nAccepted Methods: cash, card, check\", \"action\": \"completed\", \"data\": {\"segment\": \"unknown\", \"request_id\": \"04621991-0b4c-4906-bc8e-521c708af23b\"}}"
+        }
+      ]
+    },
+    "success": true,
+    "error": null
+  },
+  {
+    "tool_name": "invoice_request",
+    "http_code": 200,
+    "response_time": 1.851654,
+    "response": {
+      "results": [
+        {
+          "toolCallId": "test-tool-call-invoice_request-1768439543",
+          "result": "{\"speak\": \"I'll send a copy of your invoice to your email on file.\", \"action\": \"completed\", \"data\": {\"contact_email\": \"test@example.com\", \"action\": \"send_invoice\", \"request_id\": \"fc19bfc1-177a-45e0-832b-8988bcb32b85\"}}"
+        }
+      ]
+    },
+    "success": true,
+    "error": null
+  },
+  {
+    "tool_name": "inventory_inquiry",
+    "http_code": 200,
+    "response_time": 1.582904,
+    "response": {
+      "results": [
+        {
+          "toolCallId": "test-tool-call-inventory_inquiry-1768439547",
+          "result": "{\"speak\": \"I can check on parts availability. What specific part or equipment are you looking for?\", \"action\": \"completed\", \"data\": {\"action\": \"inventory_lookup\", \"request_id\": \"fb2f0b26-cabf-46a6-b32d-5a9b81de7e92\"}}"
+        }
+      ]
+    },
+    "success": true,
+    "error": null
+  },
+  {
+    "tool_name": "purchase_request",
+    "http_code": 200,
+    "response_time": 1.596148,
+    "response": {
+      "results": [
+        {
+          "toolCallId": "test-tool-call-purchase_request-1768439551",
+          "result": "{\"speak\": \"I can help with your purchase request. A representative will follow up with pricing and availability.\", \"action\": \"completed\", \"data\": {\"contact_phone\": \"+1234567890\", \"contact_email\": null, \"action\": \"purchase_request\", \"request_id\": \"248a7726-03a4-4a7a-a332-c9a147afa87a\"}}"
+        }
+      ]
+    },
+    "success": true,
+    "error": null
+  },
+  {
+    "tool_name": "get_pricing",
+    "http_code": 200,
+    "response_time": 1.586423,
+    "response": {
+      "results": [
+        {
+          "toolCallId": "test-tool-call-get_pricing-1768439554",
+          "result": "{\"speak\": \"For Retail customers, Diagnostic pricing includes: Diagnostic fee: $129.00 Total estimate: $129.00\", \"action\": \"completed\", \"data\": {\"pricing_tier\": \"retail\", \"tier_display_name\": \"Retail\", \"service_type\": \"Diagnostic\", \"diagnostic_fee\": 129.0, \"trip_charge\": 0.0, \"emergency_premium\": 0.0, \"after_hours_premium\": 0.0, \"weekend_premium\": 0.0, \"total_estimate\": 129.0, \"is_emergency\": false, \"is_weekend\": false, \"is_after_hours\": false, \"notes\": []}}"
+        }
+      ]
+    },
+    "success": true,
+    "error": null
+  },
+  {
+    "tool_name": "create_complaint",
+    "http_code": 200,
+    "response_time": 1.603174,
+    "response": {
+      "results": [
+        {
+          "toolCallId": "test-tool-call-create_complaint-1768439558",
+          "result": "{\"speak\": \"To document your complaint, I need: complaint_details.\", \"action\": \"needs_human\", \"data\": {\"missing_fields\": [\"complaint_details\"]}}"
+        }
+      ]
+    },
+    "success": true,
+    "error": null
+  },
+  {
+    "tool_name": "hiring_inquiry",
+    "http_code": 200,
+    "response_time": 1.776921,
+    "response": {
+      "results": [
+        {
+          "toolCallId": "test-tool-call-hiring_inquiry-1768439561",
+          "result": "{\"speak\": \"HAES HVAC Hiring Process\\n\\nRequired Documents:\\n  - Resume/CV\\n  - Government ID (Driver's License or State ID)\\n  - Social Security Card\\n  - Work Authorization (I-9)\\n\\nInterview Stages:\\n  1. Phone Screen\\n  2. Technical Interview\\n  3. Ride-Along\\n  4. Final Leadership Interview\\n  5. Background Checks\\n  6. Offer\\n\\nHiring Approval: Joint approval from Junior, Linda, Bounthon\", \"action\": \"completed\", \"data\": {\"interview_stages\": [\"Phone Screen\", \"Technical Interview\", \"Ride-Along\", \"Final Leadership Interview\", \"Background Checks\", \"Offer\"], \"approval_required\": true, \"approvers\": [\"Junior\", \"Linda\", \"Bounthon\"], \"request_id\": \"acb5af13-41b9-42ad-bc8c-8b0a4f15c27d\"}}"
+        }
+      ]
+    },
+    "success": true,
+    "error": null
+  },
+  {
+    "tool_name": "onboarding_inquiry",
+    "http_code": 200,
+    "response_time": 1.620784,
+    "response": {
+      "results": [
+        {
+          "toolCallId": "test-tool-call-onboarding_inquiry-1768439565",
+          "result": "{\"speak\": \"Onboarding checklist has 20 items (17 required). Training program: 14-day onboarding with 12 topics.\", \"action\": \"completed\", \"data\": {\"summary\": {\"total_items\": 20, \"required_items\": 17, \"by_category\": {\"hr_identity\": {\"count\": 9, \"required\": 8}, \"employment_agreements\": {\"count\": 4, \"required\": 4}, \"payroll_banking\": {\"count\": 3, \"required\": 2}, \"system_access\": {\"count\": 4, \"required\": 3}}}, \"training_summary\": {\"total_topics\": 12, \"required_topics\": 11, \"total_hours\": 56.0, \"certifications_required\": 2, \"onboarding_days\": 14, \"ramp_milestones\": [30, 60, 90]}, \"request_id\": \"e80cf8bf-6b06-4f8b-8cda-140deeabf0d8\"}}"
+        }
+      ]
+    },
+    "success": true,
+    "error": null
+  },
+  {
+    "tool_name": "payroll_inquiry",
+    "http_code": 200,
+    "response_time": 1.525344,
+    "response": {
+      "results": [
+        {
+          "toolCallId": "test-tool-call-payroll_inquiry-1768439569",
+          "result": "{\"speak\": \"To check payroll information, I need: employee_email.\", \"action\": \"needs_human\", \"data\": {\"missing_fields\": [\"employee_email\"]}}"
+        }
+      ]
+    },
+    "success": true,
+    "error": null
+  },
+  {
+    "tool_name": "check_business_hours",
+    "http_code": 200,
+    "response_time": 1.797789,
+    "response": {
+      "results": [
+        {
+          "toolCallId": "test-tool-call-check_business_hours-1768439573",
+          "result": "{\"speak\": \"We're currently closed. Business hours are 8 AM to 5 PM CST, Monday through Friday. We'll be open again on Thursday, January 15.\", \"action\": \"completed\", \"data\": {\"is_business_hours\": false, \"current_time\": \"2026-01-14T19:12:54.718973-06:00\", \"business_hours_start\": 8, \"business_hours_end\": 17, \"next_business_day\": \"2026-01-15T08:00:00-06:00\"}}"
+        }
+      ]
+    },
+    "success": true,
+    "error": null
+  },
+  {
+    "tool_name": "get_service_area_info",
+    "http_code": 200,
+    "response_time": 1.563809,
+    "response": {
+      "results": [
+        {
+          "toolCallId": "test-tool-call-get_service_area_info-1768439576",
+          "result": "{\"speak\": \"We service within 35 miles of downtown Dallas, Texas.\", \"action\": \"completed\", \"data\": {\"service_radius_miles\": 35, \"service_center\": \"Downtown Dallas, Texas\", \"address_provided\": false, \"zip_code_provided\": false}}"
+        }
+      ]
+    },
+    "success": true,
+    "error": null
+  },
+  {
+    "tool_name": "get_maintenance_plans",
+    "http_code": 200,
+    "response_time": 1.533723,
+    "response": {
+      "results": [
+        {
+          "toolCallId": "test-tool-call-get_maintenance_plans-1768439580",
+          "result": "{\"speak\": \"We offer a Basic Maintenance Plan for $279 per year. This includes VIP contract benefits, priority scheduling, and regular tune-ups. Would you like to enroll?\", \"action\": \"completed\", \"data\": {\"property_type\": \"residential\", \"plan_name\": \"Basic Maintenance Plan\", \"annual_price\": 279, \"benefits\": [\"VIP contract benefits\", \"Priority scheduling\", \"Regular tune-ups\"]}}"
+        }
+      ]
+    },
+    "success": true,
+    "error": null
+  }
+]

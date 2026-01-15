@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Invoice Request Tool",
+  "description": "Request invoice copy or send invoice",
+  "tool_definition": {
+    "type": "function",
+    "function": {
+      "name": "invoice_request",
+      "description": "Request a copy of an invoice or send invoice. Use this when customer asks for their invoice or wants it emailed.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "customer_name": {
+            "type": "string",
+            "description": "Customer's full name (required)"
+          },
+          "phone": {
+            "type": "string",
+            "description": "Customer's phone number"
+          },
+          "email": {
+            "type": "string",
+            "description": "Customer's email address"
+          },
+          "invoice_number": {
+            "type": "string",
+            "description": "Specific invoice number if known"
+          }
+        },
+        "required": ["customer_name"]
+      }
+    },
+    "async": false,
+    "server": {
+      "url": "https://haes-hvac.fly.dev/vapi/server"
+    }
+  }
+}

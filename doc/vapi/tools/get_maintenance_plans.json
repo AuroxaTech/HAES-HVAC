@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Get Maintenance Plans Tool",
+  "description": "Get maintenance plan information and pricing",
+  "tool_definition": {
+    "type": "function",
+    "function": {
+      "name": "get_maintenance_plans",
+      "description": "Get maintenance plan information and pricing. Use this when customer asks about maintenance plans, membership, or tune-up programs.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "property_type": {
+            "type": "string",
+            "enum": ["residential", "commercial"],
+            "description": "Type of property"
+          }
+        }
+      }
+    },
+    "async": false,
+    "server": {
+      "url": "https://haes-hvac.fly.dev/vapi/server"
+    }
+  }
+}

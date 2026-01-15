@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Billing Inquiry Tool",
+  "description": "Check billing information and outstanding balance",
+  "tool_definition": {
+    "type": "function",
+    "function": {
+      "name": "billing_inquiry",
+      "description": "Check billing information and outstanding balance. Use this when customer asks about payment, invoice, or balance.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "customer_name": {
+            "type": "string",
+            "description": "Customer's full name (required)"
+          },
+          "phone": {
+            "type": "string",
+            "description": "Customer's phone number"
+          },
+          "email": {
+            "type": "string",
+            "description": "Customer's email address"
+          },
+          "invoice_number": {
+            "type": "string",
+            "description": "Specific invoice number if known"
+          }
+        },
+        "required": ["customer_name"]
+      }
+    },
+    "async": false,
+    "server": {
+      "url": "https://haes-hvac.fly.dev/vapi/server"
+    }
+  }
+}

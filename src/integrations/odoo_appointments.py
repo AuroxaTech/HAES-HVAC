@@ -386,12 +386,32 @@ class AppointmentService:
                 event_values["res_model"] = "crm.lead"
                 event_values["res_id"] = lead_id
             
+            # Set status to "Scheduled" if Field Service module status field exists
+            # Field Service module may have a custom status field
+            if "state" in valid_fields:
+                # Try common status values for Field Service
+                event_values["state"] = "scheduled"
+            elif "status" in valid_fields:
+                event_values["status"] = "scheduled"
+            elif "x_status" in valid_fields:
+                # Custom field naming convention
+                event_values["x_status"] = "scheduled"
+            
             # Filter to valid fields only
             event_values = self._filter_valid_fields(event_values, valid_fields)
             
             # Create the event
             event_id = await self.client.create("calendar.event", event_values)
             logger.info(f"Created calendar event {event_id}: {name} ({start_str} - {stop_str})")
+            
+            # Try to set status after creation if it wasn't set during creation
+            # (Some Odoo modules require status to be set via write after creation)
+            if "state" in valid_fields and "state" not in event_values:
+                try:
+                    await self.client.write("calendar.event", [event_id], {"state": "scheduled"})
+                    logger.debug(f"Set status to 'scheduled' for calendar event {event_id}")
+                except Exception as e:
+                    logger.debug(f"Could not set status field (may not exist in this Odoo instance): {e}")
             
             return event_id
             

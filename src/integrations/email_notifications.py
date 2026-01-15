@@ -714,3 +714,319 @@ async def send_service_confirmation_email(
     except EmailError as e:
         logger.error(f"Failed to send service email: {e}")
         return {"status": "failed", "error": str(e)}
+
+
+def build_new_lead_notification_email(
+    customer_name: str | None,
+    phone: str | None,
+    email: str | None,
+    address: str | None,
+    service_type: str | None,
+    priority_label: str | None,
+    assigned_technician: str | None,
+    lead_id: int | None = None,
+    odoo_url: str | None = None,
+) -> tuple[str, str]:
+    """
+    Build new lead notification email (HTML + text versions).
+    
+    This email is sent to Junior, Linda, Dispatch Team, and info@hvacrfinest.com.
+    
+    Returns:
+        Tuple of (html_body, text_body)
+    """
+    customer_info = customer_name or "Unknown"
+    lead_link = f"https://www.hvacrfinest.com/web#id={lead_id}&model=crm.lead&view_type=form" if lead_id and not odoo_url else (odoo_url or f"Lead ID: #{lead_id}" if lead_id else "N/A")
+    
+    html_body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+            .header {{ background-color: #1976d2; color: white; padding: 20px; text-align: center; }}
+            .content {{ padding: 20px; background-color: #f9f9f9; }}
+            .info-box {{ background-color: white; padding: 15px; margin: 10px 0; border-radius: 5px; }}
+            .priority-high {{ background-color: #fff3cd; border-left: 4px solid #ffc107; }}
+            .priority-emergency {{ background-color: #ffebee; border-left: 4px solid #d32f2f; }}
+            .footer {{ padding: 20px; text-align: center; font-size: 12px; color: #666; }}
+            .button {{ display: inline-block; padding: 10px 20px; background-color: #1976d2; color: white; text-decoration: none; border-radius: 5px; margin: 10px 0; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>HVAC-R Finest</h1>
+                <h2>New Lead Notification</h2>
+            </div>
+            <div class="content">
+                <p>A new lead has been created in the system.</p>
+                
+                <div class="info-box {'priority-emergency' if priority_label and 'emergency' in priority_label.lower() else 'priority-high' if priority_label and 'high' in priority_label.lower() else ''}">
+                    <h3>Customer Information</h3>
+                    <p><strong>Name:</strong> {customer_info}</p>
+                    {f"<p><strong>Phone:</strong> {phone}</p>" if phone else ""}
+                    {f"<p><strong>Email:</strong> {email}</p>" if email else ""}
+                    {f"<p><strong>Address:</strong> {address}</p>" if address else ""}
+                </div>
+                
+                <div class="info-box">
+                    <h3>Service Details</h3>
+                    {f"<p><strong>Service Type:</strong> {service_type}</p>" if service_type else ""}
+                    {f"<p><strong>Priority:</strong> {priority_label}</p>" if priority_label else ""}
+                    {f"<p><strong>Assigned Technician:</strong> {assigned_technician}</p>" if assigned_technician else "<p><strong>Assigned Technician:</strong> Unassigned</p>"}
+                </div>
+                
+                <div class="info-box">
+                    <h3>Odoo Lead</h3>
+                    {f'<p><strong>Lead ID:</strong> <a href="{lead_link}">#{lead_id}</a></p>' if lead_id else ""}
+                    {f'<p><a href="{lead_link}" class="button">View Lead in Odoo</a></p>' if lead_id else ""}
+                </div>
+                
+                <p><strong>This is an automated notification from the HAES system.</strong></p>
+            </div>
+            <div class="footer">
+                <p>HVAC-R Finest | Lead Management System</p>
+                <p>Do not reply to this automated message</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    text_body = f"""
+    New Lead Notification - HVAC-R Finest
+    
+    A new lead has been created in the system.
+    
+    CUSTOMER INFORMATION:
+    - Name: {customer_info}
+    {f"- Phone: {phone}" if phone else ""}
+    {f"- Email: {email}" if email else ""}
+    {f"- Address: {address}" if address else ""}
+    
+    SERVICE DETAILS:
+    {f"- Service Type: {service_type}" if service_type else ""}
+    {f"- Priority: {priority_label}" if priority_label else ""}
+    {f"- Assigned Technician: {assigned_technician}" if assigned_technician else "- Assigned Technician: Unassigned"}
+    
+    ODOO LEAD:
+    {f"- Lead ID: #{lead_id}" if lead_id else ""}
+    {f"- Link: {lead_link}" if lead_id else ""}
+    
+    This is an automated notification from the HAES system.
+    
+    ---
+    HVAC-R Finest | Lead Management System
+    Do not reply to this automated message
+    """
+    
+    return html_body.strip(), text_body.strip()
+
+
+async def send_new_lead_notification(
+    customer_name: str | None,
+    phone: str | None,
+    email: str | None,
+    address: str | None,
+    service_type: str | None = None,
+    priority_label: str | None = None,
+    assigned_technician: str | None = None,
+    lead_id: int | None = None,
+    odoo_url: str | None = None,
+) -> dict[str, Any]:
+    """
+    Send new lead notification emails to Junior, Linda, Dispatch Team, and info@hvacrfinest.com.
+    
+    Args:
+        customer_name: Customer name
+        phone: Customer phone number
+        email: Customer email address
+        address: Service address
+        service_type: Type of service requested
+        priority_label: Priority level (e.g., "Emergency", "High", "Medium", "Low")
+        assigned_technician: Name of assigned technician
+        lead_id: Odoo lead ID
+        odoo_url: Optional custom Odoo URL (if not provided, will be generated from lead_id)
+    
+    Returns:
+        Dict with status and sent emails info
+    """
+    settings = get_settings()
+    
+    # Check if email is configured
+    if not settings.SMTP_HOST or not settings.SMTP_USERNAME:
+        logger.debug("SMTP not configured, skipping lead email notifications")
+        return {"status": "disabled", "reason": "not_configured"}
+    
+    # Create email service
+    try:
+        service = create_email_service_from_settings()
+        if not service:
+            return {"status": "disabled", "reason": "not_configured"}
+    except Exception as e:
+        logger.warning(f"Failed to create email service: {e}")
+        return {"status": "error", "error": str(e)}
+    
+    # Build message
+    html_body, text_body = build_new_lead_notification_email(
+        customer_name=customer_name,
+        phone=phone,
+        email=email,
+        address=address,
+        service_type=service_type,
+        priority_label=priority_label,
+        assigned_technician=assigned_technician,
+        lead_id=lead_id,
+        odoo_url=odoo_url,
+    )
+    
+    # Collect recipients
+    recipients = []
+    sent_results = {}
+    
+    # Add Junior email
+    if settings.JUNIOR_EMAIL:
+        recipients.append(("Junior", settings.JUNIOR_EMAIL))
+    elif hasattr(settings, "OWNER_EMAIL") and settings.OWNER_EMAIL:
+        recipients.append(("Junior", settings.OWNER_EMAIL))
+    
+    # Add Linda email
+    if settings.LINDA_EMAIL:
+        recipients.append(("Linda", settings.LINDA_EMAIL))
+    
+    # Add Dispatch email
+    if settings.DISPATCH_EMAIL:
+        recipients.append(("Dispatch Team", settings.DISPATCH_EMAIL))
+    
+    # Add info@hvacrfinest.com
+    recipients.append(("Info", "info@hvacrfinest.com"))
+    
+    if not recipients:
+        logger.warning("No email recipients configured for lead notifications")
+        return {"status": "skipped", "reason": "no_recipients"}
+    
+    # Send emails
+    subject = f"New Lead: {customer_name or 'Customer'} - {service_type or 'Service Request'}"
+    for name, email_addr in recipients:
+        try:
+            result = service.send_email(
+                to=email_addr,
+                subject=subject,
+                body_html=html_body,
+                body_text=text_body,
+            )
+            sent_results[name] = {
+                "email": email_addr,
+                "status": result.get("status", "unknown"),
+                "message_id": result.get("message_id"),
+            }
+            logger.info(f"Sent new lead notification email to {name} ({email_addr})")
+        except Exception as e:
+            logger.error(f"Failed to send email to {name} ({email_addr}): {e}")
+            sent_results[name] = {
+                "email": email_addr,
+                "status": "error",
+                "error": str(e),
+            }
+    
+    return {
+        "status": "sent" if any(r.get("status") == "sent" or r.get("status") == "dry_run" for r in sent_results.values()) else "partial",
+        "recipients": sent_results,
+    }
+
+
+def build_membership_enrollment_email(
+    customer_name: str | None,
+    plan_name: str,
+    annual_price: float,
+    payment_link: str,
+    vip_benefits: str,
+) -> tuple[str, str, str]:
+    """
+    Build membership enrollment email (subject, HTML, text).
+    
+    Returns:
+        Tuple of (subject, html_body, text_body)
+    """
+    greeting = f"Hi {customer_name}," if customer_name else "Hello,"
+    subject = f"HVAC-R Finest {plan_name} Enrollment - Payment Required"
+    
+    html_body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+            .header {{ background-color: #1976d2; color: white; padding: 20px; text-align: center; }}
+            .content {{ padding: 20px; background-color: #f9f9f9; }}
+            .info-box {{ background-color: white; padding: 15px; margin: 10px 0; border-radius: 5px; }}
+            .button {{ display: inline-block; padding: 12px 24px; background-color: #1976d2; color: white; text-decoration: none; border-radius: 5px; margin: 15px 0; }}
+            .footer {{ padding: 20px; text-align: center; font-size: 12px; color: #666; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>HVAC-R Finest</h1>
+                <h2>Membership Enrollment</h2>
+            </div>
+            <div class="content">
+                <p>{greeting}</p>
+                
+                <div class="info-box">
+                    <h3>{plan_name}</h3>
+                    <p><strong>Annual Cost:</strong> ${annual_price:.0f}</p>
+                    <p><strong>VIP Benefits:</strong> {vip_benefits}</p>
+                </div>
+                
+                <p>To complete your enrollment, please click the button below to make your payment:</p>
+                
+                <p style="text-align: center;">
+                    <a href="{payment_link}" class="button">Complete Enrollment & Pay</a>
+                </p>
+                
+                <p>Or copy and paste this link into your browser:</p>
+                <p style="word-break: break-all; color: #1976d2;">{payment_link}</p>
+                
+                <p>Once payment is received, you'll receive a confirmation email with your membership details.</p>
+                
+                <p>Thank you for choosing HVAC-R Finest!</p>
+            </div>
+            <div class="footer">
+                <p>HVAC-R Finest LLC<br>
+                (972) 372-4458<br>
+                info@hvacrfinest.com</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    text_body = f"""
+{greeting}
+
+Thank you for enrolling in {plan_name} with HVAC-R Finest!
+
+Plan Details:
+- Plan: {plan_name}
+- Annual Cost: ${annual_price:.0f}
+- VIP Benefits: {vip_benefits}
+
+To complete your enrollment, please visit:
+{payment_link}
+
+Once payment is received, you'll receive a confirmation email with your membership details.
+
+Thank you for choosing HVAC-R Finest!
+
+HVAC-R Finest LLC
+(972) 372-4458
+info@hvacrfinest.com
+    """
+    
+    return subject, html_body, text_body

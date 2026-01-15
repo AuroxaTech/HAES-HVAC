@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Check Lead Status Tool",
+  "description": "Check status of existing quote/lead",
+  "tool_definition": {
+    "type": "function",
+    "function": {
+      "name": "check_lead_status",
+      "description": "Check the status of an existing quote or lead. Use this when customer asks about their quote status or where they are in the process.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "customer_name": {
+            "type": "string",
+            "description": "Customer's full name"
+          },
+          "phone": {
+            "type": "string",
+            "description": "Customer's phone number"
+          },
+          "email": {
+            "type": "string",
+            "description": "Customer's email address"
+          },
+          "lead_id": {
+            "type": "string",
+            "description": "Specific lead ID if known"
+          }
+        }
+      }
+    },
+    "async": false,
+    "server": {
+      "url": "https://haes-hvac.fly.dev/vapi/server"
+    }
+  }
+}

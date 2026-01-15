@@ -20,6 +20,7 @@ from src.brains.revenue.schema import (
 from src.brains.revenue.qualification import qualify_lead, get_response_time_goal
 from src.brains.revenue.routing import route_lead, get_primary_assignee
 from src.brains.revenue.followups import generate_lead_followups
+from src.brains.core.schema import PricingTier
 
 logger = logging.getLogger(__name__)
 
@@ -129,10 +130,27 @@ def _handle_quote_request(command: HaelCommand) -> RevenueResult:
             },
         )
     
-    # Route the lead
+    # Calculate estimated value from budget range or square footage
+    estimated_value = None
+    if entities.budget_range:
+        import re
+        budget_lower = entities.budget_range.lower().replace(",", "").replace("$", "")
+        try:
+            numbers = re.findall(r'\d+', budget_lower)
+            if numbers:
+                estimated_value = max(int(n) for n in numbers)
+        except (ValueError, AttributeError):
+            pass
+    elif entities.square_footage:
+        # Rough estimate: $3-5 per sq ft for HVAC
+        estimated_value = entities.square_footage * 4  # Use middle estimate
+    
+    # Route the lead (pass qualification for proper routing)
     assignees, routing_reason = route_lead(
         property_type=entities.property_type,
         budget_range=entities.budget_range,
+        estimated_value=estimated_value,
+        qualification=qualification,
     )
     
     # Generate follow-ups
@@ -166,6 +184,37 @@ def _handle_quote_request(command: HaelCommand) -> RevenueResult:
     # Get response time goal
     response_minutes = get_response_time_goal(qualification)
     
+    # Determine pricing tier based on property type
+    property_type_lower = (entities.property_type or "").lower()
+    if property_type_lower in ["commercial", "business", "office", "industrial"]:
+        pricing_tier = PricingTier.COMMERCIAL
+    elif property_type_lower in ["property_management", "pm", "rental", "lessen"]:
+        pricing_tier = PricingTier.PROPERTY_MANAGEMENT
+    else:
+        pricing_tier = PricingTier.RESIDENTIAL
+    
+    # Determine system type
+    system_type = entities.system_type
+    
+    # Create quote in Odoo (will be created after lead is created)
+    quote_data = None
+    try:
+        from src.integrations.odoo_quotes import create_quote_service
+        from src.integrations.odoo import create_odoo_client_from_settings
+        
+        # Note: Quote will be created after lead is created (via request_quote tool)
+        # For now, we'll prepare the quote data but not create it here
+        # The request_quote tool will handle creating both lead and quote
+        quote_data = {
+            "estimated_value": estimated_value,
+            "system_type": system_type,
+            "pricing_tier": pricing_tier.value,
+            "needs_quote_creation": True,
+        }
+    except Exception as e:
+        logger.warning(f"Failed to prepare quote creation: {e}")
+        # Continue without quote creation
+    
     message = (
         f"Quote request captured - {qualification.value.upper()} lead. "
         f"Assigned to {', '.join(assignees)}. "
@@ -185,6 +234,7 @@ def _handle_quote_request(command: HaelCommand) -> RevenueResult:
             "routing_reason": routing_reason,
             "response_time_goal_minutes": response_minutes,
             "recommended_missing": recommended_missing,
+            "quote_data": quote_data,
         },
     )
 

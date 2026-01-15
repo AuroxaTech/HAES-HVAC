@@ -212,3 +212,65 @@ class ReportDelivery(Base):
 
     __table_args__ = (Index("ix_report_deliveries_run_channel", "report_run_id", "channel"),)
 
+
+# =============================================================================
+# Call Metrics Tables (Section 9: Performance & Quality Metrics)
+# =============================================================================
+
+
+class CallMetrics(Base):
+    """
+    Call metrics for performance tracking (Test 9.1-9.5).
+    
+    Tracks response times, completion rates, data accuracy, and user satisfaction.
+    """
+
+    __tablename__ = "call_metrics"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    call_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    request_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    channel: Mapped[str] = mapped_column(String(20), nullable=False, default="voice")  # voice, chat
+    
+    # Response time metrics (Test 9.1)
+    call_start_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    greeting_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    greeting_duration_seconds: Mapped[float | None] = mapped_column(String(20), nullable=True)  # Store as string for precision
+    
+    user_input_times: Mapped[list[dict] | None] = mapped_column(JSONB, nullable=True)  # [{timestamp, response_time}]
+    average_response_time_seconds: Mapped[float | None] = mapped_column(String(20), nullable=True)
+    pauses_over_3_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    
+    # Call completion (Test 9.2)
+    call_completed: Mapped[bool] = mapped_column(String(10), nullable=False, default="false")  # Store as string
+    call_end_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completion_reason: Mapped[str | None] = mapped_column(String(100), nullable=True)  # completed, dropped, transferred, error
+    
+    # Data accuracy (Test 9.3)
+    fields_collected: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    fields_correct: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    fields_incorrect: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    accuracy_rate: Mapped[float | None] = mapped_column(String(10), nullable=True)  # 0-100 as percentage
+    validation_errors: Mapped[list[dict] | None] = mapped_column(JSONB, nullable=True)  # [{field, error_type}]
+    
+    # User satisfaction (Test 9.4)
+    satisfaction_rating: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 1-5 scale
+    satisfaction_feedback: Mapped[str | None] = mapped_column(Text, nullable=True)
+    
+    # Issue tracking (Test 9.5)
+    issues_detected: Mapped[list[dict] | None] = mapped_column(JSONB, nullable=True)  # [{category, description, timestamp}]
+    prohibited_phrases_detected: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+    
+    # Additional metadata (using extra_data to avoid SQLAlchemy reserved name conflict)
+    extra_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+    __table_args__ = (
+        Index("ix_call_metrics_call_id", "call_id"),
+        Index("ix_call_metrics_created_at", "created_at"),
+        Index("ix_call_metrics_channel", "channel"),
+        Index("ix_call_metrics_call_completed", "call_completed"),
+    )
+

@@ -1,0 +1,34 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Inventory Inquiry Tool",
+  "description": "Check parts/equipment availability",
+  "tool_definition": {
+    "type": "function",
+    "function": {
+      "name": "inventory_inquiry",
+      "description": "Check parts or equipment availability. Use this when customer or technician asks about part availability.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "part_name": {
+            "type": "string",
+            "description": "Part name (required)"
+          },
+          "part_number": {
+            "type": "string",
+            "description": "Part number"
+          },
+          "quantity": {
+            "type": "integer",
+            "description": "Required quantity"
+          }
+        },
+        "required": ["part_name"]
+      }
+    },
+    "async": false,
+    "server": {
+      "url": "https://haes-hvac.fly.dev/vapi/server"
+    }
+  }
+}

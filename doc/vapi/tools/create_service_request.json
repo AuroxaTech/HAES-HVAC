@@ -1,0 +1,72 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Create Service Request Tool",
+  "description": "Create emergency or standard service request",
+  "tool_definition": {
+    "type": "function",
+    "function": {
+      "name": "create_service_request",
+      "description": "Create a service request for HVAC repair or maintenance. Use this when customer reports a problem (no heat, no AC, system not working, etc.). Handles emergency qualification, technician assignment, and lead creation.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "customer_name": {
+            "type": "string",
+            "description": "Customer's full name"
+          },
+          "phone": {
+            "type": "string",
+            "description": "Customer's phone number (required)"
+          },
+          "email": {
+            "type": "string",
+            "description": "Customer's email address (optional)"
+          },
+          "address": {
+            "type": "string",
+            "description": "Full service address including street, city, state, and ZIP code (required)"
+          },
+          "issue_description": {
+            "type": "string",
+            "description": "Description of the problem (required)"
+          },
+          "urgency": {
+            "type": "string",
+            "enum": ["emergency", "high", "medium", "low"],
+            "description": "Urgency level"
+          },
+          "system_type": {
+            "type": "string",
+            "description": "HVAC system type (furnace, heat_pump, ac, etc.)"
+          },
+          "indoor_temperature_f": {
+            "type": "integer",
+            "description": "Current indoor temperature in Fahrenheit (for emergency qualification)"
+          },
+          "property_type": {
+            "type": "string",
+            "enum": ["residential", "commercial", "property_management"],
+            "description": "Type of property"
+          },
+          "is_warranty": {
+            "type": "boolean",
+            "description": "True if this is a warranty claim"
+          },
+          "previous_service_id": {
+            "type": "string",
+            "description": "Previous service ID for warranty claims"
+          },
+          "previous_technician_id": {
+            "type": "string",
+            "description": "Previous technician ID for warranty claims"
+          }
+        },
+        "required": ["phone", "address", "issue_description"]
+      }
+    },
+    "async": false,
+    "server": {
+      "url": "https://haes-hvac.fly.dev/vapi/server"
+    }
+  }
+}

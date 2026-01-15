@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Request Membership Enrollment Tool",
+  "description": "Request maintenance membership enrollment",
+  "tool_definition": {
+    "type": "function",
+    "function": {
+      "name": "request_membership_enrollment",
+      "description": "Request enrollment in a maintenance membership plan. Use this when customer asks about maintenance plans or wants to join.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "customer_name": {
+            "type": "string",
+            "description": "Customer's full name (required)"
+          },
+          "phone": {
+            "type": "string",
+            "description": "Customer's phone number (required)"
+          },
+          "email": {
+            "type": "string",
+            "description": "Customer's email address"
+          },
+          "address": {
+            "type": "string",
+            "description": "Property address (required)"
+          },
+          "property_type": {
+            "type": "string",
+            "enum": ["residential", "commercial"],
+            "description": "Type of property (required)"
+          },
+          "membership_type": {
+            "type": "string",
+            "enum": ["basic", "commercial"],
+            "description": "Membership type: basic ($279/year) or commercial ($379/year) (required)"
+          },
+          "system_details": {
+            "type": "string",
+            "description": "System details"
+          }
+        },
+        "required": ["customer_name", "phone", "address", "property_type", "membership_type"]
+      }
+    },
+    "async": false,
+    "server": {
+      "url": "https://haes-hvac.fly.dev/vapi/server"
+    }
+  }
+}

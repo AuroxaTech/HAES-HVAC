@@ -1,0 +1,56 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Schedule Appointment Tool",
+  "description": "Schedule a new appointment",
+  "tool_definition": {
+    "type": "function",
+    "function": {
+      "name": "schedule_appointment",
+      "description": "Schedule a new service appointment. Use this when customer wants to book an appointment or asks about availability.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "customer_name": {
+            "type": "string",
+            "description": "Customer's full name (required)"
+          },
+          "phone": {
+            "type": "string",
+            "description": "Customer's phone number (required)"
+          },
+          "email": {
+            "type": "string",
+            "description": "Customer's email address"
+          },
+          "address": {
+            "type": "string",
+            "description": "Full service address (required)"
+          },
+          "service_type": {
+            "type": "string",
+            "description": "Type of service needed"
+          },
+          "preferred_time_windows": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "List of preferred time windows"
+          },
+          "problem_description": {
+            "type": "string",
+            "description": "Problem description"
+          },
+          "property_type": {
+            "type": "string",
+            "enum": ["residential", "commercial", "property_management"],
+            "description": "Type of property"
+          }
+        },
+        "required": ["customer_name", "phone", "address"]
+      }
+    },
+    "async": false,
+    "server": {
+      "url": "https://haes-hvac.fly.dev/vapi/server"
+    }
+  }
+}

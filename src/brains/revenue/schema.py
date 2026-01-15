@@ -77,10 +77,11 @@ class LeadData(BaseModel):
 
 class FollowUpAction(BaseModel):
     """Scheduled follow-up action."""
-    action_type: str  # thank_you, reminder, nurture, reactivation
+    action_type: str  # thank_you, reminder, nurture, reactivation, csr_call_task
     scheduled_at: datetime
     message_template: str | None = None
-    channel: str = "email"  # email, sms, call
+    channel: str = "email"  # email, sms, call, odoo_task
+    metadata: dict[str, Any] | None = None  # Additional metadata for follow-up
 
 
 class RevenueResult(BaseModel):

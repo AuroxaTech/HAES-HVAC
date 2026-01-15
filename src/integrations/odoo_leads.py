@@ -235,6 +235,75 @@ class LeadService:
             logger.warning(f"Failed to ensure Emergency tag: {e}")
             return None
     
+    async def ensure_lead_source(self, source_name: str = "AI Voice Agent") -> int | None:
+        """
+        Find or create a lead source in utm.source.
+        
+        Args:
+            source_name: Name of the source (default: "AI Voice Agent")
+            
+        Returns:
+            Source ID if found/created, None on failure
+        """
+        try:
+            await self._ensure_authenticated()
+            
+            # Search for existing source
+            sources = await self.client.search_read(
+                "utm.source",
+                [("name", "=", source_name)],
+                fields=["id"],
+                limit=1,
+            )
+            
+            if sources:
+                logger.debug(f"Found existing source: {sources[0]['id']}")
+                return sources[0]["id"]
+            
+            # Create new source
+            source_id = await self.client.create("utm.source", {"name": source_name})
+            logger.info(f"Created source '{source_name}': {source_id}")
+            return source_id
+            
+        except Exception as e:
+            logger.warning(f"Failed to ensure lead source '{source_name}': {e}")
+            return None
+    
+    async def ensure_tag(self, tag_name: str, color: int = 1) -> int | None:
+        """
+        Find or create a tag in crm.tag.
+        
+        Args:
+            tag_name: Name of the tag
+            color: Tag color (0-11)
+            
+        Returns:
+            Tag ID if found/created, None on failure
+        """
+        try:
+            await self._ensure_authenticated()
+            
+            # Search for existing tag
+            tags = await self.client.search_read(
+                "crm.tag",
+                [("name", "=", tag_name)],
+                fields=["id"],
+                limit=1,
+            )
+            
+            if tags:
+                logger.debug(f"Found existing tag '{tag_name}': {tags[0]['id']}")
+                return tags[0]["id"]
+            
+            # Create new tag
+            tag_id = await self.client.create("crm.tag", {"name": tag_name, "color": color})
+            logger.info(f"Created tag '{tag_name}': {tag_id}")
+            return tag_id
+            
+        except Exception as e:
+            logger.warning(f"Failed to ensure tag '{tag_name}': {e}")
+            return None
+    
     async def add_tag_to_lead(self, lead_id: int, tag_id: int) -> bool:
         """
         Add a tag to a lead using Odoo's Command API.
@@ -538,6 +607,7 @@ class LeadService:
         raw_text: str = "",
         structured_params: dict[str, Any] | None = None,
         request_id: str | None = None,
+        channel: str | None = None,  # "voice" or "chat"
     ) -> dict[str, Any]:
         """
         Create or update a CRM lead for a service request.
@@ -658,6 +728,120 @@ class LeadService:
                 "type": "lead",  # Keep as lead until converted
             }
             
+            # Set lead source based on channel
+            if channel == "chat":
+                source_name = "Website Chat"
+            else:
+                source_name = "AI Voice Agent"  # Default for voice
+            
+            source_id = await self.ensure_lead_source(source_name)
+            if source_id:
+                # Try both source_id and source fields
+                if "source_id" in valid_fields:
+                    lead_values["source_id"] = source_id
+                elif "source" in valid_fields:
+                    # If source is a char field, set the name
+                    sources = await self.client.search_read(
+                        "utm.source",
+                        [("id", "=", source_id)],
+                        fields=["name"],
+                        limit=1,
+                    )
+                    if sources:
+                        lead_values["source"] = sources[0]["name"]
+            
+            # Map property_type to customer type and pricing tier
+            property_type = (entities.property_type or "").lower()
+            customer_type = None
+            pricing_tier = None
+            tags_to_add = []
+            
+            if property_type == "residential":
+                customer_type = "Retail"
+                pricing_tier = "Retail Pricing"
+                tags_to_add.append("Residential")
+            elif property_type == "commercial":
+                customer_type = "Commercial"
+                pricing_tier = "Com Pricing"
+                tags_to_add.append("Commercial")
+            elif property_type in ["property_management", "property management", "pm"]:
+                customer_type = "Property Management"
+                pricing_tier = "Default-PM Pricing"
+                tags_to_add.append("Property Management")
+                
+                # Extract PM company name from metadata or description
+                pm_company_name = None
+                if structured_params and "pm_company_name" in structured_params:
+                    pm_company_name = structured_params["pm_company_name"]
+                elif structured_params and "property_management_company" in structured_params:
+                    pm_company_name = structured_params["property_management_company"]
+                
+                # Add PM company name to description if available
+                if pm_company_name:
+                    desc_html.insert(-1, f'<tr><td style="padding:3px;">PM Company:</td><td style="padding:3px;">{pm_company_name}</td></tr>')
+                    description = "".join(desc_html)
+                    lead_values["description"] = description
+                    
+                    # Check if Lessen and set tax-exempt flag
+                    if "lessen" in pm_company_name.lower():
+                        # Try to set tax-exempt flag (may be on partner or lead)
+                        if "is_tax_exempt" in valid_fields:
+                            lead_values["is_tax_exempt"] = True
+                        elif "tax_exempt" in valid_fields:
+                            lead_values["tax_exempt"] = True
+                        tags_to_add.append("Tax Exempt")
+                
+                # Set payment terms to Net 30 for PM customers
+                # Try common field names for payment terms
+                for field_name in ["payment_term_id", "payment_terms_id", "payment_terms"]:
+                    if field_name in valid_fields:
+                        try:
+                            # Search for Net 30 payment term
+                            payment_terms = await self.client.search_read(
+                                "account.payment.term",
+                                [("name", "ilike", "Net 30")],
+                                fields=["id"],
+                                limit=1,
+                            )
+                            if payment_terms:
+                                lead_values[field_name] = payment_terms[0]["id"]
+                                break
+                        except Exception:
+                            pass
+                
+                # Add payment terms note to description
+                desc_html.insert(-1, f'<tr><td style="padding:3px;">Payment Terms:</td><td style="padding:3px;">Net 30</td></tr>')
+                description = "".join(desc_html)
+                lead_values["description"] = description
+            
+            # Set customer type if field exists
+            if customer_type:
+                # Try common field names for customer type
+                for field_name in ["customer_type", "type_id", "category_id"]:
+                    if field_name in valid_fields:
+                        # Try to find or create category
+                        try:
+                            categories = await self.client.search_read(
+                                "res.partner.category",
+                                [("name", "=", customer_type)],
+                                fields=["id"],
+                                limit=1,
+                            )
+                            if categories:
+                                if field_name == "category_id":
+                                    lead_values[field_name] = [(6, 0, [categories[0]["id"]])]
+                                else:
+                                    lead_values[field_name] = categories[0]["id"]
+                                break
+                        except Exception:
+                            pass
+            
+            # Add pricing tier to description if available
+            if pricing_tier:
+                desc_html.insert(-1, f'<tr><td style="padding:3px;">Pricing Tier:</td><td style="padding:3px;">{pricing_tier}</td></tr>')
+                description = "".join(desc_html)
+                lead_values["description"] = description
+            
             # Try to link partner if we can create/find one
             partner_id = await self.ensure_partner(
                 phone=entities.phone,
@@ -696,11 +880,30 @@ class LeadService:
                     structured_params=structured_params,
                 )
             
+            # ---------------------------------------------------------------------
+            # Apply tags based on customer type and service type
+            # ---------------------------------------------------------------------
+            if lead_id and tags_to_add:
+                for tag_name in tags_to_add:
+                    tag_id = await self.ensure_tag(tag_name)
+                    if tag_id:
+                        await self.add_tag_to_lead(lead_id, tag_id)
+            
+            # Add service type tag if available
+            if lead_id and structured_params and "service_type" in structured_params:
+                service_type = structured_params["service_type"]
+                if isinstance(service_type, str):
+                    service_tag_id = await self.ensure_tag(service_type)
+                    if service_tag_id:
+                        await self.add_tag_to_lead(lead_id, service_tag_id)
+            
             return {
                 "lead_id": lead_id,
                 "action": action,
                 "status": "success",
                 "partner_id": partner_id,
+                "customer_type": customer_type,
+                "pricing_tier": pricing_tier,
             }
                 
         except OdooRPCError as e:
@@ -881,6 +1084,7 @@ async def upsert_lead_for_call(
     raw_text: str = "",
     structured_params: dict[str, Any] | None = None,
     request_id: str | None = None,
+    channel: str | None = None,  # "voice" or "chat"
 ) -> dict[str, Any]:
     """
     Convenience function to upsert a lead for a call.
@@ -903,6 +1107,7 @@ async def upsert_lead_for_call(
             raw_text=raw_text,
             structured_params=structured_params,
             request_id=request_id,
+            channel=channel,
         )
         return result
     finally:

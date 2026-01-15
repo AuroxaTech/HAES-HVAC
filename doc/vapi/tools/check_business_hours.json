@@ -1,0 +1,20 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Check Business Hours Tool",
+  "description": "Check if currently business hours",
+  "tool_definition": {
+    "type": "function",
+    "function": {
+      "name": "check_business_hours",
+      "description": "Check if we're currently within business hours (8 AM - 5 PM CST, Monday-Friday). Use this to determine if we're open or closed.",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    "async": false,
+    "server": {
+      "url": "https://haes-hvac.fly.dev/vapi/server"
+    }
+  }
+}

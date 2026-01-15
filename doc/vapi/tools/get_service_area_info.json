@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Get Service Area Info Tool",
+  "description": "Get service area coverage information",
+  "tool_definition": {
+    "type": "function",
+    "function": {
+      "name": "get_service_area_info",
+      "description": "Get service area coverage information. Use this when customer asks about service area or if we service their location.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "zip_code": {
+            "type": "string",
+            "description": "ZIP code to check"
+          },
+          "address": {
+            "type": "string",
+            "description": "Address to check"
+          }
+        }
+      }
+    },
+    "async": false,
+    "server": {
+      "url": "https://haes-hvac.fly.dev/vapi/server"
+    }
+  }
+}

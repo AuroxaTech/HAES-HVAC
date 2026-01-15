@@ -208,25 +208,44 @@ def build_emergency_confirmation_sms(
 
 def build_service_confirmation_sms(
     customer_name: str | None,
-    is_same_day: bool,
+    appointment_date: str | None = None,
+    appointment_time: str | None = None,
+    tech_name: str | None = None,
+    service_type: str | None = None,
+    is_same_day: bool = False,
 ) -> str:
     """
-    Build standard service request confirmation SMS.
+    Build standard service/appointment confirmation SMS.
     
     Args:
         customer_name: Customer name
+        appointment_date: Appointment date (e.g., "Tuesday, January 14")
+        appointment_time: Appointment time (e.g., "2:00 PM")
+        tech_name: Assigned technician name
+        service_type: Type of service
         is_same_day: Whether same-day service was requested
         
     Returns:
         SMS message body
     """
     greeting = f"Hi {customer_name}, " if customer_name else ""
-    timing = "today" if is_same_day else "soon"
+    
+    # Build appointment details if provided
+    appointment_info = ""
+    if appointment_date and appointment_time:
+        appointment_info = f"Your appointment is scheduled for {appointment_date} at {appointment_time}."
+        if tech_name:
+            appointment_info += f" Technician: {tech_name}."
+    elif is_same_day:
+        appointment_info = "We'll reach out today to confirm your appointment."
+    else:
+        appointment_info = "We'll reach out soon to confirm your appointment."
+    
+    service_info = f" Service: {service_type}." if service_type else ""
     
     return (
-        f"HVAC-R Finest: {greeting}Your service request has been received! "
-        f"We'll reach out {timing} to confirm your appointment. "
-        f"Questions? Call (972) 372-4458. Reply STOP to opt out."
+        f"HVAC-R Finest: {greeting}{appointment_info}{service_info} "
+        f"Reply CONFIRM or CANCEL. Questions? Call (972) 372-4458. Reply STOP to opt out."
     )
 
 
@@ -306,13 +325,157 @@ async def send_emergency_sms(
         return {"status": "failed", "error": str(e)}
 
 
+def build_incomplete_call_sms() -> str:
+    """
+    Build SMS message for incomplete/dropped calls.
+    
+    Returns:
+        SMS message body
+    """
+    return (
+        "HVAC-R Finest: We lost connection, please call back at (972) 372-4458. "
+        "We'd love to help! Reply STOP to opt out."
+    )
+
+
+async def send_incomplete_call_sms(
+    to_phone: str,
+) -> dict[str, Any]:
+    """
+    Send SMS fallback for incomplete/dropped calls.
+    
+    Returns:
+        Dict with status and message_sid on success, or error info
+    """
+    settings = get_settings()
+    
+    # Check feature flag
+    if not settings.FEATURE_EMERGENCY_SMS:
+        logger.debug("FEATURE_EMERGENCY_SMS disabled, skipping incomplete call SMS")
+        return {"status": "disabled", "reason": "feature_flag"}
+    
+    # Create client
+    client = create_twilio_client_from_settings()
+    if not client:
+        return {"status": "disabled", "reason": "not_configured"}
+    
+    # Build message
+    body = build_incomplete_call_sms()
+    
+    # Send
+    try:
+        result = await client.send_sms(to=to_phone, body=body)
+        logger.info(f"Sent incomplete call SMS to {to_phone}")
+        return {"status": "sent", **result}
+    except TwilioSMSError as e:
+        logger.error(f"Failed to send incomplete call SMS: {e}")
+        return {"status": "failed", "error": str(e)}
+
+
+def build_appointment_reminder_sms(
+    customer_name: str | None,
+    appointment_date: str | None = None,
+    appointment_time: str | None = None,
+    tech_name: str | None = None,
+    service_type: str | None = None,
+) -> str:
+    """
+    Build appointment reminder SMS (sent 2 hours before appointment).
+    
+    Args:
+        customer_name: Customer name
+        appointment_date: Appointment date (e.g., "Tuesday, January 14")
+        appointment_time: Appointment time (e.g., "2:00 PM")
+        tech_name: Assigned technician name
+        service_type: Type of service
+        
+    Returns:
+        SMS message body
+    """
+    greeting = f"Hi {customer_name}, " if customer_name else ""
+    
+    appointment_info = ""
+    if appointment_date and appointment_time:
+        appointment_info = f"Your HVACR FINEST appointment is in 2 hours ({appointment_date} at {appointment_time})."
+    else:
+        appointment_info = "Your HVACR FINEST appointment is in 2 hours."
+    
+    tech_info = f" Technician: {tech_name}." if tech_name else ""
+    service_info = f" Service: {service_type}." if service_type else ""
+    
+    return (
+        f"HVAC-R Finest: {greeting}{appointment_info}{tech_info}{service_info} "
+        f"Reply to reschedule or call (972) 372-4458. Reply STOP to opt out."
+    )
+
+
+async def send_appointment_reminder_sms(
+    to_phone: str,
+    customer_name: str | None,
+    appointment_date: str | None = None,
+    appointment_time: str | None = None,
+    tech_name: str | None = None,
+    service_type: str | None = None,
+) -> dict[str, Any]:
+    """
+    Send appointment reminder SMS (2 hours before appointment).
+    
+    Returns:
+        Dict with status and message_sid on success, or error info
+    """
+    settings = get_settings()
+    
+    # Check feature flag
+    if not settings.FEATURE_EMERGENCY_SMS:
+        logger.debug("FEATURE_EMERGENCY_SMS disabled, skipping reminder SMS")
+        return {"status": "disabled", "reason": "feature_flag"}
+    
+    # Create client
+    client = create_twilio_client_from_settings()
+    if not client:
+        return {"status": "disabled", "reason": "not_configured"}
+    
+    # Build message
+    body = build_appointment_reminder_sms(
+        customer_name=customer_name,
+        appointment_date=appointment_date,
+        appointment_time=appointment_time,
+        tech_name=tech_name,
+        service_type=service_type,
+    )
+    
+    # Send
+    try:
+        result = await client.send_sms(to=to_phone, body=body)
+        logger.info(f"Sent appointment reminder SMS to {to_phone}")
+        return {"status": "sent", **result}
+    except TwilioSMSError as e:
+        logger.error(f"Failed to send appointment reminder SMS: {e}")
+        return {"status": "failed", "error": str(e)}
+
+
 async def send_service_confirmation_sms(
     to_phone: str,
     customer_name: str | None,
+    appointment_date: str | None = None,
+    appointment_time: str | None = None,
+    tech_name: str | None = None,
+    service_type: str | None = None,
     is_same_day: bool = False,
 ) -> dict[str, Any]:
     """
-    Send standard service confirmation SMS.
+    Send standard service/appointment confirmation SMS.
+    
+    This function should be called immediately after appointment creation.
+    
+    Args:
+        to_phone: Customer phone number
+        customer_name: Customer name
+        appointment_date: Appointment date (e.g., "Tuesday, January 14")
+        appointment_time: Appointment time (e.g., "2:00 PM")
+        tech_name: Assigned technician name
+        service_type: Type of service
+        is_same_day: Whether same-day service was requested
     
     Returns:
         Dict with status and message_sid on success, or error info
@@ -330,11 +493,16 @@ async def send_service_confirmation_sms(
     
     body = build_service_confirmation_sms(
         customer_name=customer_name,
+        appointment_date=appointment_date,
+        appointment_time=appointment_time,
+        tech_name=tech_name,
+        service_type=service_type,
         is_same_day=is_same_day,
     )
     
     try:
         result = await client.send_sms(to=to_phone, body=body)
+        logger.info(f"Sent appointment confirmation SMS to {to_phone} for appointment on {appointment_date or 'TBD'}")
         return {"status": "sent", **result}
     except TwilioSMSError as e:
         logger.error(f"Failed to send service SMS: {e}")
@@ -401,3 +569,26 @@ async def send_reschedule_confirmation_sms(
     except TwilioSMSError as e:
         logger.error(f"Failed to send reschedule SMS: {e}")
         return {"status": "failed", "error": str(e)}
+
+
+def build_membership_enrollment_sms(
+    customer_name: str | None,
+    plan_name: str,
+    annual_price: float,
+    payment_link: str,
+) -> str:
+    """
+    Build SMS message for membership enrollment with contract and payment link.
+    
+    Returns:
+        SMS message body
+    """
+    greeting = f"Hi {customer_name}," if customer_name else "Hello,"
+    
+    return (
+        f"{greeting} Thank you for enrolling in {plan_name} with HVAC-R Finest! "
+        f"Annual cost: ${annual_price:.0f}. "
+        f"VIP benefits include priority scheduling, discounted rates, annual tune-ups, and extended warranty. "
+        f"Complete enrollment: {payment_link} "
+        f"Reply STOP to opt out."
+    )

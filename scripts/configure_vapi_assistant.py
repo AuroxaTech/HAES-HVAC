@@ -29,6 +29,16 @@ except ImportError:
     print("Error: httpx not installed. Run: pip install httpx")
     sys.exit(1)
 
+try:
+    from dotenv import load_dotenv
+    # Load .env file if it exists
+    env_path = Path(__file__).parent.parent / ".env"
+    if env_path.exists():
+        load_dotenv(env_path)
+except ImportError:
+    # python-dotenv not installed, continue without it
+    pass
+
 
 # Configuration
 VAPI_API_BASE = "https://api.vapi.ai"

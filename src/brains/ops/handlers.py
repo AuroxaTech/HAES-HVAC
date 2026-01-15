@@ -114,6 +114,11 @@ def _handle_service_request(command: HaelCommand) -> OpsResult:
             suggested_action="Please provide: " + ", ".join(missing),
         )
     
+    # Check if this is a warranty claim
+    is_warranty = command.metadata.get("is_warranty", False)
+    previous_technician_id = command.metadata.get("previous_technician_id")
+    previous_service_id = command.metadata.get("previous_service_id")
+    
     # Qualify emergency
     emergency = qualify_emergency(
         problem_description=entities.problem_description or "",
@@ -136,15 +141,47 @@ def _handle_service_request(command: HaelCommand) -> OpsResult:
     else:
         priority = ServicePriority.NORMAL
     
+    # Warranty handling: Set priority to 2nd highest if not emergency
+    if is_warranty:
+        if priority == ServicePriority.EMERGENCY:
+            # Keep emergency priority for warranty emergencies
+            pass
+        elif priority == ServicePriority.URGENT:
+            # Already urgent, keep it
+            pass
+        elif priority == ServicePriority.HIGH:
+            # Set to urgent (2nd highest)
+            priority = ServicePriority.URGENT
+        else:
+            # Set to high (2nd highest for normal)
+            priority = ServicePriority.HIGH
+        logger.info(
+            f"Warranty claim detected - priority set to {priority.value}, "
+            f"previous_service_id={previous_service_id}, "
+            f"previous_technician_id={previous_technician_id}"
+        )
+    
     # Determine if commercial
     is_commercial = entities.property_type == "commercial"
     
     # Assign technician
-    technician = assign_technician(
-        zip_code=entities.zip_code,
-        is_emergency=emergency.is_emergency,
-        is_commercial=is_commercial,
-    )
+    # For warranty claims, try to assign to same technician if previous_technician_id provided
+    technician = None
+    if is_warranty and previous_technician_id:
+        from src.brains.ops.tech_roster import get_technician
+        technician = get_technician(previous_technician_id)
+        if technician:
+            logger.info(f"Warranty claim: Assigning to previous technician {technician.name} ({technician.id})")
+        else:
+            logger.warning(f"Warranty claim: Previous technician {previous_technician_id} not found, falling back to normal assignment")
+    
+    # If no technician assigned yet (not warranty or previous tech not found), use normal assignment
+    if not technician:
+        technician = assign_technician(
+            zip_code=entities.zip_code,
+            is_emergency=emergency.is_emergency,
+            is_commercial=is_commercial,
+        )
     
     tech_assignment = None
     if technician:
@@ -203,22 +240,35 @@ def _handle_service_request(command: HaelCommand) -> OpsResult:
     if emergency.is_emergency:
         message = f"EMERGENCY: {emergency.reason}. " + message
     
+    # Build response data
+    response_data = {
+        "is_emergency": emergency.is_emergency,
+        "emergency_reason": emergency.reason if emergency.is_emergency else None,
+        "priority_label": priority_label,
+        "eta_window_hours_min": eta_window["hours_min"] if eta_window else None,
+        "eta_window_hours_max": eta_window["hours_max"] if eta_window else None,
+        "service_type": service_type.name,
+        "estimated_duration_min": service_type.duration_minutes_min,
+        "estimated_duration_max": service_type.duration_minutes_max,
+        "assigned_technician": tech_data,
+    }
+    
+    # Add warranty information if applicable
+    if is_warranty:
+        response_data["is_warranty"] = True
+        response_data["waive_diagnostic_fee"] = True  # Flag to waive diagnostic fee
+        response_data["previous_service_id"] = previous_service_id
+        response_data["previous_technician_id"] = previous_technician_id
+        if previous_technician_id and technician:
+            response_data["same_technician_assigned"] = True
+        message += " [Warranty Claim - Diagnostic fee waived]"
+    
     return OpsResult(
         status=OpsStatus.SUCCESS,
         message=message,
         requires_human=False,
         work_order=work_order,
-        data={
-            "is_emergency": emergency.is_emergency,
-            "emergency_reason": emergency.reason if emergency.is_emergency else None,
-            "priority_label": priority_label,
-            "eta_window_hours_min": eta_window["hours_min"] if eta_window else None,
-            "eta_window_hours_max": eta_window["hours_max"] if eta_window else None,
-            "service_type": service_type.name,
-            "estimated_duration_min": service_type.duration_minutes_min,
-            "estimated_duration_max": service_type.duration_minutes_max,
-            "assigned_technician": tech_data,
-        },
+        data=response_data,
     )
 
 

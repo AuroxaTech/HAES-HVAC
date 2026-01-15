@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Check Availability Tool",
+  "description": "Check next available appointment slots",
+  "tool_definition": {
+    "type": "function",
+    "function": {
+      "name": "check_availability",
+      "description": "Check next available appointment slots without creating an appointment. Use this when customer asks 'when are you available?' or 'what's your next slot?'",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "service_type": {
+            "type": "string",
+            "description": "Type of service needed"
+          },
+          "preferred_date": {
+            "type": "string",
+            "description": "Preferred date for availability check"
+          },
+          "property_type": {
+            "type": "string",
+            "enum": ["residential", "commercial", "property_management"],
+            "description": "Type of property"
+          },
+          "zip_code": {
+            "type": "string",
+            "description": "ZIP code for technician assignment"
+          }
+        }
+      }
+    },
+    "async": false,
+    "server": {
+      "url": "https://haes-hvac.fly.dev/vapi/server"
+    }
+  }
+}

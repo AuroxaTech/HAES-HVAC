@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Payment Terms Inquiry Tool",
+  "description": "Get payment terms for customer segment",
+  "tool_definition": {
+    "type": "function",
+    "function": {
+      "name": "payment_terms_inquiry",
+      "description": "Get payment terms information. Use this when customer asks about payment terms, due dates, or payment policies.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "customer_name": {
+            "type": "string",
+            "description": "Customer's full name"
+          },
+          "phone": {
+            "type": "string",
+            "description": "Customer's phone number"
+          },
+          "email": {
+            "type": "string",
+            "description": "Customer's email address"
+          },
+          "property_type": {
+            "type": "string",
+            "enum": ["residential", "commercial", "property_management"],
+            "description": "Type of property"
+          }
+        }
+      }
+    },
+    "async": false,
+    "server": {
+      "url": "https://haes-hvac.fly.dev/vapi/server"
+    }
+  }
+}

@@ -1,0 +1,494 @@
+"""
+HAES HVAC - OPS Tools Tests
+
+Tests for OPS brain tools:
+- create_service_request
+- schedule_appointment
+- check_availability
+- reschedule_appointment
+- cancel_appointment
+- check_appointment_status
+"""
+
+import pytest
+from unittest.mock import patch, MagicMock, AsyncMock
+from datetime import datetime, timedelta
+
+from src.vapi.tools.ops.create_service_request import handle_create_service_request
+from src.vapi.tools.ops.schedule_appointment import handle_schedule_appointment
+from src.vapi.tools.ops.check_availability import handle_check_availability
+from src.vapi.tools.ops.reschedule_appointment import handle_reschedule_appointment
+from src.vapi.tools.ops.cancel_appointment import handle_cancel_appointment
+from src.vapi.tools.ops.check_appointment_status import handle_check_appointment_status
+
+
+class TestCreateServiceRequest:
+    """Tests for create_service_request tool."""
+    
+    @pytest.mark.asyncio
+    async def test_create_service_request_requires_phone(self):
+        """Should require phone number."""
+        parameters = {
+            "address": "123 Main St, Dallas, TX 75201",
+            "issue_description": "AC not working",
+        }
+        
+        response = await handle_create_service_request(
+            tool_call_id="tc_001",
+            parameters=parameters,
+            call_id="call_001",
+        )
+        
+        assert response.action == "needs_human"
+        assert "phone" in response.data.get("missing_fields", [])
+    
+    @pytest.mark.asyncio
+    async def test_create_service_request_requires_address(self):
+        """Should require address."""
+        parameters = {
+            "phone": "+19725551234",
+            "issue_description": "AC not working",
+        }
+        
+        response = await handle_create_service_request(
+            tool_call_id="tc_002",
+            parameters=parameters,
+            call_id="call_002",
+        )
+        
+        assert response.action == "needs_human"
+        assert "address" in response.data.get("missing_fields", [])
+    
+    @pytest.mark.asyncio
+    async def test_create_service_request_requires_issue_description(self):
+        """Should require issue description."""
+        parameters = {
+            "phone": "+19725551234",
+            "address": "123 Main St, Dallas, TX 75201",
+        }
+        
+        response = await handle_create_service_request(
+            tool_call_id="tc_003",
+            parameters=parameters,
+            call_id="call_003",
+        )
+        
+        assert response.action == "needs_human"
+        assert "issue_description" in response.data.get("missing_fields", [])
+    
+    @pytest.mark.asyncio
+    @patch("src.vapi.tools.ops.create_service_request.create_lead_service")
+    @patch("src.vapi.tools.ops.create_service_request.handle_ops_command")
+    async def test_create_service_request_success(self, mock_ops_handler, mock_lead_service):
+        """Should successfully create service request."""
+        # Mock OPS handler
+        from src.brains.ops.schema import OpsResult, OpsStatus
+        mock_ops_handler.return_value = OpsResult(
+            status=OpsStatus.SUCCESS,
+            message="Service request created successfully",
+            requires_human=False,
+            data={"lead_id": 123, "assigned_technician": {"id": "junior", "name": "Junior"}},
+        )
+        
+        parameters = {
+            "phone": "+19725551234",
+            "address": "123 Main St, DeSoto, TX 75115",
+            "issue_description": "AC not cooling properly",
+            "customer_name": "John Doe",
+            "urgency": "medium",
+            "property_type": "residential",
+        }
+        
+        response = await handle_create_service_request(
+            tool_call_id="tc_004",
+            parameters=parameters,
+            call_id="call_004",
+        )
+        
+        assert response.action == "completed"
+        assert response.speak is not None and len(response.speak) > 0
+        assert response.data.get("lead_id") is not None
+    
+    @pytest.mark.asyncio
+    @patch("src.vapi.tools.ops.create_service_request.handle_ops_command")
+    async def test_create_service_request_emergency(self, mock_ops_handler):
+        """Should handle emergency requests correctly."""
+        from src.brains.ops.schema import OpsResult, OpsStatus
+        mock_ops_handler.return_value = OpsResult(
+            status=OpsStatus.SUCCESS,
+            message="Emergency service request created",
+            requires_human=False,
+            data={
+                "lead_id": 456,
+                "is_emergency": True,
+                "priority_label": "CRITICAL",
+                "eta_window_hours_min": 1.5,
+                "eta_window_hours_max": 3.0,
+            },
+        )
+        
+        parameters = {
+            "phone": "+19725559999",
+            "address": "456 Emergency St, DeSoto, TX 75115",
+            "issue_description": "No heat, it's freezing!",
+            "indoor_temperature_f": 50,
+            "urgency": "emergency",
+        }
+        
+        response = await handle_create_service_request(
+            tool_call_id="tc_005",
+            parameters=parameters,
+            call_id="call_005",
+        )
+        
+        assert response.action == "completed"
+        assert response.data.get("is_emergency") is True
+        assert response.data.get("priority_label") == "CRITICAL"
+    
+    @pytest.mark.asyncio
+    @patch("src.vapi.tools.ops.create_service_request.is_within_service_area")
+    async def test_create_service_request_out_of_area(self, mock_service_area):
+        """Should handle out-of-service-area requests."""
+        # is_within_service_area returns (bool, str | None)
+        mock_service_area.return_value = (False, "We service within 35 miles of downtown Dallas")
+        
+        parameters = {
+            "phone": "+19725551234",
+            "address": "123 Main St, Austin, TX 78701",  # Out of area
+            "issue_description": "AC not working",
+        }
+        
+        response = await handle_create_service_request(
+            tool_call_id="tc_006",
+            parameters=parameters,
+            call_id="call_006",
+        )
+        
+        assert response.action == "needs_human"
+        assert "35 miles" in response.speak.lower() or "service area" in response.speak.lower() or "outside" in response.speak.lower()
+    
+    @pytest.mark.asyncio
+    @patch("src.vapi.tools.ops.create_service_request.handle_ops_command")
+    async def test_create_service_request_warranty(self, mock_ops_handler):
+        """Should handle warranty claims correctly."""
+        from src.brains.ops.schema import OpsResult, OpsStatus
+        mock_ops_handler.return_value = OpsResult(
+            status=OpsStatus.SUCCESS,
+            message="Warranty service request created",
+            requires_human=False,
+            data={
+                "lead_id": 789,
+                "is_warranty": True,
+                "waive_diagnostic_fee": True,
+            },
+        )
+        
+        parameters = {
+            "phone": "+19725551234",
+            "address": "123 Main St, DeSoto, TX 75115",
+            "issue_description": "AC you fixed last week is not working again",
+            "is_warranty": True,
+            "previous_service_id": "12345",
+        }
+        
+        response = await handle_create_service_request(
+            tool_call_id="tc_007",
+            parameters=parameters,
+            call_id="call_007",
+        )
+        
+        assert response.action == "completed"
+        assert response.data.get("is_warranty") is True
+
+
+class TestScheduleAppointment:
+    """Tests for schedule_appointment tool."""
+    
+    @pytest.mark.asyncio
+    async def test_schedule_appointment_requires_phone(self):
+        """Should require phone number."""
+        parameters = {
+            "address": "123 Main St, Dallas, TX 75201",
+            "customer_name": "John Doe",
+        }
+        
+        response = await handle_schedule_appointment(
+            tool_call_id="tc_sched_001",
+            parameters=parameters,
+            call_id="call_sched_001",
+        )
+        
+        assert response.action == "needs_human"
+        assert "phone" in response.data.get("missing_fields", [])
+    
+    @pytest.mark.asyncio
+    @patch("src.vapi.tools.ops.schedule_appointment.handle_ops_command")
+    async def test_schedule_appointment_success(self, mock_ops_handler):
+        """Should successfully schedule appointment."""
+        from datetime import datetime, timedelta
+        from src.brains.ops.schema import OpsResult, OpsStatus
+        future_time = datetime.now() + timedelta(hours=4)
+        
+        mock_ops_handler.return_value = OpsResult(
+            status=OpsStatus.SUCCESS,
+            message="Appointment scheduled successfully",
+            requires_human=False,
+            data={
+                "appointment_id": 1001,
+                "scheduled_time": future_time.isoformat(),
+                "scheduled_time_end": (future_time + timedelta(hours=2)).isoformat(),
+                "technician": None,
+            },
+        )
+        
+        parameters = {
+            "phone": "+19725551234",
+            "address": "123 Main St, DeSoto, TX 75115",
+            "customer_name": "John Doe",
+            "preferred_date": "tomorrow",
+            "preferred_time": "morning",
+        }
+        
+        response = await handle_schedule_appointment(
+            tool_call_id="tc_sched_002",
+            parameters=parameters,
+            call_id="call_sched_002",
+        )
+        
+        assert response.action == "completed"
+        assert response.data.get("appointment_id") is not None
+        assert "scheduled" in response.speak.lower()
+
+
+class TestCheckAvailability:
+    """Tests for check_availability tool."""
+    
+    @pytest.mark.asyncio
+    async def test_check_availability_works_without_phone(self):
+        """Should work without phone number (just checking general availability)."""
+        parameters = {
+            "service_type": "diagnostic",
+        }
+        
+        response = await handle_check_availability(
+            tool_call_id="tc_avail_001",
+            parameters=parameters,
+            call_id="call_avail_001",
+        )
+        
+        # Should process (may complete or need more info, but shouldn't fail on missing phone)
+        assert response.action in ["completed", "needs_human"]
+    
+    @pytest.mark.asyncio
+    @patch("src.vapi.tools.ops.check_availability.create_appointment_service")
+    @patch("src.vapi.tools.ops.check_availability.handle_ops_command")
+    async def test_check_availability_success(self, mock_ops_handler, mock_appointment_service):
+        """Should successfully find available slots."""
+        from datetime import datetime, timedelta
+        from src.brains.ops.schema import OpsResult, OpsStatus
+        
+        future_time = datetime.now() + timedelta(hours=4)
+        
+        # Mock OPS handler
+        mock_ops_handler.return_value = OpsResult(
+            status=OpsStatus.SUCCESS,
+            message="Available slots found",
+            requires_human=False,
+            data={
+                "available_slots": [
+                    {
+                        "start": future_time.isoformat(),
+                        "end": (future_time + timedelta(hours=2)).isoformat(),
+                        "status": "available",
+                    }
+                ]
+            },
+        )
+        
+        # Mock appointment service (async function returns async service)
+        mock_service_instance = AsyncMock()
+        mock_appointment_service.return_value = mock_service_instance
+        from src.brains.ops.scheduling_rules import TimeSlot, SlotStatus
+        mock_slot = TimeSlot(
+            start=future_time,
+            end=future_time + timedelta(hours=2),
+            status=SlotStatus.AVAILABLE,
+        )
+        # find_next_available_slot is async, so use return_value
+        mock_service_instance.find_next_available_slot = AsyncMock(return_value=mock_slot)
+        
+        parameters = {
+            "preferred_date": "tomorrow",
+            "service_type": "diagnostic",
+        }
+        
+        response = await handle_check_availability(
+            tool_call_id="tc_avail_002",
+            parameters=parameters,
+            call_id="call_avail_002",
+        )
+        
+        # check_availability returns "needs_human" to ask for confirmation before scheduling
+        assert response.action == "needs_human" or response.action == "completed"
+        assert "available" in response.speak.lower() or "slot" in response.speak.lower()
+        assert "slot" in str(response.data) or "availability" in str(response.data)
+
+
+class TestRescheduleAppointment:
+    """Tests for reschedule_appointment tool."""
+    
+    @pytest.mark.asyncio
+    async def test_reschedule_appointment_requires_phone(self):
+        """Should require phone number."""
+        parameters = {}
+        
+        response = await handle_reschedule_appointment(
+            tool_call_id="tc_resched_001",
+            parameters=parameters,
+            call_id="call_resched_001",
+        )
+        
+        assert response.action == "needs_human"
+        assert "phone" in response.data.get("missing_fields", [])
+    
+    @pytest.mark.asyncio
+    @patch("src.vapi.tools.ops.reschedule_appointment.handle_ops_command")
+    async def test_reschedule_appointment_success(self, mock_ops_handler):
+        """Should successfully reschedule appointment."""
+        from datetime import datetime, timedelta
+        from src.brains.ops.schema import OpsResult, OpsStatus
+        old_time = datetime.now() + timedelta(days=1)
+        new_time = datetime.now() + timedelta(days=2)
+        
+        mock_ops_handler.return_value = OpsResult(
+            status=OpsStatus.SUCCESS,
+            message="Appointment rescheduled successfully",
+            requires_human=False,
+            data={
+                "appointment_id": 2001,
+                "scheduled_time": new_time.isoformat(),
+                "scheduled_time_end": (new_time + timedelta(hours=2)).isoformat(),
+                "previous_time": old_time.isoformat(),
+            },
+        )
+        
+        parameters = {
+            "customer_name": "John Doe",
+            "phone": "+19725551234",
+            "new_preferred_date": "next Tuesday",
+        }
+        
+        response = await handle_reschedule_appointment(
+            tool_call_id="tc_resched_002",
+            parameters=parameters,
+            call_id="call_resched_002",
+        )
+        
+        assert response.action == "completed"
+        assert "rescheduled" in response.speak.lower()
+        assert response.data.get("appointment_id") is not None
+
+
+class TestCancelAppointment:
+    """Tests for cancel_appointment tool."""
+    
+    @pytest.mark.asyncio
+    async def test_cancel_appointment_requires_phone(self):
+        """Should require phone number."""
+        parameters = {}
+        
+        response = await handle_cancel_appointment(
+            tool_call_id="tc_cancel_001",
+            parameters=parameters,
+            call_id="call_cancel_001",
+        )
+        
+        assert response.action == "needs_human"
+        assert "phone" in response.data.get("missing_fields", [])
+    
+    @pytest.mark.asyncio
+    @patch("src.vapi.tools.ops.cancel_appointment.handle_ops_command")
+    async def test_cancel_appointment_success(self, mock_ops_handler):
+        """Should successfully cancel appointment."""
+        from src.brains.ops.schema import OpsResult, OpsStatus
+        mock_ops_handler.return_value = OpsResult(
+            status=OpsStatus.SUCCESS,
+            message="Appointment cancelled successfully",
+            requires_human=False,
+            data={
+                "appointment_id": 3001,
+                "cancelled": True,
+            },
+        )
+        
+        parameters = {
+            "customer_name": "John Doe",
+            "phone": "+19725551234",
+        }
+        
+        response = await handle_cancel_appointment(
+            tool_call_id="tc_cancel_002",
+            parameters=parameters,
+            call_id="call_cancel_002",
+        )
+        
+        assert response.action == "completed"
+        assert "cancel" in response.speak.lower()
+
+
+class TestCheckAppointmentStatus:
+    """Tests for check_appointment_status tool."""
+    
+    @pytest.mark.asyncio
+    async def test_check_appointment_status_requires_phone(self):
+        """Should require phone number."""
+        parameters = {}
+        
+        response = await handle_check_appointment_status(
+            tool_call_id="tc_status_001",
+            parameters=parameters,
+            call_id="call_status_001",
+        )
+        
+        assert response.action == "needs_human"
+        assert "phone" in response.data.get("missing_fields", [])
+    
+    @pytest.mark.asyncio
+    @patch("src.vapi.tools.ops.check_appointment_status.handle_ops_command")
+    async def test_check_appointment_status_success(self, mock_ops_handler):
+        """Should successfully find appointment status."""
+        from datetime import datetime, timedelta
+        from src.brains.ops.schema import OpsResult, OpsStatus
+        
+        future_time = datetime.now() + timedelta(days=1)
+        
+        # Mock OPS handler
+        mock_ops_handler.return_value = OpsResult(
+            status=OpsStatus.SUCCESS,
+            message="Appointment found",
+            requires_human=False,
+            data={
+                "appointments": [{
+                    "id": 4001,
+                    "name": "Service Appointment",
+                    "scheduled_time": future_time.isoformat(),
+                    "scheduled_time_end": (future_time + timedelta(hours=2)).isoformat(),
+                    "state": "confirmed",
+                }]
+            },
+        )
+        
+        parameters = {
+            "customer_name": "John Doe",
+            "phone": "+19725551234",
+        }
+        
+        response = await handle_check_appointment_status(
+            tool_call_id="tc_status_002",
+            parameters=parameters,
+            call_id="call_status_002",
+        )
+        
+        assert response.action == "completed"
+        assert "appointment" in response.speak.lower()
+        assert response.data.get("appointments") is not None

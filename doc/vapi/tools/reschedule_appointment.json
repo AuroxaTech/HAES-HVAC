@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Reschedule Appointment Tool",
+  "description": "Reschedule existing appointment",
+  "tool_definition": {
+    "type": "function",
+    "function": {
+      "name": "reschedule_appointment",
+      "description": "Reschedule an existing appointment. Use this when customer wants to change their appointment time.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "customer_name": {
+            "type": "string",
+            "description": "Customer's full name (required)"
+          },
+          "phone": {
+            "type": "string",
+            "description": "Customer's phone number (required)"
+          },
+          "address": {
+            "type": "string",
+            "description": "Service address (for lookup)"
+          },
+          "preferred_time_windows": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "List of preferred new time windows"
+          },
+          "appointment_id": {
+            "type": "string",
+            "description": "Specific appointment ID if known"
+          }
+        },
+        "required": ["customer_name", "phone"]
+      }
+    },
+    "async": false,
+    "server": {
+      "url": "https://haes-hvac.fly.dev/vapi/server"
+    }
+  }
+}

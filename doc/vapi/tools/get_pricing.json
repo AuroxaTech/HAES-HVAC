@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Get Pricing Tool",
+  "description": "Get service pricing for customer type",
+  "tool_definition": {
+    "type": "function",
+    "function": {
+      "name": "get_pricing",
+      "description": "Get service pricing information. Use this when customer asks about pricing, fees, or costs.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "property_type": {
+            "type": "string",
+            "enum": ["residential", "commercial", "property_management"],
+            "description": "Type of property (required)"
+          },
+          "service_type": {
+            "type": "string",
+            "description": "Type of service (required)"
+          },
+          "urgency": {
+            "type": "string",
+            "enum": ["emergency", "high", "medium", "low"],
+            "description": "Urgency level"
+          },
+          "is_weekend": {
+            "type": "boolean",
+            "description": "True if weekend service"
+          },
+          "is_after_hours": {
+            "type": "boolean",
+            "description": "True if after-hours service"
+          },
+          "customer_type": {
+            "type": "string",
+            "description": "Override property_type with specific customer type"
+          }
+        },
+        "required": ["property_type", "service_type"]
+      }
+    },
+    "async": false,
+    "server": {
+      "url": "https://haes-hvac.fly.dev/vapi/server"
+    }
+  }
+}
