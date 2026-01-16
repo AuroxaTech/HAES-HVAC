@@ -17,7 +17,7 @@
           },
           "service_type": {
             "type": "string",
-            "description": "Type of service (required)"
+            "description": "Type of service (optional, defaults to 'service')"
           },
           "urgency": {
             "type": "string",
@@ -37,7 +37,7 @@
             "description": "Override property_type with specific customer type"
           }
         },
-        "required": ["property_type", "service_type"]
+        "required": ["property_type"]
       }
     },
     "async": false,

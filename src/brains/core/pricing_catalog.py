@@ -22,46 +22,47 @@ class TierPricing:
 
 # Pricing catalog from RDD Section 3
 # Values are explicit from the document
+# Premiums are calculated as: (Total Price - Diagnostic Fee)
 PRICING_CATALOG: dict[PricingTier, TierPricing] = {
     PricingTier.DEFAULT_PM: TierPricing(
         tier=PricingTier.DEFAULT_PM,
-        diagnostic_fee=89.0,
-        trip_charge=0.0,
-        emergency_premium=50.0,
-        after_hours_premium=35.0,
-        weekend_premium=35.0,
+        diagnostic_fee=85.0,  # Fixed: was 89.0
+        trip_charge=85.0,  # Added: was 0.0
+        emergency_premium=40.0,  # $125 total - $85 diagnostic = $40
+        after_hours_premium=40.0,  # $125 total - $85 diagnostic = $40
+        weekend_premium=90.0,  # $175 total - $85 diagnostic = $90
     ),
     PricingTier.RETAIL: TierPricing(
         tier=PricingTier.RETAIL,
-        diagnostic_fee=129.0,
-        trip_charge=0.0,
-        emergency_premium=75.0,
-        after_hours_premium=50.0,
-        weekend_premium=50.0,
+        diagnostic_fee=125.0,  # Fixed: was 129.0
+        trip_charge=99.0,  # Added: was 0.0
+        emergency_premium=62.5,  # $187.50 total - $125 diagnostic = $62.50
+        after_hours_premium=62.5,  # $187.50 total - $125 diagnostic = $62.50
+        weekend_premium=124.0,  # $249 total - $125 diagnostic = $124
     ),
     PricingTier.COM: TierPricing(
         tier=PricingTier.COM,
-        diagnostic_fee=149.0,
-        trip_charge=0.0,
-        emergency_premium=100.0,
-        after_hours_premium=75.0,
-        weekend_premium=75.0,
+        diagnostic_fee=250.0,  # Fixed: was 149.0
+        trip_charge=179.0,  # Added: was 0.0
+        emergency_premium=100.0,  # $350 total - $250 diagnostic = $100
+        after_hours_premium=100.0,  # $350 total - $250 diagnostic = $100
+        weekend_premium=100.0,  # $350 total - $250 diagnostic = $100
     ),
     PricingTier.COM_LESSEN: TierPricing(
         tier=PricingTier.COM_LESSEN,
-        diagnostic_fee=99.0,
-        trip_charge=0.0,
-        emergency_premium=50.0,
-        after_hours_premium=35.0,
-        weekend_premium=35.0,
+        diagnostic_fee=125.0,  # Fixed: was 99.0
+        trip_charge=75.0,  # Added: was 0.0
+        emergency_premium=50.0,  # $175 total - $125 diagnostic = $50
+        after_hours_premium=50.0,  # $175 total - $125 diagnostic = $50
+        weekend_premium=125.0,  # $250 total - $125 diagnostic = $125
     ),
     PricingTier.COM_HOTELS: TierPricing(
         tier=PricingTier.COM_HOTELS,
-        diagnostic_fee=119.0,
-        trip_charge=0.0,
-        emergency_premium=75.0,
-        after_hours_premium=50.0,
-        weekend_premium=50.0,
+        diagnostic_fee=155.0,  # Fixed: was 119.0
+        trip_charge=99.0,  # Added: was 0.0
+        emergency_premium=144.0,  # $299 total - $155 diagnostic = $144
+        after_hours_premium=144.0,  # $299 total - $155 diagnostic = $144
+        weekend_premium=194.0,  # $349 total - $155 diagnostic = $194
     ),
 }
 
