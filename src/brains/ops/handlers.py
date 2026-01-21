@@ -1056,6 +1056,28 @@ async def _handle_cancel_appointment(command: HaelCommand) -> OpsResult:
         event_id = appointment["id"]
         lead_id = appointment.get("res_id") if appointment.get("res_model") == "crm.lead" else None
         
+        # Get appointment details for notifications
+        appointment_start_str = appointment.get("start")
+        appointment_name = appointment.get("name", "Appointment")
+        appointment_location = appointment.get("location")
+        tech_user_id = appointment.get("user_id")
+        
+        # Parse appointment datetime
+        appointment_datetime = None
+        if appointment_start_str:
+            try:
+                appointment_datetime = datetime.fromisoformat(appointment_start_str.replace("Z", "+00:00"))
+                if appointment_datetime.tzinfo:
+                    appointment_datetime = appointment_datetime.replace(tzinfo=None)
+            except Exception as e:
+                logger.warning(f"Failed to parse appointment datetime: {e}")
+        
+        # Check if cancellation is within 24 hours (cancellation policy applies)
+        cancellation_within_24h = False
+        if appointment_datetime:
+            hours_until_appointment = (appointment_datetime - now).total_seconds() / 3600
+            cancellation_within_24h = 0 < hours_until_appointment < 24
+        
         # Cancel the appointment
         success = await appointment_service.cancel_appointment(event_id=event_id)
         
@@ -1070,6 +1092,66 @@ async def _handle_cancel_appointment(command: HaelCommand) -> OpsResult:
                 },
             )
         
+        # Initialize response data
+        response_data = {
+            "appointment_id": event_id,
+            "cancelled": True,
+            "lead_id": lead_id,
+            "cancellation_within_24h": cancellation_within_24h,
+            "appointment_datetime": appointment_start_str,
+            "appointment_name": appointment_name,
+        }
+        
+        # Send cancellation confirmation SMS to customer (fire-and-forget)
+        if entities.phone:
+            try:
+                from src.integrations.twilio_sms import create_twilio_client_from_settings
+                sms_client = create_twilio_client_from_settings()
+                if sms_client:
+                    # Format appointment date/time for SMS
+                    if appointment_datetime:
+                        appointment_date = appointment_datetime.strftime("%A, %B %d")
+                        appointment_time = appointment_datetime.strftime("%I:%M %p")
+                        sms_body = f"HVACR FINEST: Your appointment on {appointment_date} at {appointment_time} has been cancelled. If you need to reschedule, please call us at (972) 372-4458."
+                    else:
+                        sms_body = f"HVACR FINEST: Your appointment has been cancelled. If you need to reschedule, please call us at (972) 372-4458."
+                    
+                    # Send SMS asynchronously (fire-and-forget)
+                    import asyncio
+                    asyncio.create_task(sms_client.send_sms(entities.phone, sms_body))
+                    logger.info(f"Scheduled cancellation confirmation SMS to {entities.phone}")
+                    response_data["sms_scheduled"] = True
+            except Exception as e:
+                logger.warning(f"Failed to send cancellation SMS: {e}")
+        
+        # Send notification email to dispatch team (fire-and-forget)
+        try:
+            from src.integrations.email_notifications import send_new_lead_notification
+            
+            # Format appointment details for email
+            service_type = f"Cancelled: {appointment_name}"
+            if appointment_datetime:
+                appointment_date = appointment_datetime.strftime("%A, %B %d, %Y")
+                appointment_time = appointment_datetime.strftime("%I:%M %p")
+                service_type += f" (was scheduled for {appointment_date} at {appointment_time})"
+            
+            # Send notification asynchronously (fire-and-forget)
+            import asyncio
+            asyncio.create_task(send_new_lead_notification(
+                customer_name=entities.full_name,
+                phone=entities.phone,
+                email=entities.email,
+                address=entities.address,
+                service_type=service_type,
+                priority_label="Cancellation",
+                assigned_technician=None,  # Appointment cancelled, no tech assigned
+                lead_id=lead_id,
+            ))
+            logger.info(f"Scheduled cancellation notification email for appointment {event_id}")
+            response_data["email_scheduled"] = True
+        except Exception as e:
+            logger.warning(f"Failed to send cancellation notification email: {e}")
+        
         # Optionally update linked lead status (simplified - could be enhanced)
         if lead_id:
             try:
@@ -1079,15 +1161,16 @@ async def _handle_cancel_appointment(command: HaelCommand) -> OpsResult:
             except Exception as e:
                 logger.warning(f"Failed to update lead {lead_id} after cancellation: {e}")
         
+        # Add cancellation policy info
+        if cancellation_within_24h:
+            response_data["cancellation_policy_applies"] = True
+            response_data["cancellation_policy_note"] = "Cancellation within 24 hours - policy may apply"
+        
         return OpsResult(
             status=OpsStatus.SUCCESS,
             message="Your appointment has been cancelled. You will receive a confirmation shortly.",
             requires_human=False,
-            data={
-                "appointment_id": event_id,
-                "cancelled": True,
-                "lead_id": lead_id,
-            },
+            data=response_data,
         )
         
     except Exception as e:

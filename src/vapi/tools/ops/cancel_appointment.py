@@ -109,24 +109,23 @@ async def handle_cancel_appointment(
         response_data = result.data or {}
         response_data["request_id"] = request_id
         
-        # Add cancellation policy information
-        from datetime import datetime, timedelta
-        appointment_id = result.data.get("appointment_id") if result.data else None
+        # Get cancellation policy information from result data
+        cancellation_within_24h = result.data.get("cancellation_within_24h", False) if result.data else False
         
-        # Check if appointment is within 24 hours (would apply cancellation policy)
-        # Note: This is a simplified check - in production, we'd look up the actual appointment time
         cancellation_policy = {
             "notice_required_hours": 24,
             "policy_text": "We request 24 hours notice for cancellations or reschedules. No-show appointments may be subject to a trip charge.",
-            "applies": True,  # Policy always applies, but enforcement may vary
+            "applies": cancellation_within_24h,
         }
         
         response_data["cancellation_policy"] = cancellation_policy
         
         # Enhance message with policy information
         enhanced_message = result.message
-        if cancellation_policy["applies"]:
-            enhanced_message += " As a reminder, we request 24 hours notice for cancellations. Thank you for letting us know in advance."
+        if cancellation_within_24h:
+            enhanced_message += " As a reminder, we request 24 hours notice for cancellations. A representative may contact you regarding our cancellation policy."
+        else:
+            enhanced_message += " Thank you for letting us know in advance."
         
         return handler.format_success_response(
             enhanced_message,
