@@ -18,6 +18,7 @@ from src.vapi.tools.ops.check_appointment_status import handle_check_appointment
 from src.vapi.tools.revenue.request_quote import handle_request_quote
 from src.vapi.tools.revenue.check_lead_status import handle_check_lead_status
 from src.vapi.tools.revenue.request_membership_enrollment import handle_request_membership_enrollment
+from src.vapi.tools.revenue.ivr_close_sale import handle_ivr_close_sale
 
 # CORE tools
 from src.vapi.tools.core.billing_inquiry import handle_billing_inquiry
@@ -53,6 +54,7 @@ def register_all_tools():
     register_tool("request_quote", handle_request_quote)
     register_tool("check_lead_status", handle_check_lead_status)
     register_tool("request_membership_enrollment", handle_request_membership_enrollment)
+    register_tool("ivr_close_sale", handle_ivr_close_sale)
     
     # CORE tools
     register_tool("billing_inquiry", handle_billing_inquiry)

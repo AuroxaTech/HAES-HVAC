@@ -54,6 +54,40 @@ class ToolResponse:
 class BaseToolHandler:
     """Base class for all Vapi tool handlers."""
     
+    # Define which roles can use which tools
+    TOOL_PERMISSIONS = {
+        # Public tools (customers)
+        "create_service_request": ["customer", "technician", "dispatch", "manager", "executive", "admin"],
+        "schedule_appointment": ["customer", "technician", "dispatch", "manager", "executive", "admin"],
+        "reschedule_appointment": ["customer", "dispatch", "manager", "executive", "admin"],
+        "cancel_appointment": ["customer", "dispatch", "manager", "executive", "admin"],
+        "check_appointment_status": ["customer", "manager", "executive", "admin"],
+        "check_availability": ["customer", "manager", "executive", "admin"],
+        "request_quote": ["customer", "technician", "manager", "executive", "admin"],
+        "check_lead_status": ["customer", "manager", "executive", "admin"],
+        "request_membership_enrollment": ["customer", "manager", "executive", "admin"],
+        "billing_inquiry": ["customer", "billing", "manager", "executive", "admin"],
+        "invoice_request": ["customer", "billing", "manager", "executive", "admin"],
+        "payment_terms_inquiry": ["customer", "billing", "manager", "executive", "admin"],
+        "get_pricing": ["customer", "manager", "executive", "admin"],
+        "get_maintenance_plans": ["customer", "manager", "executive", "admin"],
+        "get_service_area_info": ["customer", "technician", "hr", "billing", "manager", "dispatch", "executive", "admin"],
+        "check_business_hours": ["customer", "technician", "hr", "billing", "manager", "dispatch", "executive", "admin"],
+        "create_complaint": ["customer", "manager", "executive", "admin"],
+        
+        # Technician-only tools
+        "ivr_close_sale": ["technician", "manager", "executive", "admin"],
+        
+        # HR tools
+        "payroll_inquiry": ["hr", "manager", "executive", "admin"],
+        "onboarding_inquiry": ["hr", "manager", "executive", "admin"],
+        "hiring_inquiry": ["hr", "manager", "executive", "admin"],
+        
+        # Operations tools
+        "inventory_inquiry": ["manager", "dispatch", "executive", "admin"],
+        "purchase_request": ["manager", "dispatch", "executive", "admin"],
+    }
+    
     def __init__(self, tool_name: str):
         self.tool_name = tool_name
         self.logger = logging.getLogger(f"{__name__}.{tool_name}")
@@ -709,6 +743,45 @@ class BaseToolHandler:
             action="completed",
             data=data or {},
         )
+    
+    def check_access(
+        self,
+        tool_name: str,
+        caller_role: str,
+        caller_is_active: bool = True,
+    ) -> tuple[bool, str]:
+        """
+        Check if caller has permission to use this tool.
+        
+        Args:
+            tool_name: Name of the tool to check
+            caller_role: Caller's role (from CallerRole enum value)
+            caller_is_active: Whether caller's account is active
+            
+        Returns:
+            (allowed: bool, error_message: str)
+        """
+        # Admin has all permissions
+        if caller_role == "admin":
+            return True, ""
+        
+        # Get required roles for this tool
+        required_roles = self.TOOL_PERMISSIONS.get(tool_name, [])
+        
+        # If tool not in permissions list, allow public access (backward compatible)
+        if not required_roles:
+            return True, ""
+        
+        # Check if caller's role is allowed
+        if caller_role not in required_roles:
+            role_names = ", ".join(r.title() for r in required_roles)
+            return False, f"This feature is only available to {role_names}."
+        
+        # Check if caller is active
+        if not caller_is_active:
+            return False, "Your account is inactive. Please contact your manager."
+        
+        return True, ""
 
 
 async def handle_tool_call_with_base(

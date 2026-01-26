@@ -256,7 +256,7 @@ todos:
       - implement_revenue_quote
   - id: implement_conversionflow_ivr_close
     content: Create ivr_close_sale tool or IVR endpoint for ConversionFlow™ - handles technician close line calls, proposal presentation, voice approval, deposit collection, pipeline updates (Test 5.2)
-    status: pending
+    status: in_progress
     dependencies:
       - implement_revenue_quote
   - id: verify_lead_qualification_routing
@@ -1317,8 +1317,15 @@ dependencies: [implement_core_complaint]
 
 ### Test 5.2: ConversionFlow™ - IVR Closing System
 
-- ❌ **Not Covered**: No ConversionFlow™ implementation exists
-- ❌ **Gap**: No IVR "Close Line" mechanism for technicians
+- ✅ **In Progress**: ConversionFlow™ implementation started
+  - `ivr_close_sale` tool handler created (`src/vapi/tools/revenue/ivr_close_sale.py`)
+  - Tool schema created (`doc/vapi/tools/internal_ops/technician/ivr_close_sale.json`)
+  - Tool registered in tool registry
+  - Role-based access control enforces technician-only access
+  - Available via Internal OPS Line (+1-855-768-3265) for technicians
+  - Updates Odoo pipeline stage to "Quote Approved - Waiting for Parts"
+  - Records IVR closing details and triggers install crew dispatch
+- ⚠️ **Gap**: No IVR "Close Line" mechanism for technicians (now available via Internal OPS Line)
 - ❌ **Gap**: No proposal presentation system
 - ❌ **Gap**: No Good/Better/Best options presentation
 - ❌ **Gap**: No voice approval recording

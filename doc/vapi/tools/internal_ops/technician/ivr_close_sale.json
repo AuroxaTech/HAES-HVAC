@@ -1,0 +1,50 @@
+{
+  "tool_definition": {
+    "type": "function",
+    "async": false,
+    "function": {
+      "name": "ivr_close_sale",
+      "description": "Close a sale via IVR - presents proposal, records approval, collects deposit, and updates Odoo pipeline. This tool is for technicians to close sales in the field.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "quote_id": {
+            "type": "string",
+            "description": "Odoo quote/lead ID to close"
+          },
+          "proposal_selection": {
+            "type": "string",
+            "enum": ["good", "better", "best"],
+            "description": "Which proposal option the customer selected (Good/Better/Best)"
+          },
+          "financing_option": {
+            "type": "string",
+            "description": "Financing partner selected (e.g., 'GreenSky', 'Hearth', 'cash')"
+          },
+          "deposit_amount": {
+            "type": "number",
+            "description": "Deposit amount collected from customer (in dollars)"
+          },
+          "customer_phone": {
+            "type": "string",
+            "description": "Customer phone number for verification (optional)"
+          },
+          "customer_name": {
+            "type": "string",
+            "description": "Customer name for verification (optional)"
+          }
+        },
+        "required": ["quote_id", "proposal_selection"]
+      }
+    },
+    "server": {
+      "url": "https://haes-hvac.fly.dev/vapi/server"
+    },
+    "messages": [
+      {"type": "request-start", "content": "Let me process the sale closing for you."},
+      {"type": "request-complete", "content": ""},
+      {"type": "request-failed", "content": "I encountered an error closing the sale. Please try again or contact dispatch."},
+      {"type": "request-response-delayed", "content": "This is taking a moment. Please hold.", "timingMilliseconds": 3000}
+    ]
+  }
+}

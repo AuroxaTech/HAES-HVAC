@@ -13,12 +13,15 @@
       { "file": "doc/VAPI_TROUBLESHOOTING.md", "purpose": "Vapi integration troubleshooting guide with common issues and solutions" },
       { "file": "doc/Requirements.md", "purpose": "High-level project requirements" },
       { "file": "doc/HAES - Requirement Discovery Document.md", "purpose": "Detailed RDD with business rules and policies" },
-      { "file": "doc/vapi/system_prompt.md", "purpose": "Riley AI assistant system prompt" },
+      { "file": "doc/vapi/system_prompt_customer_inbound.md", "purpose": "Riley Customer AI assistant system prompt" },
+      { "file": "doc/vapi/system_prompt_internal_ops.md", "purpose": "Riley OPS AI assistant system prompt for internal employees" },
       { "file": "doc/vapi/tool_schema.json", "purpose": "Vapi hael_route tool definition" },
       { "file": "doc/vapi/tools/README.md", "purpose": "Vapi tools organization documentation by integration type" },
-      { "file": "doc/vapi/kb/customer_faq.md", "purpose": "Vapi Knowledge Base - Customer FAQ" },
-      { "file": "doc/vapi/kb/policies.md", "purpose": "Vapi Knowledge Base - Policies & Disclosures" },
-      { "file": "doc/vapi/kb/ops_intake_and_call_policy.md", "purpose": "Vapi Knowledge Base - Intake checklists, emergency rules, prohibited phrases, terminology" }
+      { "file": "doc/vapi/ASSISTANTS_AND_TOOLS_REFERENCE.md", "purpose": "Complete reference table of all Vapi assistants, their IDs, phone numbers, and attached tools" },
+      { "file": "doc/vapi/kb/customer_faq.txt", "purpose": "Vapi Knowledge Base - Customer FAQ (for Riley Customer - Inbound)" },
+      { "file": "doc/vapi/kb/policies.txt", "purpose": "Vapi Knowledge Base - Policies & Disclosures (for Riley Customer - Inbound)" },
+      { "file": "doc/vapi/kb/ops_intake_and_call_policy.txt", "purpose": "Vapi Knowledge Base - Intake checklists, emergency rules, prohibited phrases, terminology (for Riley OPS)" },
+      { "file": "doc/vapi/KB_ASSIGNMENT.md", "purpose": "Knowledge Base assignment guide - which KB files go to which assistant" }
     ]
   },
   "architecture": {
@@ -169,62 +172,92 @@
       "integration_mode": "Server URL (direct tool-calls)",
       "production_endpoint": "/vapi/server",
       "legacy_endpoints": ["/vapi/tools/hael_route", "/webhooks/vapi"],
-      "tool_architecture": "Direct granular tools (22 tools) + legacy HAEL fallback",
-      "assistant_name": "Riley",
-      "tools_implemented": 22,
+      "tool_architecture": "Direct granular tools (23 tools) + legacy HAEL fallback",
+      "assistants": {
+        "riley": {
+          "name": "Riley Customer - Inbound",
+          "assistant_id": "f639ba5f-7c38-4949-9479-ec2a40428d76",
+          "phone_number": "+19725971644",
+          "source": "8x8_forwarded",
+          "tools_count": 17,
+          "tool_category": "customer_facing",
+          "purpose": "Customer service",
+          "system_prompt": "doc/vapi/system_prompt_customer_inbound.md",
+          "status": "configured"
+        },
+        "riley_ops": {
+          "name": "Riley OPS",
+          "assistant_id": "fd35b574-1a9c-4052-99d8-a820e0ebabf7",
+          "phone_number": "+18557683265",
+          "source": "twilio",
+          "tools_count": 6,
+          "tool_category": "internal_ops",
+          "purpose": "Internal operations support",
+          "system_prompt": "doc/vapi/system_prompt_internal_ops.md",
+          "status": "configured"
+        }
+      },
+      "phone_numbers": {
+        "customer_line": {
+          "number": "+19725971644",
+          "source": "8x8_forwarded",
+          "assistant": "Riley",
+          "tools": "customer_facing (17 tools)",
+          "purpose": "Public customer service"
+        },
+        "internal_ops_line": {
+          "number": "+18557683265",
+          "source": "twilio",
+          "assistant": "Riley OPS",
+          "tools": "internal_ops (6+ tools)",
+          "purpose": "Internal employees (technicians, HR, billing, managers)"
+        }
+      },
+      "tools_implemented": 23,
       "tool_categories": {
         "ops": 6,
-        "revenue": 3,
+        "revenue": 4,
         "core": 7,
         "people": 3,
         "utils": 3
       },
       "tool_registry": "src/vapi/tools/register_tools.py",
       "base_handler": "src/vapi/tools/base.py",
+      "role_based_access": {
+        "enabled": true,
+        "caller_identification": "src/utils/caller_identification.py",
+        "identification_flow": [
+          "1. Try Odoo hr.employee lookup (phone, mobile, work_phone fields)",
+          "2. Fallback to static technician roster",
+          "3. Default to CUSTOMER if not found"
+        ],
+        "roles": ["customer", "technician", "hr", "billing", "manager", "dispatch", "executive", "admin"],
+        "permissions_enforced": "Backend checks permissions before processing tool calls",
+        "access_control": "src/vapi/tools/base.py - TOOL_PERMISSIONS dictionary and check_access() method"
+      },
       "tool_organization": {
-        "structure": "Organized by integration type in doc/vapi/tools/",
-        "odoo": {
-          "folder": "doc/vapi/tools/odoo/",
-          "count": 10,
-          "description": "Direct Odoo integration tools that create, update, or query data",
-          "tools": [
-            "create_service_request",
-            "create_complaint",
-            "check_lead_status",
-            "request_quote",
-            "request_membership_enrollment",
-            "schedule_appointment",
-            "reschedule_appointment",
-            "cancel_appointment",
-            "check_appointment_status",
-            "check_availability"
-          ]
+        "structure": "Organized by access level in doc/vapi/tools/",
+        "customer_facing": {
+          "folder": "doc/vapi/tools/customer_facing/",
+          "count": 17,
+          "description": "Customer-facing tools available via Customer Line",
+          "subcategories": {
+            "appointments": 5,
+            "leads_quotes": 4,
+            "billing": 3,
+            "information": 4,
+            "complaints": 1
+          }
         },
-        "brain_handlers": {
-          "folder": "doc/vapi/tools/brain_handlers/",
-          "count": 8,
-          "description": "Tools that use brain handlers (OPS/CORE/REVENUE/PEOPLE) which may query Odoo or use business logic",
-          "tools": [
-            "billing_inquiry",
-            "invoice_request",
-            "payment_terms_inquiry",
-            "inventory_inquiry",
-            "purchase_request",
-            "hiring_inquiry",
-            "onboarding_inquiry",
-            "payroll_inquiry"
-          ]
-        },
-        "static": {
-          "folder": "doc/vapi/tools/static/",
-          "count": 4,
-          "description": "Static or calculated utility tools without Odoo integration",
-          "tools": [
-            "get_pricing",
-            "get_maintenance_plans",
-            "get_service_area_info",
-            "check_business_hours"
-          ]
+        "internal_ops": {
+          "folder": "doc/vapi/tools/internal_ops/",
+          "count": 6,
+          "description": "Internal employee tools available via Internal OPS Line",
+          "subcategories": {
+            "technician": 1,
+            "hr": 3,
+            "operations": 2
+          }
         }
       },
       "transfer_policy": {
@@ -234,13 +267,24 @@
       },
       "documentation": {
         "system_prompt": "doc/vapi/system_prompt.md",
-        "tool_schemas": "doc/vapi/tools/ (organized in odoo/, brain_handlers/, static/ folders)",
+        "system_prompt_internal_ops": "doc/vapi/system_prompt_internal_ops.md",
+        "tool_schemas": "doc/vapi/tools/ (organized in customer_facing/ and internal_ops/ folders)",
         "tool_organization_guide": "doc/vapi/tools/README.md",
         "kb_docs": [
-          "doc/vapi/kb/customer_faq.md",
-          "doc/vapi/kb/policies.md",
-          "doc/vapi/kb/ops_intake_and_call_policy.md"
-        ]
+          "doc/vapi/kb/customer_faq.txt",
+          "doc/vapi/kb/policies.txt",
+          "doc/vapi/kb/ops_intake_and_call_policy.txt"
+        ],
+        "kb_assignment": {
+          "riley_customer": {
+            "required": ["customer_faq.txt", "policies.txt"],
+            "optional": []
+          },
+          "riley_ops": {
+            "required": ["ops_intake_and_call_policy.txt"],
+            "optional": ["policies.txt"]
+          }
+        }
       },
       "features": [
         "Wrong number detection",
@@ -285,23 +329,62 @@
     "Time tracking integration unspecified - payroll excludes hourly calculations"
   ],
   "vapi_tools": {
-    "total_tools": 22,
+    "total_tools": 23,
     "base_handler": "src/vapi/tools/base.py",
     "organization": {
-      "odoo_integration": {
-        "folder": "doc/vapi/tools/odoo/",
-        "count": 10,
-        "description": "Tools with direct Odoo API integration (create/update/query leads, appointments)"
+      "customer_facing": {
+        "folder": "doc/vapi/tools/customer_facing/",
+        "count": 17,
+        "description": "Customer-facing tools available via Customer Line (+1-972-597-1644)",
+        "subcategories": {
+          "appointments": {
+            "folder": "doc/vapi/tools/customer_facing/appointments/",
+            "count": 5,
+            "tools": ["schedule_appointment", "reschedule_appointment", "cancel_appointment", "check_appointment_status", "check_availability"]
+          },
+          "leads_quotes": {
+            "folder": "doc/vapi/tools/customer_facing/leads_quotes/",
+            "count": 4,
+            "tools": ["create_service_request", "request_quote", "check_lead_status", "request_membership_enrollment"]
+          },
+          "billing": {
+            "folder": "doc/vapi/tools/customer_facing/billing/",
+            "count": 3,
+            "tools": ["billing_inquiry", "invoice_request", "payment_terms_inquiry"]
+          },
+          "information": {
+            "folder": "doc/vapi/tools/customer_facing/information/",
+            "count": 4,
+            "tools": ["get_pricing", "get_maintenance_plans", "get_service_area_info", "check_business_hours"]
+          },
+          "complaints": {
+            "folder": "doc/vapi/tools/customer_facing/complaints/",
+            "count": 1,
+            "tools": ["create_complaint"]
+          }
+        }
       },
-      "brain_handlers": {
-        "folder": "doc/vapi/tools/brain_handlers/",
-        "count": 8,
-        "description": "Tools that use brain handlers which may query Odoo or use business logic"
-      },
-      "static_utility": {
-        "folder": "doc/vapi/tools/static/",
-        "count": 4,
-        "description": "Static or calculated utility tools without Odoo integration"
+      "internal_ops": {
+        "folder": "doc/vapi/tools/internal_ops/",
+        "count": 6,
+        "description": "Internal employee tools available via Internal OPS Line (+1-855-768-3265)",
+        "subcategories": {
+          "technician": {
+            "folder": "doc/vapi/tools/internal_ops/technician/",
+            "count": 1,
+            "tools": ["ivr_close_sale"]
+          },
+          "hr": {
+            "folder": "doc/vapi/tools/internal_ops/hr/",
+            "count": 3,
+            "tools": ["payroll_inquiry", "onboarding_inquiry", "hiring_inquiry"]
+          },
+          "operations": {
+            "folder": "doc/vapi/tools/internal_ops/operations/",
+            "count": 2,
+            "tools": ["inventory_inquiry", "purchase_request"]
+          }
+        }
       }
     },
     "tool_categories": {

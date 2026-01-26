@@ -793,6 +793,78 @@ async def vapi_server_url(request: Request) -> dict[str, Any]:
                 if not existing:
                     checker.start(VAPI_TOOL_SCOPE, idempotency_key)
                 
+                # Extract caller phone from Vapi message
+                call_obj = message.get("call", {})
+                caller_phone = (
+                    call_obj.get("customer", {}).get("number") or
+                    call_obj.get("from") or
+                    call_obj.get("customerNumber") or
+                    message.get("call", {}).get("customer", {}).get("number")
+                )
+                
+                # Identify caller (Layer 1: Hybrid lookup)
+                caller_identity = None
+                if caller_phone:
+                    try:
+                        from src.utils.caller_identification import identify_caller
+                        caller_identity = await identify_caller(caller_phone)
+                        
+                        logger.info(
+                            f"Caller identified: phone={caller_phone[:5] if len(caller_phone) > 5 else caller_phone}***, "
+                            f"role={caller_identity.role.value}, "
+                            f"name={caller_identity.name or 'Unknown'}"
+                        )
+                    except Exception as ident_err:
+                        logger.warning(f"Caller identification failed: {ident_err}")
+                        # Continue with default customer role
+                        from src.utils.caller_identification import CallerIdentity, CallerRole, get_permissions_for_role
+                        caller_identity = CallerIdentity(
+                            phone=caller_phone or "",
+                            role=CallerRole.CUSTOMER,
+                            is_active=True,
+                            permissions=get_permissions_for_role(CallerRole.CUSTOMER),
+                        )
+                else:
+                    # No phone number - default to customer
+                    from src.utils.caller_identification import CallerIdentity, CallerRole, get_permissions_for_role
+                    caller_identity = CallerIdentity(
+                        phone="",
+                        role=CallerRole.CUSTOMER,
+                        is_active=True,
+                        permissions=get_permissions_for_role(CallerRole.CUSTOMER),
+                    )
+                
+                # Check access (Layer 3: Permission check)
+                from src.vapi.tools.base import BaseToolHandler
+                handler = BaseToolHandler(tool_name)
+                allowed, error_msg = handler.check_access(
+                    tool_name=tool_name,
+                    caller_role=caller_identity.role.value,
+                    caller_is_active=caller_identity.is_active,
+                )
+                
+                if not allowed:
+                    logger.warning(
+                        f"Access denied: tool={tool_name}, "
+                        f"caller_role={caller_identity.role.value}, "
+                        f"caller_phone={caller_phone[:5] if caller_phone and len(caller_phone) > 5 else 'N/A'}***"
+                    )
+                    return {
+                        "speak": error_msg or "I'm sorry, you don't have access to this feature.",
+                        "action": "error",
+                        "data": {
+                            "error": "unauthorized",
+                            "role": caller_identity.role.value,
+                            "tool": tool_name
+                        }
+                    }
+                
+                # Add caller context to parameters (for tool handlers to use)
+                parameters["_caller_role"] = caller_identity.role.value
+                parameters["_caller_id"] = caller_identity.employee_id
+                parameters["_caller_name"] = caller_identity.name
+                parameters["_caller_phone"] = caller_identity.phone
+                
                 # Check for wrong number and profanity/abuse detection early
                 from src.vapi.tools.base import BaseToolHandler
                 base_handler = BaseToolHandler(tool_name)

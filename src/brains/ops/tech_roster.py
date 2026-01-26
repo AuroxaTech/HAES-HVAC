@@ -192,3 +192,58 @@ def assign_technician(
     
     return None
 
+
+def normalize_phone(phone: str | None) -> str | None:
+    """
+    Normalize phone number for comparison.
+    
+    Converts various formats to +1XXXXXXXXXX format.
+    Supports US numbers (10 digits) and international (+ prefix).
+    """
+    if not phone:
+        return None
+    
+    # Remove all non-digit characters except +
+    digits = ''.join(filter(str.isdigit, phone))
+    
+    # If already has + prefix, preserve it
+    if phone.startswith('+'):
+        # Extract digits after +
+        digits_after_plus = ''.join(filter(str.isdigit, phone[1:]))
+        if len(digits_after_plus) == 10:
+            return f"+1{digits_after_plus}"
+        elif len(digits_after_plus) == 11 and digits_after_plus[0] == '1':
+            return f"+{digits_after_plus}"
+        # International number - return as-is if it has + prefix
+        return phone if phone.startswith('+') else None
+    
+    # US number processing
+    if len(digits) == 10:
+        return f"+1{digits}"
+    elif len(digits) == 11 and digits[0] == '1':
+        return f"+{digits}"
+    
+    return None
+
+
+def get_technician_by_phone_static(phone: str) -> Technician | None:
+    """
+    Look up technician from static roster by phone number.
+    
+    Args:
+        phone: Phone number (any format, will be normalized)
+        
+    Returns:
+        Technician if found, None otherwise
+    """
+    normalized = normalize_phone(phone)
+    if not normalized:
+        return None
+    
+    for tech in TECHNICIAN_ROSTER.values():
+        tech_phone_normalized = normalize_phone(tech.phone)
+        if tech_phone_normalized == normalized:
+            return tech
+    
+    return None
+
