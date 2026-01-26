@@ -691,13 +691,27 @@ class BaseToolHandler:
     ) -> ToolResponse:
         """Format error response."""
         self.logger.exception(f"Error in {self.tool_name}: {error}")
+        
+        # Extract error details for data field
+        error_data = {
+            "tool": self.tool_name,
+        }
+        
+        # If it's an APIError, extract structured error info
+        if hasattr(error, 'code'):
+            error_data["error_code"] = error.code.value if hasattr(error.code, 'value') else str(error.code)
+        if hasattr(error, 'message'):
+            error_data["error"] = error.message
+        elif hasattr(error, 'details'):
+            error_data["error"] = str(error)
+            error_data["details"] = error.details
+        else:
+            error_data["error"] = str(error)
+        
         return ToolResponse(
             speak=user_message,
             action="error",
-            data={
-                "error": str(error),
-                "tool": self.tool_name,
-            },
+            data=error_data,
         )
     
     def format_needs_human_response(

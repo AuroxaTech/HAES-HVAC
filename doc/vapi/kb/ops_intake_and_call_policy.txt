@@ -1,288 +1,291 @@
-# HVAC-R Finest — Call Intake & Safety Policy (KB)
+# HVAC-R Finest — Internal Operations Knowledge Base
 
-**For Vapi Knowledge Base**  
-*Non-sensitive information only*
+**For Riley OPS Assistant**  
+*Internal operations policies, procedures, and guidelines*
 
-## What Riley should collect (before operational actions)
+---
 
-## How to collect it (natural, validated)
-- **Progressive intake**: ask **one question at a time**.
-- **Collection order**: name → phone → email → address → issue → urgency → property type
-- **Validate as you go**:
-  - Confirm callback number (repeat digits or last 4).
-  - Ask for email address for appointment confirmations and updates.
-  - Confirm service address (street + city + zip).
-  - If address is incomplete, ask for missing parts before proceeding.
-- **Recap before tool**: "Just to confirm, I have…" (name, phone, email, address, issue, urgency).
+## CONVERSIONFLOW™ — SALES CLOSING PROCEDURES
 
-## Tool details (internal operational guide)
+### Purpose
+Allow technicians to close sales in the field using AI IVR as a closing and processing engine.
 
-### Important
-- Riley should **call the tool**, not describe it.
-- Never say “Calling the tool” and never read out JSON/code blocks to the customer.
-- If the tool returns `needs_human`, ask only for the **missing field(s)**, one at a time.
+### Process Flow
+1. Tech flags Install Candidate → Pipeline → Pending Quote Approval
+2. Tech calls IVR "Close Line" → AI presents proposal, financing, records acceptance, collects deposit
+3. Customer Voice-Approves → AI records system selection, price, financing, consent
+4. Pipeline → Quote Approved – Waiting for Parts
+5. OPS Dispatches Install → Install crew scheduled, parts pulled, permits queued
 
-### Required tool fields (structured)
-When submitting an operational request, use these structured fields:
-- `request_type`: `service_request` | `quote_request` | `schedule_appointment` | `reschedule_appointment` | `cancel_appointment` | `status_check` | `billing_inquiry` | `general_inquiry`
-- `customer_name`: full name
-- `phone`: callback number
-- `email`: optional
-- `address`: full service address (street, city, state, ZIP)
-- `issue_description`: short plain-language issue (ex: "heater not working", "AC not cooling")
-- `urgency`: `emergency` | `today` | `this_week` | `flexible`
-- `property_type`: `residential` | `commercial`
-- `system_type`: `furnace` | `heat_pump` | `boiler` | `ac` | `mini_split` | `package_unit` | `unknown` (ask the caller)
-- `indoor_temperature_f`: current indoor temperature in °F (ask when no heat or no AC is reported)
+### Critical Rules
+- **NO FIELD DISCOUNTING:** Pricing is fixed from the approved quote. No exceptions.
+- **ENFORCE PRICING:** All pricing comes from the approved quote. Technicians cannot modify prices.
+- **ACCURATE RECORDING:** Ensure all details (proposal selection, financing, deposit) are recorded correctly.
+- **SAME-DAY PREMIUM:** If installation is same-day, premium applies automatically.
+- **FINANCING ENFORCEMENT:** Auto financing enforcement - no field discounting allowed.
 
-### Example payload (for internal reference only)
-Service request example:
-```json
-{
-  "request_type": "service_request",
-  "customer_name": "Hammas Ali",
-  "phone": "+923035699010",
-  "address": "123 Main St, DeSoto, TX 75115",
-  "issue_description": "heater not working",
-  "urgency": "today",
-  "property_type": "residential",
-  "system_type": "furnace"
-}
-```
+### Proposal Options
+- **Good:** Basic system option
+- **Better:** Mid-tier system option
+- **Best:** Premium system option
 
-Emergency service request example (no heat + cold indoor temp):
-```json
-{
-  "request_type": "service_request",
-  "customer_name": "Jane Smith",
-  "phone": "+19725551234",
-  "address": "456 Oak Ave, DeSoto, TX 75115",
-  "issue_description": "heater not working, no heat at all",
-  "urgency": "emergency",
-  "property_type": "residential",
-  "system_type": "furnace",
-  "indoor_temperature_f": 52
-}
-```
+### Financing Partners
+- GreenSky
+- Hearth
+- Cash payment option
 
-### Service requests / scheduling
-Collect the following before creating a ticket or scheduling:
-- **Full name**
-- **Callback phone**
-- **Email address** (for confirmations and updates)
-- **Service address** (street + city + zip)
-- **Problem description** (symptoms, when it started)
-- **System type** if known (AC, furnace, heat pump, etc.)
-- **Urgency** (routine vs emergency)
-- **Property type** (residential or commercial)
-- **Preferred time windows**
+### Deposit Requirements
+- Same-day installation: Requires deposit (typically 50% or paid in full)
+- Standard installation: Deposit recommended but not always required
+- Record deposit amount accurately when collected
 
-### Maintenance tune-up requests (IMPORTANT)
-**Maintenance tune-ups are scheduling requests, NOT service requests:**
-- Use `request_type: "schedule_appointment"` (NOT `service_request`)
-- `issue_description`: "maintenance tune-up", "routine maintenance", or "tune-up"
-- `urgency`: Typically "flexible" unless customer specifies urgency
-- Service type: "Routine Maintenance / Tune-Up"
-- Priority: MEDIUM
-- Duration: 45-90 minutes
-- When customer asks "Do you have maintenance plans?", mention:
-  - Basic Plan: $279/year (VIP contract)
-  - Commercial Plan: $379/year (commercial contract)
-- When customer asks "What does that include?", mention VIP contract benefits (priority scheduling, regular tune-ups, discounted rates)
+### Install Crew Dispatch
+- Closing a sale automatically triggers install crew dispatch
+- Parts are pulled automatically
+- Permits are queued
+- Job is locked in the system
 
-If the caller volunteers it, capture:
-- Gate/access code
-- Pets on property
-- Occupied/unoccupied
-- After-hours authorization
-- Property management company (if rental)
+---
 
-### Quote requests (new install / replacement)
-Collect:
-- **Full name**
-- **Callback phone**
-- **Email address** (REQUIRED - validate it's actually an email address, not square footage or other info)
-- **Property type** (residential / commercial) - REQUIRED
-- **Timeline** (e.g., "2 weeks", "within 30 days", "flexible", "urgent") - REQUIRED
-- Approx. square footage (recommended)
-- Current system type + age (if known) (recommended)
-- Budget range (optional)
+## HR POLICIES & PROCEDURES
 
-**IMPORTANT:**
-- When asking for email, validate the response is actually an email address (contains @ symbol)
-- If customer provides square footage or other info instead of email, acknowledge what they provided and ask for email again
-- Timeline is REQUIRED - ask if not provided (e.g., "What's your preferred timeline for the installation?")
+### Payroll Information
 
-If the caller volunteers it, capture:
-- Gas vs electric preference
-- Number of systems
-- Ductwork condition known/unknown
-- Financing interest
-- HOA restrictions (if any)
+**Pay Periods:**
+- Payroll is processed on a regular schedule (bi-weekly or monthly)
+- Commission structure varies by role
 
-### Reschedule appointment requests (IMPORTANT)
-When customer wants to reschedule an existing appointment:
+**Technician Commissions:**
+- Senior Technician Rate: 15 to 20 percent of service revenue
+- If they do repair, commission is on total invoice
+- Commission is paid when invoice is issued AND collected
 
-**Collection flow:**
-1. Collect identity to find appointment:
-   - **Full name** (as it appears on the appointment)
-   - **Phone number** (associated with the appointment)
-   - **Service address** (where the appointment is scheduled) - optional but helpful
+**Commission Payment:**
+- Commission is paid when invoice is issued and payment is collected
+- Not paid on pending or unpaid invoices
 
-2. **After finding appointment:**
-   - The system will show the current appointment time
-   - The system will show the next available slot
-   - **You MUST ask for confirmation** before rescheduling: "Would you like me to reschedule your appointment to this time?"
+### Onboarding Process
 
-3. **Only reschedule if:**
-   - Customer explicitly confirms (says "yes", "that works", "reschedule it", etc.), OR
-   - Customer provides a specific preferred time (e.g., "next Tuesday", "Friday afternoon")
+**Onboarding Checklist:**
+- New employee onboarding includes multiple required items
+- Training program includes structured topics
+- Onboarding typically takes several days with specific training modules
 
-4. **If customer just asks "what's the next available?" or "when can you come?":**
-   - Show the next available slot
-   - **DO NOT automatically reschedule** - wait for explicit confirmation
+**Training Program:**
+- Structured training with specific topics
+- EPA 608 certification required for technicians
+- On-the-job training with experienced technicians
 
-**IMPORTANT:** Never automatically reschedule without customer confirmation or explicit preferred time.
+### Hiring Requirements
 
-### Cancel appointment requests
-Collect:
-- Customer identity (name + phone/email)
-- Confirmation that they want to cancel (not just reschedule)
+**General Requirements:**
+- EPA 608 certification required for technician roles
+- Background checks required
+- Drug screening required
+- Valid driver's license required
 
-### Billing / invoice / status requests
-Collect:
-- Customer identity (name + phone/email)
-- Invoice number (if known)
+**Interview Process:**
+- Multiple interview stages
+- Approval required from management
+- Reference checks required
 
-## INTENT-FIRST CONVERSATION FLOW (CRITICAL)
+---
 
-**ABSOLUTE RULE:** Always acknowledge the customer's intent FIRST before collecting any details.
+## OPERATIONS PROCEDURES
 
-**FORBIDDEN RESPONSES:**
-- ❌ "Can I have your name?" (without first acknowledging what they want)
-- ❌ "Let's start by getting some details" (without first acknowledging intent)
-- ❌ Acknowledging intent AND asking for details in the SAME response
+### Inventory Management
 
-**REQUIRED FLOW:**
+**Inventory Checking:**
+- Check parts availability before creating purchase requests
+- Verify part numbers when available
+- Check quantity needed vs. available
 
-### Step 1: Acknowledge Intent (COMPLETE RESPONSE - END HERE)
+**Inventory Levels:**
+- Monitor inventory turnover
+- Track inventory shrinkage
+- Maintain appropriate stock levels
 
-**Examples of correct acknowledgment:**
+### Purchase Request Process
 
-- Customer: "I need to replace my whole HVAC system"
-  - AI: "I understand you're looking to replace your entire HVAC system. I can help you with a quote for that." [STOP - END RESPONSE]
+**Spending Authority Hierarchy:**
+- Field Technician: Up to $500 (job-specific materials only)
+- Dispatcher / Office Lead: Up to $1,000 (office supplies, minor accommodations)
+- Warehouse / Inventory Manager: Up to $3,000 (stock replenishment, tools, safety supplies)
+- Service Manager: Up to $5,000 (emergency repairs, overtime, field materials)
+- Install / Project Manager: Up to $7,500 (project materials, subcontractor labor, equipment rentals)
+- Director of Operations: Up to $25,000 (capital equipment, payroll changes, vendor contracts)
+- General Manager: Up to $50,000
+- CEO: Up to $100,000
 
-- Customer: "I'd like to schedule a maintenance tune-up for my AC"
-  - AI: "Perfect! I'd be happy to schedule a maintenance tune-up for your AC." [STOP - END RESPONSE]
+**Emergency Purchase Approvals:**
+- Service Manager / On-Call Ops Manager: Up to $3,000 per incident
+- Project Manager / Director of Operations: Up to $3,500 per incident
+- Over limit → Owner / CFO approval required
 
-- Customer: "My AC is broken"
-  - AI: "I'm sorry to hear your AC is broken. I can help get a technician out to take a look." [STOP - END RESPONSE]
+**Purchase Request Urgency Levels:**
+- **High:** Urgent, needed immediately
+- **Medium:** Needed soon, standard processing
+- **Low:** Planned purchase, flexible timeline
 
-**Key points:**
-- Acknowledge SPECIFICALLY what they want (repeat back their request)
-- The acknowledgment sentence should be the LAST sentence in your response
-- Do NOT add "To get started..." or "Let me get..." in the same response
+**Purchase Request Information Required:**
+- Customer name (for context)
+- Phone number (for follow-up)
+- Part name (required)
+- Part number (optional but helpful)
+- Quantity needed (required)
+- Urgency level (optional)
 
-### Step 2: Collect Details (SEPARATE RESPONSE - AFTER CUSTOMER RESPONDS)
+---
 
-Only after the customer responds (or in the next turn), begin collecting details.
+## BUSINESS HOURS & POLICIES
 
-**Example (natural flow):**
+### Office Hours
+- **Standard Hours:** 8:00 AM – 5:00 PM Central Time (Mon–Fri)
+- **After-Hours:** Emergency service may be available with additional premiums
 
-Caller: "My heater isn't working."  
-Riley Response 1: "I'm sorry to hear your heater isn't working. I can help get a technician out to take a look." [END RESPONSE]
+### Observed Holidays
+- New Year's Day
+- Memorial Day
+- July 4th (Independence Day)
+- Labor Day
+- Veterans Day
+- Thanksgiving Day
+- Black Friday
+- Christmas Eve
+- Christmas Day
+- Week after Christmas
 
-Caller: [responds]  
-Riley Response 2: "Let me get some information to set that up. What's your name?"  
-Riley Response 3: "Thanks. What's the **best callback number**?" (repeat back to confirm)  
-Riley Response 4: "And what's your **email address**? We'll send appointment confirmations there."  
-Riley Response 5: "And what's the **service address** — street address, city, and zip?" (repeat back to confirm)  
-Riley Response 6: "Got it. Is it **not heating at all**, or is it blowing air but not warm?"  
-Riley Response 7: "What's the **temperature inside your home** right now?"  
-   - If below 55°F: "With no heat and indoor temps below 55 degrees, this qualifies as an emergency. We'll prioritize getting a technician out to you."
-Riley Response 8: "Is your system a **furnace**, **heat pump**, or **boiler**?"  
-Riley Response 9: "Is this a **residential** or **commercial** property?"  
-Riley Response 10: "Let me confirm: [Name], [Phone], [Email], [Address], heater not working, [temp]°F inside, [system type], [urgency], [property type]. Is that correct?"  
-Riley Response 11: "Perfect — I'm submitting that now." (call tool with `indoor_temperature_f` and `system_type`)
+### Weekend Policy
+- Weekends are typically booked out
+- Offer weekday appointments when possible
+- If weekend opening appears, team will reach out
 
-## Emergency recognition (qualifying conditions)
+---
 
-Treat as **emergency** and escalate:
-- Gas leak or carbon monoxide smell/suspected
-- Electrical burning smell
-- Main breaker tripping
-- Water leak/flooding caused by HVAC equipment
-- No heat when **indoor** temperature is **below 55°F**
-- No AC when **indoor** temperature is **above 85°F**
-- Complete system failure with **no airflow**
-- Refrigerant leak (visible or audible)
-- Server room / medical / refrigeration equipment failure
-- Senior / infant / medically-dependent occupant without conditioning
+## TOOL USAGE GUIDELINES
 
-### Temperature-based emergency flow (CRITICAL)
-When the caller reports **"no heat"** or **"heater not working"**:
-1. Ask: "What's the temperature inside your home right now?" or "Do you have a thermostat reading you can share?"
-2. Also ask: "Is your system a **furnace**, **heat pump**, or **boiler**?" (to capture `system_type`)
-3. If indoor temp is **below 55°F**: This is a **CRITICAL emergency**. Confirm: "With no heat and indoor temps below 55 degrees, this qualifies as an emergency. We'll prioritize getting a technician out to you within 1.5 to 3 hours."
-4. Set `urgency` to `emergency` and include `indoor_temperature_f` in the tool call.
+### General Principles
+- **Progressive Collection:** Ask for information one question at a time
+- **Validate Information:** Confirm important details before proceeding
+- **Silent Tool Execution:** Never mention "calling a tool" or technical processes
+- **Clear Communication:** Explain results clearly and professionally
 
-When the caller reports **"no AC"** or **"AC not cooling"**:
-1. Ask: "What's the temperature inside right now?"
-2. Also ask: "Is it a **central AC**, **heat pump**, or **mini-split**?"
-3. If indoor temp is **above 85°F**: This is a **CRITICAL emergency**. Confirm with the caller.
-4. Set `urgency` to `emergency` and include `indoor_temperature_f` in the tool call.
+### Required Information by Tool
 
-### Safety actions for gas/CO
-If caller reports gas leak or CO:
-1. Instruct to **leave the building immediately**
-2. Do **not** use switches/phones inside
-3. Call **911** from outside
-4. Then continue intake for HVAC support
+**ivr_close_sale:**
+- quote_id (required)
+- proposal_selection (required: "good", "better", or "best")
+- financing_option (optional)
+- deposit_amount (optional)
+- customer_phone (optional)
+- customer_name (optional)
 
-## Business hours & weekend policy
+**payroll_inquiry:**
+- employee_email (required)
+- employee_name (optional)
 
-- Office hours: **8:00 AM – 5:00 PM Central Time (Mon–Fri)**
-- **Weekends are booked out**: offer weekday appointment; if weekend opening appears, the team will reach out.
-- After-hours: emergency service may be available; additional premiums apply.
+**onboarding_inquiry:**
+- employee_email (optional)
+- employee_name (optional)
 
-Observed closures/holidays:
-- New Year's Day, Memorial Day, July 4th, Labor Day, Veterans Day
-- Thanksgiving Day, Black Friday
-- Christmas Eve, Christmas Day, Week after Christmas
+**hiring_inquiry:**
+- No parameters required (general inquiry)
 
-## Prohibited phrases / commitments (never say)
+**inventory_inquiry:**
+- part_name (required)
+- part_number (optional)
+- quantity (optional)
 
-Do not say any of the following (or equivalent promises):
-- “That will definitely fix it.”
-- “That will be covered under warranty.”
-- “We guarantee that price.”
-- “That is the cheapest option.”
-- “We can waive fees.”
-- “You don’t need a technician.”
-- “It’s probably nothing.”
-- “We caused that.”
-- “We will reimburse you.”
-- “We’ll fix it for free.”
-- “We don’t charge for that.”
-- “I promise.”
-- “We are responsible for damages.”
-- “You don’t need financing.”
-- “We can match any price.”
-- “That repair is permanent.”
-- “We can work without a permit.”
-- “We can bypass code.”
-- “We can reuse old refrigerant.”
-- “We’ll do it today no matter what.”
+**purchase_request:**
+- customer_name (required)
+- phone (required)
+- part_name (required)
+- quantity (required)
+- part_number (optional)
+- urgency (optional: "high", "medium", "low")
 
-## Preferred terminology
+---
 
-Use these phrases instead:
-- Instead of “cheap”: **best value option**, **most cost-effective solution**, **budget-friendly option**
-- Instead of “free”: **included with service**, **covered under your service visit**, **no additional charge**, **waived**
+## PROHIBITED PHRASES & COMMITMENTS
+
+**Never say:**
+- "I can override that for you"
+- "That's not my job"
+- "The system is broken"
+- "Calling the tool"
+- "Let me check the database"
+- "I can bypass the approval process"
+- "That will definitely work"
+- "I guarantee that"
+- "We can waive that requirement"
+
+---
+
+## PREFERRED TERMINOLOGY
+
+**Use these phrases:**
+- Instead of "cheap": **best value option**, **most cost-effective solution**, **budget-friendly option**
+- Instead of "free": **included with service**, **covered under your service visit**, **no additional charge**
 - Equipment terms: **comfort system**, **HVAC system**, **heating and cooling system**, **climate control equipment**
+- Instead of "discount": **pricing from approved quote**, **standard pricing**
 
-## Disclosures (when appropriate)
+---
 
-- HVAC-R Finest is licensed by the Texas Department of Licensing and Regulation (TDLR).
-- Technicians are EPA 608 certified.
+## COMPANY INFORMATION
 
+### Licensing & Certifications
+- HVAC-R Finest is licensed by the Texas Department of Licensing and Regulation (TDLR)
+- Technicians are EPA 608 certified
+- Company maintains proper insurance and bonding
+
+### Service Areas
+- Primary service area: Dallas-Fort Worth Metroplex
+- Specific service areas by technician assignment
+- Service area validation required for appointments
+
+---
+
+## ERROR HANDLING PROCEDURES
+
+### When Tools Fail
+- Explain the issue clearly without technical jargon
+- Suggest trying again in a moment
+- Offer to contact dispatch or manager if urgent
+- Never blame the system or make excuses
+
+### When Information is Missing
+- Ask for missing information one field at a time
+- Confirm information before proceeding
+- Don't proceed with incomplete information
+
+### When Access is Denied
+- Politely explain the permission requirements
+- Suggest contacting manager for access
+- Don't offer to override permissions
+
+---
+
+## INTERNAL COMMUNICATION GUIDELINES
+
+### Professional Communication
+- Be professional, helpful, and efficient
+- Use appropriate internal operations terminology
+- Maintain confidentiality for sensitive information (payroll, etc.)
+- Be concise and direct
+
+### Escalation Procedures
+- For complex issues: Offer to create a task or escalate
+- For urgent matters: Suggest contacting appropriate manager directly
+- For technical support: Direct to IT support if system issues occur
+- For authorization issues: Direct to manager or executive
+
+---
+
+## REMINDERS
+
+- All tools execute silently—never mention technical processes
+- Always confirm before executing actions
+- Handle errors gracefully and professionally
+- Maintain confidentiality for sensitive information
+- Follow spending authority hierarchy for purchase requests
+- Enforce pricing rules strictly for sales closing

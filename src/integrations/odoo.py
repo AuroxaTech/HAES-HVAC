@@ -178,7 +178,14 @@ class OdooClient:
             error = data["error"]
             error_message = error.get("message", "Unknown Odoo error")
             error_data = error.get("data", {})
-            logger.error(f"Odoo RPC error: {error_message}")
+            
+            # Log full error structure for debugging
+            logger.error(
+                f"Odoo RPC error - Full error structure: {json.dumps(error, indent=2, default=str)}"
+            )
+            logger.error(f"Odoo RPC error message: {error_message}")
+            logger.error(f"Odoo RPC error data: {json.dumps(error_data, indent=2, default=str)}")
+            
             raise OdooRPCError(
                 message=error_message,
                 odoo_error=error_data,
