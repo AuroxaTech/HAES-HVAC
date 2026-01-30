@@ -75,15 +75,16 @@ todos:
     status: completed
     dependencies:
       - module10-deploy
+isProject: false
 ---
 
 # HAES HVAC Development Plan (Module-by-Module, Modular Monolith)
 
 ## Reference pattern to follow
 
-- **Codebase pattern/structure**: [`InnovaSalesLab-Dev/sally_love_real_estate`](https://github.com/InnovaSalesLab-Dev/sally_love_real_estate)
-- **Requirements**: [`/Users/mac/Developer/HAES HVAC/Requirements.md`](/Users/mac/Developer/HAES%20HVAC/requirements.md)
-- **Discovery (RDD)**: [`/Users/mac/Developer/HAES HVAC/HAES - Requirement Discovery Document.md`](/Users/mac/Developer/HAES%20HVAC/HAES%20-%20Requirement%20Discovery%20Document.md)
+- **Codebase pattern/structure**: `[InnovaSalesLab-Dev/sally_love_real_estate](https://github.com/InnovaSalesLab-Dev/sally_love_real_estate)`
+- **Requirements**: `[/Users/mac/Developer/HAES HVAC/Requirements.md](/Users/mac/Developer/HAES%20HVAC/requirements.md)`
+- **Discovery (RDD)**: `[/Users/mac/Developer/HAES HVAC/HAES - Requirement Discovery Document.md](/Users/mac/Developer/HAES%20HVAC/HAES%20-%20Requirement%20Discovery%20Document.md)`
 
 ## Objectives and goals (what “done” means)
 
@@ -99,8 +100,8 @@ todos:
 - Parts can auto-order at reorder points (with approvals)
 - KPIs report automatically
 
-6. **Production deployment**: Fly.io deploy with sane ops defaults (health checks, logs, secrets, monitoring).
-7. **Project context file (Cursor)**: Maintain `.cursor/context.json` as the single source of truth for current architecture/modules/endpoints/DB schema/env-var names. Update it **after every module** and any major change. **Never store secrets** in it.
+1. **Production deployment**: Fly.io deploy with sane ops defaults (health checks, logs, secrets, monitoring).
+2. **Project context file (Cursor)**: Maintain `.cursor/context.json` as the single source of truth for current architecture/modules/endpoints/DB schema/env-var names. Update it **after every module** and any major change. **Never store secrets** in it.
 
 ## Target system architecture
 
@@ -127,6 +128,8 @@ flowchart TD
   Api --> Jobs[BackgroundJobs]
   Jobs --> Odoo
 ```
+
+
 
 ## Module-by-module execution order
 
@@ -326,6 +329,7 @@ Implement:
 - **Request ID middleware**: assigns `X-Request-Id` (generate if missing), include in logs and responses.
 - **Structured logging**: log a single line per request (method, path, status, duration_ms, request_id).
 - **Error envelope**: all errors return JSON:
+
 ```json
 {
   "error": {
@@ -335,7 +339,6 @@ Implement:
   }
 }
 ```
-
 
 In Module 1 we only need:
 
@@ -358,7 +361,7 @@ Use Alembic migrations. Create **exact tables**:
 - `created_at` (timestamp)
 - `expires_at` (timestamp, nullable)
 
-2. `audit_log`
+1. `audit_log`
 
 - `id` (PK)
 - `created_at`
@@ -372,7 +375,7 @@ Use Alembic migrations. Create **exact tables**:
 - `status` (text) — `received|processed|error`
 - `error_message` (text, nullable)
 
-3. `jobs`
+1. `jobs`
 
 - `id` (PK)
 - `created_at`
@@ -462,8 +465,8 @@ Create `Dockerfile` that:
 - `scripts/verify_db.py` can insert+read from `audit_log`
 - `scripts/verify_http.py --base-url http://localhost:8000` prints PASS
 - `pytest` passes:
-    - `tests/test_health.py`
-    - `tests/test_db_smoke.py` (when DB is configured)
+  - `tests/test_health.py`
+  - `tests/test_db_smoke.py` (when DB is configured)
 - No secrets are committed:
 - `.env` is gitignored
 - `.env.example` exists with blank values only
@@ -474,30 +477,30 @@ When Module 1 implementation is complete, validate it with these steps:1) Instal
 
 - `uv sync`
 
-2) Run migrations (the chosen migration command must be documented in README)
+1. Run migrations (the chosen migration command must be documented in README)
 
 - Expected: migrations apply cleanly (no errors)
 
-3) Run the server
+1. Run the server
 
 - `uv run uvicorn src.main:app --reload --host 0.0.0.0 --port 8000`
 
-4) Validate HTTP endpoints
+1. Validate HTTP endpoints
 
 - `uv run python scripts/verify_http.py --base-url http://localhost:8000`
 - Expected: PASS (root + health)
 
-5) Validate DB read/write + required tables
+1. Validate DB read/write + required tables
 
 - `uv run python scripts/verify_db.py`
 - Expected: PASS (SELECT 1 + audit_log insert/read)
 
-6) Run test suite
+1. Run test suite
 
 - `uv run pytest`
 - Expected: all tests green
 
-7) Update project context
+1. Update project context
 
 - Update `.cursor/context.json` to reflect:
 - Module 1 status = done
@@ -592,7 +595,7 @@ Implement `class OdooClient` with these methods (names and behavior are part of 
 - creates an `httpx.AsyncClient`
 - does not perform network calls
 
-2) `async authenticate() -> int`
+1. `async authenticate() -> int`
 
 - calls `/web/session/authenticate`
 - returns `uid` as int on success
@@ -601,7 +604,7 @@ Implement `class OdooClient` with these methods (names and behavior are part of 
 - `OdooAuthError` (bad db/user/password/api_key)
 - `OdooTransportError` (DNS/TLS/timeout)
 
-3) `async call_kw(model: str, method: str, args: list, kwargs: dict) -> Any`
+1. `async call_kw(model: str, method: str, args: list, kwargs: dict) -> Any`
 
 - calls `/web/dataset/call_kw`
 - raises `OdooRPCError` on any JSON-RPC error, preserving:
@@ -609,7 +612,7 @@ Implement `class OdooClient` with these methods (names and behavior are part of 
 - model/method
 - request_id (if available)
 
-4) Convenience wrappers (implemented in terms of `call_kw`):
+1. Convenience wrappers (implemented in terms of `call_kw`):
 
 - `search(model, domain, offset=0, limit=0, order=None) -> list[int]`
 - `read(model, ids, fields=None) -> list[dict]`
@@ -619,7 +622,7 @@ Implement `class OdooClient` with these methods (names and behavior are part of 
 - `unlink(model, ids) -> bool`
 - `fields_get(model, attributes=None) -> dict`
 
-5) `async close()`
+1. `async close()`
 
 - closes the `httpx.AsyncClient`
 
@@ -706,31 +709,31 @@ Must test with mocked HTTP responses:
 
 ### “Module done” validation checklist (copy/paste runnable)
 
-1) Set env vars (do not commit them)
+1. Set env vars (do not commit them)
 
 - `export ODOO_BASE_URL=...`
 - `export ODOO_DB=...`
 - `export ODOO_USERNAME=...`
 - `export ODOO_PASSWORD=...`
 
-2) Verify connectivity
+1. Verify connectivity
 
 - `uv run python scripts/verify_odoo_connection.py`
 - Expected: PASS summary with uid and user login (no secrets printed)
 
-3) Discover capabilities
+1. Discover capabilities
 
 - `uv run python scripts/discover_odoo_capabilities.py`
 - Expected:
 - prints accessible models
 - writes `.cursor/odoo_discovery.json`
 
-4) Run unit tests
+1. Run unit tests
 
 - `uv run pytest -k odoo`
 - Expected: all green
 
-5) Update project context
+1. Update project context
 
 - Update `.cursor/context.json`:
 - mark Module 2 status = done
@@ -742,7 +745,7 @@ Must test with mocked HTTP responses:
 
 ### Module objective
 
-Implement the **Command Engine (HAEL)** described in [`Requirements.md`](/Users/mac/Developer/HAES%20HVAC/requirements.md) and RDD **Section 9** as a deterministic, testable pipeline that:
+Implement the **Command Engine (HAEL)** described in `[Requirements.md](/Users/mac/Developer/HAES%20HVAC/requirements.md)` and RDD **Section 9** as a deterministic, testable pipeline that:
 
 - converts inbound voice/chat “raw input” into a **validated command object**
 - routes that command to exactly one brain (**CORE/OPS/REVENUE/PEOPLE**)
@@ -777,8 +780,8 @@ HAEL must produce a command that is:
 - `src/hael/` (new/filled):
 - `src/hael/schema.py` (new): Pydantic models for the HAEL command envelope + intents/entities.
 - `src/hael/extractors/` (new):
-    - `src/hael/extractors/base.py` (new): extractor interface
-    - `src/hael/extractors/rule_based.py` (new): deterministic extractor (Module 3 default)
+  - `src/hael/extractors/base.py` (new): extractor interface
+  - `src/hael/extractors/rule_based.py` (new): deterministic extractor (Module 3 default)
 - `src/hael/router.py` (new): deterministic intent→brain router and “requires human” logic
 - `src/hael/__init__.py` (update): exports
 - `src/models/` (update): re-export HAEL models if we want them shared across modules
@@ -798,7 +801,7 @@ In `src/hael/schema.py`, define:1) `Channel` enum:
 - `chat`
 - `system`
 
-2) `Brain` enum:
+1. `Brain` enum:
 
 - `core`
 - `ops`
@@ -806,7 +809,7 @@ In `src/hael/schema.py`, define:1) `Channel` enum:
 - `people`
 - `unknown`
 
-3) `Intent` enum (initial set; can expand later, but must be stable for tests):
+1. `Intent` enum (initial set; can expand later, but must be stable for tests):
 
 - `service_request`
 - `schedule_appointment`
@@ -824,7 +827,7 @@ In `src/hael/schema.py`, define:1) `Channel` enum:
 - `payroll_inquiry`
 - `unknown`
 
-4) `Entity` model (normalized extracted data; all fields optional, validated):
+1. `Entity` model (normalized extracted data; all fields optional, validated):
 
 - `full_name`
 - `phone`
@@ -841,7 +844,7 @@ In `src/hael/schema.py`, define:1) `Channel` enum:
 - `budget_range`
 - `timeline`
 
-5) `HaelCommand` model:
+1. `HaelCommand` model:
 
 - `request_id` (string; required)
 - `channel` (Channel; required)
@@ -922,7 +925,7 @@ When HAEL processes an input:1) write `audit_log` row with status `received`, st
 
 - `sha256(channel + normalized_phone/email + intent + canonical_entities_subset + date_bucket)`
 
-3) upsert into `idempotency_keys` with status `in_progress`/`completed` later4) update `audit_log` with `intent`, `brain`, `command_json`, `status=processed` OR `status=error`
+1. upsert into `idempotency_keys` with status `in_progress`/`completed` later4) update `audit_log` with `intent`, `brain`, `command_json`, `status=processed` OR `status=error`
 
 ### Tests and fixtures (exact)
 
@@ -1061,8 +1064,8 @@ For OPS intents, required fields are derived from HAEL entities:
 - For `reschedule_appointment` / `cancel_appointment` / `status_update_request`:
 - identity anchor: `phone` OR `email`
 - plus at least one of:
-    - a known appointment identifier (not available until we create it; so we’ll use best-effort lookup by contact + recent open jobs)
-    - address/zip + recency window (e.g., last 14 days) — implemented as deterministic lookup rules
+  - a known appointment identifier (not available until we create it; so we’ll use best-effort lookup by contact + recent open jobs)
+  - address/zip + recency window (e.g., last 14 days) — implemented as deterministic lookup rules
 
 If required inputs are missing, return `needs_human` with explicit `missing_fields`.
 
@@ -1117,13 +1120,13 @@ OPS-BRAIN must implement Odoo actions in `odoo_actions.py`:1) Ensure a customer/
 
 - search or create `res.partner` by phone/email
 
-2) Create or update a “work order / job” record using the discovered work model:
+1. Create or update a “work order / job” record using the discovered work model:
 
 - store problem description
 - store urgency classification
 - store address/zip (if model supports)
 
-3) If a schedulable model exists (e.g., `calendar.event`), create an event or schedule fields on the work order.4) For reschedule/cancel:
+1. If a schedulable model exists (e.g., `calendar.event`), create an event or schedule fields on the work order.4) For reschedule/cancel:
 
 - find the latest open job for the contact in a deterministic time window
 - update status fields (or cancel event)
@@ -1140,27 +1143,27 @@ All writes must be audited in `audit_log` with:
 - for each fixture:
 - feed a `HaelCommand` JSON into `handle_ops_command`
 - validate:
-    - returned `status`
-    - `needs_human` behavior
-    - missing fields list
+  - returned `status`
+  - `needs_human` behavior
+  - missing fields list
 - optionally (when `RUN_ODOO_INTEGRATION_TESTS=1`):
-    - perform real Odoo writes into a test record namespace (must be documented)
+  - perform real Odoo writes into a test record namespace (must be documented)
 
 ### Tests (exact)
 
-1) `tests/test_ops_rules.py`:
+1. `tests/test_ops_rules.py`:
 
 - emergency rules classification given explicit phrases
 - scheduling buffer rule (minimum 30 minutes between)
 
-2) `tests/test_ops_odoo_mocked.py`:
+1. `tests/test_ops_odoo_mocked.py`:
 
 - uses a mocked `OdooClient`
 - asserts that for a valid service request:
 - we search/create `res.partner`
 - we create a work order record in the selected model
 
-3) `tests/test_ops_odoo_smoke.py` (optional, skipped by default):
+1. `tests/test_ops_odoo_smoke.py` (optional, skipped by default):
 
 - runs only when `RUN_ODOO_INTEGRATION_TESTS=1`
 - requires Odoo env vars
@@ -1180,23 +1183,23 @@ All writes must be audited in `audit_log` with:
 
 ### “Module done” validation checklist (copy/paste runnable)
 
-1) Run unit tests
+1. Run unit tests
 
 - `uv run pytest -k ops`
 - Expected: all green
 
-2) Validate OPS fixtures
+1. Validate OPS fixtures
 
 - `uv run python scripts/verify_ops_flow.py`
 - Expected: PASS summary
 
-3) (Optional) Run Odoo smoke test (only if enabled and safe)
+1. (Optional) Run Odoo smoke test (only if enabled and safe)
 
 - `export RUN_ODOO_INTEGRATION_TESTS=1`
 - `uv run pytest -k ops_odoo_smoke`
 - Expected: green (and no stray records left behind)
 
-4) Update project context
+1. Update project context
 
 - Update `.cursor/context.json` with Module 4 outputs (no secrets)
 
@@ -1322,7 +1325,7 @@ Each tier defines these literal fees:
 - emergency/after-hours premium
 - weekend/holiday premium
 
-Tier selection (deterministic):1) If the customer’s Odoo `res.partner` record has a tag/category mapping to a known tier → use that tier.2) Else if a calling context provides a tier hint (future HAEL field) → use it.3) Else return `needs_human=true` with `missing_fields=["pricing_tier"] `and include a suggested default of `Retail` (as a non-binding suggestion).Premium selection (deterministic):
+Tier selection (deterministic):1) If the customer’s Odoo `res.partner` record has a tag/category mapping to a known tier → use that tier.2) Else if a calling context provides a tier hint (future HAEL field) → use it.3) Else return `needs_human=true` with `missing_fields=["pricing_tier"]` and include a suggested default of `Retail` (as a non-binding suggestion).Premium selection (deterministic):
 
 - weekend/holiday premium applies if `created_at` falls on weekend OR on a configured holiday list (from RDD holidays).
 - emergency premium applies only if:
@@ -1446,26 +1449,26 @@ This is consumed by Module 9 (KPI engine + delivery).
 
 ### Tests (exact)
 
-1) `tests/test_core_pricing.py`
+1. `tests/test_core_pricing.py`
 
 - ensures literal pricing tables match RDD values
 - ensures tier selection fails closed when unknown
 
-2) `tests/test_core_approvals.py`
+1. `tests/test_core_approvals.py`
 
 - asserts exact thresholds route to the correct approver
 
-3) `tests/test_core_payment_terms.py`
+1. `tests/test_core_payment_terms.py`
 
 - asserts segment-based due days + late fee percent
 
-4) `tests/test_core_odoo_mocked.py`
+1. `tests/test_core_odoo_mocked.py`
 
 - mocked Odoo calls for:
 - reading payment terms/taxes (read-only)
 - invoice lookup by partner (read-only)
 
-5) `tests/test_core_odoo_smoke.py` (optional)
+1. `tests/test_core_odoo_smoke.py` (optional)
 
 - skipped unless `RUN_ODOO_INTEGRATION_TESTS=1`
 - runs read-only checks against `account.move` and `account.payment.term`
@@ -1486,33 +1489,33 @@ This is consumed by Module 9 (KPI engine + delivery).
 
 ### “Module done” validation checklist (copy/paste runnable)
 
-1) Run unit tests
+1. Run unit tests
 
 - `uv run pytest -k core`
 - Expected: all green
 
-2) Validate pricing decisions
+1. Validate pricing decisions
 
 - `uv run python scripts/verify_core_pricing.py`
 - Expected: PASS
 
-3) Validate approvals
+1. Validate approvals
 
 - `uv run python scripts/verify_core_approvals.py`
 - Expected: PASS
 
-4) Validate compliance output
+1. Validate compliance output
 
 - `uv run python scripts/verify_core_compliance.py`
 - Expected: prints license/disclosure/warranty (no secrets)
 
-5) (Optional) Validate Odoo accounting access (read-only)
+1. (Optional) Validate Odoo accounting access (read-only)
 
 - `export RUN_ODOO_INTEGRATION_TESTS=1`
 - `uv run python scripts/discover_odoo_accounting.py`
 - Expected: PASS capability summary
 
-6) Update project context
+1. Update project context
 
 - Update `.cursor/context.json` (no secrets)
 
@@ -1717,7 +1720,7 @@ In `odoo_actions.py` implement:1) Ensure contact exists (`res.partner`) by phone
 - qualification level (hot/warm/cold) stored in a deterministic field or tag (depending on discovery)
 - initial pipeline stage name (as stored in CRM stage model; mapping must be discovery-driven)
 
-3) Create follow-up activities (`mail.activity`) if availableAll Odoo writes must be audited in `audit_log` with:
+1. Create follow-up activities (`mail.activity`) if availableAll Odoo writes must be audited in `audit_log` with:
 
 - `intent=quote_request`, `brain=revenue`, `command_json`, `odoo_result_json` (redacted)
 
@@ -1743,19 +1746,19 @@ In `odoo_actions.py` implement:1) Ensure contact exists (`res.partner`) by phone
 
 ### Tests (exact)
 
-1) `tests/test_revenue_qualification.py`
+1. `tests/test_revenue_qualification.py`
 
 - validates hot/warm/cold rules with deterministic inputs
 
-2) `tests/test_revenue_routing.py`
+1. `tests/test_revenue_routing.py`
 
 - validates residential/commercial/high-value routing
 
-3) `tests/test_revenue_followups.py`
+1. `tests/test_revenue_followups.py`
 
 - validates follow-up plan generation (task counts and schedule offsets)
 
-4) `tests/test_revenue_odoo_mocked.py`
+1. `tests/test_revenue_odoo_mocked.py`
 
 - mocked `OdooClient` asserts:
 - `res.partner` search/create
@@ -1778,24 +1781,24 @@ In `odoo_actions.py` implement:1) Ensure contact exists (`res.partner`) by phone
 
 ### “Module done” validation checklist (copy/paste runnable)
 
-1) Run unit tests
+1. Run unit tests
 
 - `uv run pytest -k revenue`
 - Expected: all green
 
-2) Validate qualification/routing scripts
+1. Validate qualification/routing scripts
 
 - `uv run python scripts/verify_revenue_qualification.py`
 - `uv run python scripts/verify_revenue_routing.py`
 - Expected: PASS
 
-3) (Optional) Validate Odoo CRM/Sales capability
+1. (Optional) Validate Odoo CRM/Sales capability
 
 - `export RUN_ODOO_INTEGRATION_TESTS=1`
 - `uv run python scripts/discover_odoo_crm_sales.py`
 - Expected: PASS capability summary
 
-4) Update project context
+1. Update project context
 
 - Update `.cursor/context.json` (no secrets)
 
@@ -2009,20 +2012,20 @@ All writes must be audited in `audit_log` with:
 
 ### Tests (exact)
 
-1) `tests/test_people_onboarding_catalog.py`
+1. `tests/test_people_onboarding_catalog.py`
 
 - asserts onboarding checklist matches the RDD items (count + key strings)
 
-2) `tests/test_people_training_catalog.py`
+1. `tests/test_people_training_catalog.py`
 
 - asserts training catalog contains the required anchors (14-day + 30/60/90 + topics)
 
-3) `tests/test_people_payroll_rules.py`
+1. `tests/test_people_payroll_rules.py`
 
 - validates commission calculations for repairs vs installs
 - validates “eligible vs payable” behavior based on invoice/collection flags
 
-4) `tests/test_people_odoo_mocked.py`
+1. `tests/test_people_odoo_mocked.py`
 
 - mocked `OdooClient` asserts:
 - `hr.employee` lookup by email (if configured)
@@ -2045,25 +2048,25 @@ All writes must be audited in `audit_log` with:
 
 ### “Module done” validation checklist (copy/paste runnable)
 
-1) Run unit tests
+1. Run unit tests
 
 - `uv run pytest -k people`
 - Expected: all green
 
-2) Validate onboarding/training/payroll scripts
+1. Validate onboarding/training/payroll scripts
 
 - `uv run python scripts/verify_people_onboarding.py`
 - `uv run python scripts/verify_people_training.py`
 - `uv run python scripts/verify_people_payroll_rules.py`
 - Expected: PASS
 
-3) (Optional) Validate Odoo HR/Payroll capability (read-only)
+1. (Optional) Validate Odoo HR/Payroll capability (read-only)
 
 - `export RUN_ODOO_INTEGRATION_TESTS=1`
 - `uv run python scripts/discover_odoo_hr_payroll.py`
 - Expected: PASS capability summary
 
-4) Update project context
+1. Update project context
 
 - Update `.cursor/context.json` (no secrets)
 
@@ -2111,7 +2114,7 @@ We will implement:1) **One primary Vapi tool endpoint** that Vapi can call from 
 
 - `POST /vapi/tools/hael_route`
 
-2) **One Vapi webhook endpoint** for call lifecycle + transcript events:
+1. **One Vapi webhook endpoint** for call lifecycle + transcript events:
 
 - `POST /webhooks/vapi`
 
@@ -2197,13 +2200,13 @@ Processing (deterministic):1) Build an idempotency key: `vapi:{call_id}:{tool_ca
 - `revenue.handle_revenue_command` for quote_request
 - `people.handle_people_command` for HR/payroll intents
 
-5) Convert brain result into a Vapi-friendly tool response:
+1. Convert brain result into a Vapi-friendly tool response:
 
 - `speak` (string): what assistant should say next
 - `action` (string): `completed|needs_human|unsupported|error`
 - `data` (json): structured result (safe, redacted)
 
-6) Persist final tool response in `idempotency_keys.response_json` and mark completed.7) Write an `audit_log` record referencing:
+1. Persist final tool response in `idempotency_keys.response_json` and mark completed.7) Write an `audit_log` record referencing:
 
 - request_id, call_id, tool_call_id
 - intent, brain
@@ -2311,28 +2314,28 @@ Scripts:
 
 ### “Module done” validation checklist (copy/paste runnable)
 
-1) Run unit tests
+1. Run unit tests
 
 - `uv run pytest -k vapi`
 - `uv run pytest -k chat`
 - Expected: all green
 
-2) Validate tool routing
+1. Validate tool routing
 
 - `uv run python scripts/verify_vapi_tool_route.py`
 - Expected: PASS
 
-3) Validate chat routing
+1. Validate chat routing
 
 - `uv run python scripts/verify_chat_route.py`
 - Expected: PASS
 
-4) Validate webhook ingestion (requires DB)
+1. Validate webhook ingestion (requires DB)
 
 - `uv run python scripts/verify_vapi_webhook.py`
 - Expected: PASS
 
-5) Update project context
+1. Update project context
 
 - Update `.cursor/context.json` (no secrets)
 
@@ -2416,7 +2419,7 @@ Add a new table to persist outputs:1) `report_runs`
 - `summary_text` (text; SMS-friendly)
 - `correlation_id` (request_id or job_id)
 
-2) `report_deliveries`
+1. `report_deliveries`
 
 - `id` (PK)
 - `created_at`
@@ -2454,7 +2457,7 @@ KPIs are computed from two sources:1) **Odoo-derived metrics** (preferred when a
 - work orders/jobs (field service/project)
 - inventory/POs (inventory/purchase)
 
-2) **Internal system metrics** from `audit_log`:
+1. **Internal system metrics** from `audit_log`:
 
 - calls received/handled (voice webhook + vapi tool usage)
 - bookings attempted/succeeded (brain results audited)
@@ -2517,9 +2520,9 @@ Create/Update:
 - `src/reporting/compute.py` (new): KPI compute functions (Odoo + audit_log)
 - `src/reporting/generate.py` (new): report assembly (json + summary_text)
 - `src/reporting/delivery/` (new):
-    - `email_smtp.py` (new): SMTP sender adapter (optional)
-    - `sms_twilio.py` (new): Twilio SMS adapter (optional)
-    - `odoo_note.py` (new): Odoo posting adapter (optional, discovery-driven)
+  - `email_smtp.py` (new): SMTP sender adapter (optional)
+  - `sms_twilio.py` (new): Twilio SMS adapter (optional)
+  - `odoo_note.py` (new): Odoo posting adapter (optional, discovery-driven)
 - `src/reporting/scheduler.py` (new): job scheduling helpers (create jobs for daily/weekly/monthly)
 - `src/reporting/worker.py` (new): in-process job worker loop + DB locking
 - `src/db/models.py` (update): add SQLAlchemy models for `report_runs` and `report_deliveries`
@@ -2575,17 +2578,18 @@ All schedule times must respect `REPORT_TIMEZONE`.
 
 ### “Module done” validation checklist (copy/paste runnable)
 
-1) Run unit tests
+1. Run unit tests
 
 - `uv run pytest -k reporting`
 - Expected: all green
 
-2) Generate one report locally
+1. Generate one report locally
 
 - `uv run python scripts/run_report_once.py --type daily --date 2026-01-02`
 - Expected: report_run persisted + printed summary
 
-3) Validate fixtures
+1. Validate fixtures
 
 - `uv run python scripts/verify_reporting_fixtures.py`
 - Expected: PASS
+

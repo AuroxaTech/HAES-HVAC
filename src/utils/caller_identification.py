@@ -220,7 +220,7 @@ async def identify_from_odoo(phone: str) -> Optional[CallerIdentity]:
     """
     Identify caller from Odoo hr.employee model.
     
-    Searches for employee by phone, mobile, or work_phone fields.
+    Searches for employee by phone, mobile_phone, or work_phone fields.
     
     Args:
         phone: Normalized phone number
@@ -237,19 +237,20 @@ async def identify_from_odoo(phone: str) -> Optional[CallerIdentity]:
             await odoo_client.authenticate()
         
         # Search for employee by phone number
-        # Odoo hr.employee has phone, mobile, and work_phone fields
+        # Odoo hr.employee has phone, mobile_phone, and work_phone fields
+        # Note: Field is "mobile_phone" not "mobile" in Odoo 18
         domain = [
             "|",
             "|",
             ("phone", "ilike", phone),
-            ("mobile", "ilike", phone),
+            ("mobile_phone", "ilike", phone),
             ("work_phone", "ilike", phone),
         ]
         
         employees = await odoo_client.search_read(
             model="hr.employee",
             domain=domain,
-            fields=["id", "name", "job_title", "phone", "mobile", "work_phone", "active"],
+            fields=["id", "name", "job_title", "phone", "mobile_phone", "work_phone", "active"],
             limit=1,
         )
         

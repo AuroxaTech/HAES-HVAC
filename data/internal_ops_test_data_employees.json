@@ -1,0 +1,102 @@
+{
+  "employees": [
+    {
+      "id": 1,
+      "name": "Admin(I)",
+      "work_email": "linda@hvacrfinest.com",
+      "phone": "+1 972-372-4458",
+      "work_phone": "9723724458",
+      "active": true,
+      "job_title": "Technician",
+      "job_id": {
+        "id": 1,
+        "name": "Service Technician"
+      }
+    },
+    {
+      "id": 2,
+      "name": "Office",
+      "work_email": "info@hvacrfinest.com",
+      "phone": "+1 972-372-4458",
+      "work_phone": "9723724458",
+      "active": true,
+      "job_title": "HVAC Office Administrator",
+      "job_id": {
+        "id": 2,
+        "name": "HVAC Office Administrator"
+      }
+    },
+    {
+      "id": 3,
+      "name": "Tech",
+      "work_email": "tm@hvacrfinest.com",
+      "phone": false,
+      "work_phone": "9723724458",
+      "active": true,
+      "job_title": false,
+      "job_id": false
+    },
+    {
+      "id": 7,
+      "name": "Bounthon Dikousman",
+      "work_email": "b.dikousman@yahoo.com",
+      "phone": "+1 972-372-4458",
+      "work_phone": "+1 972-372-4458",
+      "active": true,
+      "job_title": "Field Manager",
+      "job_id": {
+        "id": 4,
+        "name": "Field Manager"
+      }
+    },
+    {
+      "id": 10,
+      "name": "Anna Phaoviseth",
+      "work_email": "phaoviseth@hotmail.com",
+      "phone": "+1 209-602-7865",
+      "work_phone": "2096027865",
+      "active": true,
+      "job_title": "HVAC Office Administrator",
+      "job_id": {
+        "id": 2,
+        "name": "HVAC Office Administrator"
+      }
+    },
+    {
+      "id": 11,
+      "name": "Linda Dikousman",
+      "work_email": "klphaoviseth@gmail.com",
+      "phone": false,
+      "work_phone": "+1 972-372-4458 opt 2",
+      "active": true,
+      "job_title": "HVAC Office Administrator",
+      "job_id": {
+        "id": 2,
+        "name": "HVAC Office Administrator"
+      }
+    },
+    {
+      "id": 14,
+      "name": "Isaiah Calderon",
+      "work_email": "isaiahcalderon214@gmail.com",
+      "phone": false,
+      "work_phone": "+1 972-372-4458",
+      "active": true,
+      "job_title": false,
+      "job_id": false
+    },
+    {
+      "id": 15,
+      "name": "Aubry Ritchie",
+      "work_email": "ritchie74@gmail.com",
+      "phone": "\u202a(910) 238-0011\u202c",
+      "work_phone": "+1 972-372-4458",
+      "active": true,
+      "job_title": "Service Technician",
+      "job_id": {
+        "id": 1,
+        "name": "Service Technician"
+      }
+    }
+  ]
+}

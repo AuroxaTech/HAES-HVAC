@@ -1,0 +1,274 @@
+It’s an AI Daily Operating Coach that rides on the Ops phone line and turns a tech’s morning check-in into alignment, accountability, and growth data.
+
+
+AI OPERATIONS COACH — SYSTEM DESIGN
+OBJECTIVE
+Turn the technician Ops number into a daily coaching + accountability + growth engine that:
+•	Aligns personal “WHY” → company mission
+•	Tracks milestones & KPIs
+•	Reinforces Gallup Strengths
+•	Detects burnout, drift, or stagnation early
+•	Removes managers from daily coaching labor
+•	Compounds employee growth over time
+•	
+REALITY (FACTS & CONSTRAINTS)
+•	Techs already call Ops early morning
+•	Attention span: 60–180 seconds max
+•	Must feel supportive, not surveillance
+•	Needs structured data output (not just talk)
+•	Must integrate later with HR, KPIs, reviews, comp
+•	Bot must adapt per individual, not generic coaching
+ASSUMPTIONS (flagged):
+•	You can store per-tech profiles (strengths, goals, KPIs)
+•	You control call flow via your AI API (VAPI / 8x8 / etc.)
+•	Odoo or Sheets can act as the “brain” initially
+STRATEGY
+
+✅  Layered Micro-Coaching System (RECOMMENDED)
+
+CORE SYSTEM ARCHITECTURE
+1️⃣ TECH PROFILE (STATIC, SET ONCE)
+Stored in DB / Sheet / Odoo:
+•	Name
+•	Role
+•	Start date
+•	Gallup Strengths (Top 5)
+•	Personal WHY (1–2 sentences)
+•	Current 90-day goal
+•	Primary KPI focus (1–3 max)
+This is the lens the bot uses to coach.
+
+2️⃣ DAILY OPS CHECK-IN FLOW (60–120 sec)
+Trigger:
+Tech calls Ops number → recognized by phone ID
+STEP 1 — Human Anchor (10 sec)
+“Good morning [Name]. Before we start — quick check-in.”
+STEP 2 — Health Scan (20 sec)
+•	Energy level (1–5)
+•	Any blockers today? (Yes/No → voice note if yes)
+👉 Red flags auto-tagged
+STEP 3 — KPI Alignment (20 sec)
+Bot references their KPI:
+•	“Yesterday you focused on ___”
+•	“Today, what’s your top execution priority?”
+Stored as:
+•	KPI_focus_today
+•	Confidence_level
+STEP 4 — Strengths-Based Coaching (20 sec)
+Bot uses Gallup profile:
+Examples:
+•	Responsibility → “Finish what you start today”
+•	Achiever → “What does ‘win’ look like today?”
+•	Harmony → “Any friction to avoid?”
+This is not random motivation — it’s mapped.
+
+STEP 5 — Micro-Commitment (10 sec)
+“What’s one action today that moves you closer to your 90-day goal?”
+Logged as:
+•	Daily_commitment
+
+3️⃣ WEEKLY MILESTONE LOOP (AUTOMATED)
+Once per week, bot shifts mode:
+•	Progress vs goal (%)
+•	KPI trend (up / flat / down)
+•	Time investment self-check
+•	Burnout indicator
+If thresholds hit → auto-flag manager only then
+EXECUTION PLAN
+•	OpenAI / OpenRouter
+
+Deliverables:
+•	Tech profile table
+•	Morning call flow script
+•	Data logging
+•	Manager alert rules
+
+Intelligence Layer
+•	Adaptive prompts
+•	Strengths-based coaching rules
+•	KPI trend analysis
+•	Auto-generated weekly summaries
+Autonomy & Scale
+•	No daily manager involvement
+•	Bot recommends: 
+•	Training
+•	Schedule changes
+•	Incentive nudges
+•	Feeds into reviews & comp
+
+FAILURE POINTS & MITIGATION
+RiskMitigationTechs feel monitored so Frame as personal growth tool
+Too long Hard-cap calls at 2 minBad data
+Use structured promptsOver-coaching1 focus per day max
+Manager overload Alert only on thresholds 
+
+•	Too long → enforce hard cap, cut goal question first
+•	Tech resistance → “Ops-only mode” reduces friction
+•	Garbage answers → always re-prompt to “make it measurable”
+•	Manager spam → only escalate on rules, not every note
+Kill-switch: “Disable coaching prompts” → falls back to ops-only.
+
+Kill-Switch:
+One toggle disables coaching → ops-only mode instantly.
+
+SCALE LOGIC (COMPOUNDING)
+Daily check-ins create a dataset you can use for:
+•	performance reviews
+•	training recommendations
+•	early burnout detection
+•	KPI coaching at scale
+•	retention and culture (without managers doing daily emotional labor)
+•	Each call → data
+•	Each week → better coaching
+•	Each quarter → stronger techs
+•	Fewer managers needed
+•	Higher retention
+•	Better performance without micromanagement
+This converts: Labor → Data → Intelligence → Margin
+
+TOP 3 PRIORITIES (RIGHT NOW)
+•	Define Tech Profile Schema
+•	Lock Daily Call Script
+•	Decide where data lives first
+
+Bottleneck: Over-complexity
+Fix: Start with 1 KPI + 1 Strength + 1 Goal per tech
+KPIs (FOR THE SYSTEM)
+•	Daily check-in completion %
+•	Energy trend
+•	KPI adherence rate
+•	Goal progress velocity
+•	Tech retention
+
+
+Example and more details
+Two-mode script:
+•	Daily Check-In (default)
+•	Ops-Only Fallback (if caller refuses coaching / is in a hurry)
+
+EXECUTION PLAN — SCRIPT (READY TO IMPLEMENT)
+Below is the exact voice script with branching logic, tone, and structured logging fields.
+
+0) SYSTEM / PRE-FLIGHT
+Voice: friendly, confident, fast.
+If caller recognized (Caller ID match):
+•	Use name + personalized fields.
+If not recognized:
+•	Quick identity capture → proceed in generic mode.
+A) DAILY CHECK-IN MODE 
+
+(DEFAULT)
+1) Greeting + Time Box
+BOT: “Good morning, {FirstName}. This is the HVAC-R Finest Ops Coach.
+We’ll do a 90-second check-in and you’ll be on your way.”
+LOG:
+•	call_type = "daily_checkin"
+•	tech_id
+•	timestamp
+2) Attendance Confirmation
+BOT: “Are you checked in and ready to roll today? Yes or no.”
+If YES → continue
+If NO:
+“Got it. What’s the reason: sick, family, vehicle, schedule, or other?”
+LOG:
+•	ready_status = yes/no
+•	not_ready_reason = enum
+ESCALATE RULE:
+•	If not_ready_reason in (sick, family, other) 
+•	→ notify manager + dispatcher
+
+3) Energy / Readiness Scan (Fast)
+BOT: “Quick pulse check. On a scale of 1 to 5, what’s your energy right now?”
+If 1–2 (low): “Copy. Keep it simple today. I’ll help you focus on one win.”
+If 3–5: “Perfect. Let’s turn that into results.”
+LOG:
+•	energy_level = 1..5
+ESCALATE RULE:
+•	If energy_level <= 2 for 2+ consecutive workdays → flag “burnout_watch”
+
+4) Blockers (Binary + Optional Detail)
+BOT: “Any blockers that could slow you down today? Yes or no.”
+If NO: “Good. Clean runway.”
+If YES: “Name it in one sentence.”
+BOT (after detail): “Understood. I’m logging that and routing it to ops support.”
+LOG:
+•	blocker_present = yes/no
+•	blocker_note = text (<= 180 chars)
+ESCALATE RULE:
+•	Always route blocker note to ops channel (Slack/SMS/email)
+
+5) KPI Focus (One Lever Only)
+BOT: “Today’s main focus is {PrimaryKPI}.
+What’s your top action to move that KPI today? One sentence.”
+If tech gives vague answer: “Make it measurable. Example: ‘close two tickets,’ ‘reduce callbacks,’ ‘sell one maintenance,’ ‘arrive on time all day.’ What’s yours?”
+LOG:
+•	kpi_focus = {PrimaryKPI}
+•	kpi_action_today = text
+
+6) Strengths-Based Micro-Coaching (10–15 sec)
+BOT: “Based on your strengths — {TopStrength1} and {TopStrength2} — here’s today’s edge:”
+Insert one of these micro-lines based on strengths (rules below). Then:
+“Repeat back your focus in five words or less.”
+LOG:
+•	coach_prompt_used = strength_template_id
+•	focus_summary_5_words = text
+Strength Templates (pick 1)
+Use these as the bot’s “library.”
+(Your dev maps TopStrengths → template.)
+•	Achiever: “Win the day by stacking small completions. Finish the first job clean.”
+•	Responsibility: “Do what you said you’d do. Close loops before you start new ones.”
+•	Competition: “Pick a scoreboard: callbacks, close rate, time-to-complete. Beat yesterday.”
+•	Learner: “One skill today: ask one better question on every call.”
+•	Relator: “Build trust fast: explain the plan before touching anything.”
+•	Communication: “Be clear: diagnose, explain, confirm. No mystery steps.”
+•	Analytical: “Slow down 10%. Verify readings before deciding.”
+•	Harmony: “Prevent friction: set 
+•	expectations early with dispatch and customer.”
+•	Discipline: “Follow your checklist. Clean work beats fast work.”
+•	Focus: “One target. Say no to distractions until that target is done.”
+•	Woo: “Lead with warmth, then direct the call to the next step.”
+•	Empathy: “Listen first, then solve. People relax when they feel heard.”
+7) Goal Alignment (10 sec)
+BOT: “Your 90-day goal is: {90DayGoal}.
+What’s one thing you’ll do today that supports that goal?”
+LOG:
+•	goal_action_today = text
+8) Close + Confirm + Exit
+BOT: “Locked in. Your plan today is: {focus_summary_5_words}.
+I’ll check your progress at end of day. Go win.”
+LOG:
+•	call_completed = true
+•	duration_seconds
+
+Optional: If you have EOD calls enabled:
+•	schedule EOD reminder text/call
+B) OPS-ONLY FALLBACK MODE (IF TECH IS IN A RUSH)
+Trigger phrases:
+•	“I’m busy”
+•	“skip”
+•	“not doing this”
+•	silence x2
+BOT: “Copy. Ops-only mode. Two quick questions.”
+•	“Are you ready to roll? yes/no”
+•	“Any blockers? yes/no — one sentence if yes.”
+BOT: “Logged. Have a safe day.”
+LOG:
+•	call_type = "ops_only"
+•	minimal fields above
+DATA SCHEMA (FIELDS TO STORE)
+Minimum viable:
+•	timestamp
+•	tech_id
+•	call_type
+•	ready_status
+•	not_ready_reason
+•	energy_level
+•	blocker_present
+•	blocker_note
+•	primary_kpi
+•	kpi_action_today
+•	coach_prompt_used
+•	focus_summary_5_words
+•	goal_action_today
+•	call_completed
+•	duration_seconds

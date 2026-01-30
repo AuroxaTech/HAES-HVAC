@@ -227,11 +227,28 @@ async def handle_ivr_close_sale(
             
             quote = quotes[0]
             quote_name = quote.get("name", f"Quote {quote_id}")
+            current_state = quote.get("state", "")
+
+            # Check if quote is already closed (sale order confirmed)
+            if current_state == "sale":
+                logger.info(f"sale.order {quote_id_int} is already in state 'sale', returning already-closed response")
+                return handler.format_success_response(
+                    f"This quote has already been closed. Quote {quote_name} is already confirmed. No further action needed. Thank you!",
+                    data={
+                        "quote_id": quote_id_int,
+                        "quote_name": quote_name,
+                        "proposal_selection": proposal_selection,
+                        "status": "already_closed",
+                        "current_state": current_state,
+                        "already_closed": True,
+                    },
+                )
+
             partner_id = quote.get("partner_id", [None])[0] if quote.get("partner_id") else None
-            
+
             # If we need partner phone/email, we'd need to read from res.partner separately
             # For now, we don't need them for closing the sale
-            
+
             # Update quote state to "sale" (confirmed order)
             # Note: state field is readonly, so we use action_confirm() workflow method
             state_updated = False
@@ -323,7 +340,25 @@ async def handle_ivr_close_sale(
         # Handle crm.lead
         lead = leads[0]
         lead_name = lead.get("name", f"Lead {quote_id}")
-        
+        lead_stage = lead.get("stage_id")  # [id, name] or False
+
+        # Check if lead is already in a closed/won stage
+        if lead_stage and len(lead_stage) >= 2:
+            stage_name_lower = (lead_stage[1] or "").lower()
+            if any(kw in stage_name_lower for kw in ["won", "approved", "sale", "parts", "confirmed"]):
+                logger.info(f"crm.lead {quote_id_int} is already in stage '{lead_stage[1]}', returning already-closed response")
+                return handler.format_success_response(
+                    f"This lead has already been closed. Lead {lead_name} is already in the approved stage. No further action needed. Thank you!",
+                    data={
+                        "quote_id": quote_id_int,
+                        "lead_name": lead_name,
+                        "proposal_selection": proposal_selection,
+                        "status": "already_closed",
+                        "current_stage": lead_stage[1],
+                        "already_closed": True,
+                    },
+                )
+
         # Update lead stage to "Quote Approved - Waiting for Parts" or similar
         # First, find the appropriate stage
         stage_updated = False

@@ -78,6 +78,17 @@ class Settings(BaseSettings):
     VAPI_WEBHOOK_SECRET: str = Field(default="", description="Vapi webhook verification secret")
     VAPI_ASSISTANT_ID: str = Field(default="", description="Vapi assistant ID")
     VAPI_TWILIO_PHONE_ID: str = Field(default="", description="Vapi Twilio phone ID")
+    # Web call testing: use static test identity when call is from Vapi web (no phone lookup)
+    VAPI_WEB_CALLS_USE_TEST_IDENTITY: bool = Field(
+        default=False,
+        description="If true, web calls (or calls with no caller phone) use VAPI_WEB_TEST_ROLE for RBAC. Set true only for testing internal OPS from Vapi web. Leave false in production.",
+    )
+    VAPI_WEB_TEST_ROLE: Literal[
+        "technician", "hr", "billing", "manager", "dispatch", "executive", "admin"
+    ] = Field(
+        default="technician",
+        description="Role to use when VAPI_WEB_CALLS_USE_TEST_IDENTITY is true.",
+    )
 
     # =========================================================================
     # Twilio SMS/Voice

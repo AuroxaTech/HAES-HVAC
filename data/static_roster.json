@@ -1,0 +1,72 @@
+{
+  "_meta": {
+    "description": "Static technician roster (from src/brains/ops/tech_roster.py). Use roster[].phone for caller-id testing on Internal OPS line.",
+    "source": "TECHNICIAN_ROSTER"
+  },
+  "roster": [
+    {
+      "id": "bounthon",
+      "name": "Bounthon",
+      "phone": "512-555-0001",
+      "email": "bounthon@haes.com",
+      "skill_level": "master",
+      "certifications": [
+        "epa_608",
+        "nate",
+        "tdlr",
+        "osha_10",
+        "commercial"
+      ],
+      "service_areas": [
+        "787",
+        "786",
+        "785",
+        "752",
+        "750"
+      ],
+      "can_handle_emergency": true,
+      "can_handle_commercial": true,
+      "daily_capacity_hours": 8.0
+    },
+    {
+      "id": "junior",
+      "name": "Junior",
+      "phone": "512-555-0002",
+      "email": "junior@haes.com",
+      "skill_level": "master",
+      "certifications": [
+        "epa_608",
+        "nate",
+        "tdlr",
+        "commercial"
+      ],
+      "service_areas": [
+        "787",
+        "786",
+        "785",
+        "751"
+      ],
+      "can_handle_emergency": true,
+      "can_handle_commercial": true,
+      "daily_capacity_hours": 8.0
+    },
+    {
+      "id": "aubry",
+      "name": "Aubry",
+      "phone": "512-555-0003",
+      "email": "aubry@haes.com",
+      "skill_level": "senior",
+      "certifications": [
+        "epa_608",
+        "tdlr"
+      ],
+      "service_areas": [
+        "787",
+        "786"
+      ],
+      "can_handle_emergency": true,
+      "can_handle_commercial": false,
+      "daily_capacity_hours": 8.0
+    }
+  ]
+}

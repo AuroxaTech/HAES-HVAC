@@ -20,6 +20,7 @@ todos:
   - id: tests-and-verification
     content: Add/update unit + integration tests and update the verification checklist to cover ETA, pricing, Odoo tag/activities, and SMS.
     status: completed
+isProject: false
 ---
 
 # Emergency flow: ETA + pricing + Odoo notifications + customer SMS
@@ -40,11 +41,11 @@ todos:
 
 ## Current state (what we’ll leverage)
 
-- Emergency qualification rules already exist, including the 55°F threshold: [`src/brains/ops/emergency_rules.py`](/Users/mac/Developer/HAES%20HVAC/src/brains/ops/emergency_rules.py)
-- Tech assignment by ZIP prefix exists: [`src/brains/ops/tech_roster.py`](/Users/mac/Developer/HAES%20HVAC/src/brains/ops/tech_roster.py)
-- Pricing components exist and are explicitly defined: [`src/brains/core/pricing_catalog.py`](/Users/mac/Developer/HAES%20HVAC/src/brains/core/pricing_catalog.py) and computed via `calculate_service_pricing()` in [`src/brains/core/handlers.py`](/Users/mac/Developer/HAES%20HVAC/src/brains/core/handlers.py)
-- Odoo lead upsert already works, including emergency banner in description: [`src/integrations/odoo_leads.py`](/Users/mac/Developer/HAES%20HVAC/src/integrations/odoo_leads.py)
-- Vapi Server URL endpoint already orchestrates HAEL+brains and Odoo upserts: [`src/api/vapi_server.py`](/Users/mac/Developer/HAES%20HVAC/src/api/vapi_server.py)
+- Emergency qualification rules already exist, including the 55°F threshold: `[src/brains/ops/emergency_rules.py](/Users/mac/Developer/HAES%20HVAC/src/brains/ops/emergency_rules.py)`
+- Tech assignment by ZIP prefix exists: `[src/brains/ops/tech_roster.py](/Users/mac/Developer/HAES%20HVAC/src/brains/ops/tech_roster.py)`
+- Pricing components exist and are explicitly defined: `[src/brains/core/pricing_catalog.py](/Users/mac/Developer/HAES%20HVAC/src/brains/core/pricing_catalog.py)` and computed via `calculate_service_pricing()` in `[src/brains/core/handlers.py](/Users/mac/Developer/HAES%20HVAC/src/brains/core/handlers.py)`
+- Odoo lead upsert already works, including emergency banner in description: `[src/integrations/odoo_leads.py](/Users/mac/Developer/HAES%20HVAC/src/integrations/odoo_leads.py)`
+- Vapi Server URL endpoint already orchestrates HAEL+brains and Odoo upserts: `[src/api/vapi_server.py](/Users/mac/Developer/HAES%20HVAC/src/api/vapi_server.py)`
 
 ## Proposed end-to-end flow
 
@@ -58,6 +59,8 @@ flowchart TD
   VapiServer --> TwilioSMS[Twilio_SMS_send]
   VapiServer --> VapiSpeak[Vapi_tool_result_speak]
 ```
+
+
 
 ## Implementation plan
 
@@ -73,9 +76,9 @@ flowchart TD
 
 Files:
 
-- [`doc/vapi/tool_schema.json`](/Users/mac/Developer/HAES%20HVAC/doc/vapi/tool_schema.json)
-- [`doc/vapi/system_prompt.md`](/Users/mac/Developer/HAES%20HVAC/doc/vapi/system_prompt.md) (keep behavior/tone; move specifics to KB)
-- [`doc/vapi/kb/ops_intake_and_call_policy.md`](/Users/mac/Developer/HAES%20HVAC/doc/vapi/kb/ops_intake_and_call_policy.md)
+- `[doc/vapi/tool_schema.json](/Users/mac/Developer/HAES%20HVAC/doc/vapi/tool_schema.json)`
+- `[doc/vapi/system_prompt.md](/Users/mac/Developer/HAES%20HVAC/doc/vapi/system_prompt.md)` (keep behavior/tone; move specifics to KB)
+- `[doc/vapi/kb/ops_intake_and_call_policy.md](/Users/mac/Developer/HAES%20HVAC/doc/vapi/kb/ops_intake_and_call_policy.md)`
 
 ### 2) Make DeSoto (751xx) route to Junior
 
@@ -84,7 +87,7 @@ Files:
 
 File:
 
-- [`src/brains/ops/tech_roster.py`](/Users/mac/Developer/HAES%20HVAC/src/brains/ops/tech_roster.py)
+- `[src/brains/ops/tech_roster.py](/Users/mac/Developer/HAES%20HVAC/src/brains/ops/tech_roster.py)`
 
 ### 3) Add ETA window + CRITICAL wording to OPS results
 
@@ -95,7 +98,7 @@ File:
 
 File:
 
-- [`src/brains/ops/handlers.py`](/Users/mac/Developer/HAES%20HVAC/src/brains/ops/handlers.py)
+- `[src/brains/ops/handlers.py](/Users/mac/Developer/HAES%20HVAC/src/brains/ops/handlers.py)`
 
 ### 4) Compute emergency pricing from CORE catalog and include in speak + Odoo description
 
@@ -107,8 +110,8 @@ File:
 
 Files:
 
-- [`src/api/vapi_server.py`](/Users/mac/Developer/HAES%20HVAC/src/api/vapi_server.py)
-- [`src/brains/core/handlers.py`](/Users/mac/Developer/HAES%20HVAC/src/brains/core/handlers.py) (reuse, not reimplement)
+- `[src/api/vapi_server.py](/Users/mac/Developer/HAES%20HVAC/src/api/vapi_server.py)`
+- `[src/brains/core/handlers.py](/Users/mac/Developer/HAES%20HVAC/src/brains/core/handlers.py)` (reuse, not reimplement)
 
 ### 5) Odoo: apply “Emergency” tag + create Odoo-native notifications
 
@@ -131,8 +134,8 @@ Files:
 
 Files:
 
-- [`src/integrations/odoo_leads.py`](/Users/mac/Developer/HAES%20HVAC/src/integrations/odoo_leads.py) (tag + activity helpers)
-- [`src/config/settings.py`](/Users/mac/Developer/HAES%20HVAC/src/config/settings.py) (new env vars)
+- `[src/integrations/odoo_leads.py](/Users/mac/Developer/HAES%20HVAC/src/integrations/odoo_leads.py)` (tag + activity helpers)
+- `[src/config/settings.py](/Users/mac/Developer/HAES%20HVAC/src/config/settings.py)` (new env vars)
 
 ### 6) Customer SMS confirmation via Twilio (no new dependency)
 
@@ -143,9 +146,9 @@ Files:
 
 Files:
 
-- Add [`src/integrations/twilio_sms.py`](/Users/mac/Developer/HAES%20HVAC/src/integrations/twilio_sms.py)
-- Update [`src/api/vapi_server.py`](/Users/mac/Developer/HAES%20HVAC/src/api/vapi_server.py) to enqueue background send
-- Update [`src/config/settings.py`](/Users/mac/Developer/HAES%20HVAC/src/config/settings.py) to validate `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`
+- Add `[src/integrations/twilio_sms.py](/Users/mac/Developer/HAES%20HVAC/src/integrations/twilio_sms.py)`
+- Update `[src/api/vapi_server.py](/Users/mac/Developer/HAES%20HVAC/src/api/vapi_server.py)` to enqueue background send
+- Update `[src/config/settings.py](/Users/mac/Developer/HAES%20HVAC/src/config/settings.py)` to validate `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`
 
 ### 7) Tests + verification checklist updates
 
@@ -197,10 +200,10 @@ Add a script to validate the full emergency flow outside pytest, suitable for st
 
 Files:
 
-- [`tests/test_vapi_tool_integration.py`](/Users/mac/Developer/HAES%20HVAC/tests/test_vapi_tool_integration.py)
+- `[tests/test_vapi_tool_integration.py](/Users/mac/Developer/HAES%20HVAC/tests/test_vapi_tool_integration.py)`
 - Add/extend focused tests as needed under `tests/`
-- Add [`scripts/verify_emergency_flow.py`](/Users/mac/Developer/HAES%20HVAC/scripts/verify_emergency_flow.py)
-- Update [`doc/vapi/VOICE_AGENT_VERIFICATION_CHECKLIST.md`](/Users/mac/Developer/HAES%20HVAC/doc/vapi/VOICE_AGENT_VERIFICATION_CHECKLIST.md) to reflect the now-implemented behaviors
+- Add `[scripts/verify_emergency_flow.py](/Users/mac/Developer/HAES%20HVAC/scripts/verify_emergency_flow.py)`
+- Update `[doc/vapi/VOICE_AGENT_VERIFICATION_CHECKLIST.md](/Users/mac/Developer/HAES%20HVAC/doc/vapi/VOICE_AGENT_VERIFICATION_CHECKLIST.md)` to reflect the now-implemented behaviors
 
 ### 8) Deploy + Vapi update steps
 
@@ -224,3 +227,4 @@ Files:
 
 - Ship behind a feature flag (optional): `FEATURE_EMERGENCY_SMS=true` and `FEATURE_ODOO_ACTIVITIES=true`
 - Start in staging / test assistant, then production
+

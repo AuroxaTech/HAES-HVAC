@@ -1,0 +1,1954 @@
+# HAES HVAC-R FINEST - Internal OPS Tools Testing Protocol
+
+**Version:** 1.1  
+**Date:** January 26, 2026  
+**Project:** Internal Operations Voice Agent Tools  
+**Client:** HVAC-R FINEST LLC
+
+---
+
+## 📋 Purpose
+
+Comprehensive testing protocol specifically for internal operations tools accessible via the Internal OPS Line. This document covers all 6 internal_ops tools with detailed test cases, edge cases, RBAC verification, and integration testing.
+
+---
+
+## 📦 Test Data Management (Use Real Odoo + Roster Data)
+
+**Primary test data file:** `data/internal_ops_test_data.json` (or `doc/internal_ops_test_data.json` if merge was run with doc output). This single JSON contains:
+
+- **odoo_ids.sale_orders** – Real quote IDs for `ivr_close_sale` (use `id` as quote_id).
+- **odoo_ids.crm_leads** – Real lead IDs for `ivr_close_sale` (use `id` as quote_id).
+- **employees** – Real Odoo hr.employee records: use `work_email` for payroll_inquiry/onboarding_inquiry; use `phone`/`work_phone` as caller number for HR/manager role testing.
+- **inventory** – Real product names: use `name` for inventory_inquiry and purchase_request.
+- **roster** – Static technician roster: use `phone` as caller number to test technician identification when calling the Internal OPS Line (fallback when number is not in Odoo).
+
+**Static roster only:** `data/static_roster.json` (or `doc/static_roster.json`) – technician id, name, phone, email, service_areas, certifications. Edit this file to add/change roster entries; merge script will include it in combined data.
+
+**How to refresh test data (run from project root with venv activated):**
+
+1. **Fetch real Odoo IDs (quotes + leads):**  
+   `python scripts/find_real_odoo_ids.py`  
+   → Writes `doc/internal_ops_test_data_odoo_ids.json`
+
+2. **Fetch real inventory:**  
+   `python scripts/find_real_inventory_data.py`  
+   → Writes `doc/internal_ops_test_data_inventory.json` and `.cursor/real_inventory_data.json`
+
+3. **Fetch real employees:**  
+   `python scripts/find_real_employee_data.py`  
+   → Writes `doc/internal_ops_test_data_employees.json`
+
+4. **Export static roster:**  
+   `python scripts/export_static_roster.py`  
+   → Writes `doc/static_roster.json`
+
+5. **Merge into one JSON:**  
+   `python scripts/merge_internal_ops_test_data.py`  
+   → Reads odoo_ids, employees, inventory, and static_roster.json; writes `doc/internal_ops_test_data.json` (copy to `data/` if your tests read from there).
+
+**Quick reference – where to get test values:**
+
+| What you need          | Source in JSON                              |
+|------------------------|---------------------------------------------|
+| quote_id (ivr_close_sale) | odoo_ids.sale_orders[].id or crm_leads[].id |
+| employee_email (payroll/onboarding) | employees[].work_email                      |
+| part_name (inventory/purchase) | inventory[].name                            |
+| Technician caller phone (RBAC) | roster[].phone or employees[].phone         |
+| Customer name/phone (purchase_request) | Use any test customer; required by tool   |
+
+---
+
+## 🎯 Test Environment Details
+
+### Internal OPS Phone Line
+
+**Phone Number:** +1 (855) 768-3265 (Twilio)  
+**Assistant:** Riley OPS  
+**Vapi Assistant ID:** fd35b574-1a9c-4052-99d8-a820e0ebabf7
+
+### Tools Available
+
+1. **ivr_close_sale** - ConversionFlow™ sale closing (Technician)
+2. **payroll_inquiry** - Payroll/commission information (HR)
+3. **onboarding_inquiry** - Onboarding information (HR)
+4. **hiring_inquiry** - Hiring information (HR)
+5. **inventory_inquiry** - Parts/equipment availability (Operations)
+6. **purchase_request** - Parts/equipment purchase requests (Operations)
+
+### Authorized Test Users
+
+**CRITICAL:** Use phone numbers that are either (1) in Odoo `hr.employee` (phone/work_phone) or (2) in the static technician roster (`data/static_roster.json` or `doc/static_roster.json`). The system identifies callers in this order: Odoo first, then static roster, then defaults to "customer" (denied).
+
+**Where to get test user phone numbers:**
+
+- **From combined test data:** Open `data/internal_ops_test_data.json` (or `doc/internal_ops_test_data.json`).
+  - **Technician (roster):** Use `roster[].phone` (e.g. 512-555-0001, 512-555-0002, 512-555-0003 from static roster).
+  - **HR / Manager / Ops (Odoo):** Use `employees[].phone` or `employees[].work_phone` for employees that have HR/manager/dispatch job titles in Odoo.
+- **Static roster only:** See `roster[]` in `data/static_roster.json` – id, name, phone, email, service_areas. Use these phones to test technician role when Odoo lookup is not used or as fallback.
+
+**Example test users (verify against your current JSON):**
+
+- **Technician:** Any `roster[].phone` (e.g. Bounthon, Junior, Aubry from static roster).
+- **HR/Manager/Operations:** Any `employees[]` entry with matching role in Odoo – use that employee’s `phone` or `work_phone` and `work_email` for payroll/onboarding tests.
+
+### Test Data Requirements
+
+**Before Testing:**
+
+- [ ] Combined test data available: `data/internal_ops_test_data.json` (or `doc/internal_ops_test_data.json`) with odoo_ids, employees, inventory, roster.
+- [ ] Real Odoo quote IDs: use `odoo_ids.sale_orders[].id` for `ivr_close_sale` testing.
+- [ ] Real Odoo lead IDs: use `odoo_ids.crm_leads[].id` for `ivr_close_sale` (lead path).
+- [ ] Real employee emails: use `employees[].work_email` for payroll_inquiry and onboarding_inquiry.
+- [ ] Real part names: use `inventory[].name` for inventory_inquiry and purchase_request.
+- [ ] Static roster: use `roster[].phone` for technician caller-id testing (optional: ensure `data/static_roster.json` or `doc/static_roster.json` is up to date).
+- [ ] For `purchase_request`: use any test customer name/phone; part from `inventory[].name`, quantity as needed.
+
+---
+
+## ⚠️ Before You Start - CRITICAL SETUP
+
+### ✅ Pre-Testing Checklist
+
+- [ ] Riley OPS assistant configured and active in Vapi
+- [ ] Internal OPS Line (+1-855-768-3265) forwarding to Riley OPS
+- [ ] Fly.io backend deployed and healthy
+- [ ] Odoo API connection tested and working
+- [ ] All 6 internal_ops tools registered and attached to Riley OPS
+- [ ] RBAC system configured and tested (Odoo hr.employee + static roster fallback)
+- [ ] Test data refreshed if needed: run `find_real_odoo_ids.py`, `find_real_inventory_data.py`, `find_real_employee_data.py`, `export_static_roster.py`, then `merge_internal_ops_test_data.py`
+- [ ] Combined test data file available: `data/internal_ops_test_data.json` or `doc/internal_ops_test_data.json` (contains odoo_ids, employees, inventory, roster)
+- [ ] Test employee/technician phone numbers: use `employees[]` (Odoo) or `roster[]` (static) from the combined JSON
+- [ ] Real quote/lead IDs, employee emails, part names available from combined JSON (see Test Data Management section)
+- [ ] Vapi dashboard access for call log review
+- [ ] Odoo admin access for verification
+
+### 🔐 Access Requirements
+
+- [ ] Vapi dashboard access (to review call logs and tool execution)
+- [ ] Odoo admin access (to verify data updates)
+- [ ] Fly.io logs access (to debug issues)
+- [ ] Odoo `hr.employee` access (to verify RBAC)
+
+### 🔒 RBAC Roles
+
+**Allowed Roles:**
+- ✅ Technician
+- ✅ HR
+- ✅ Manager
+- ✅ Executive
+- ✅ Admin
+
+**Denied Roles:**
+- ❌ Customer (default fallback)
+
+**RBAC Identification Flow:**
+1. System looks up caller phone number in Odoo `hr.employee` (phone, work_phone fields; Odoo 18 may not have mobile).
+2. If found, assigns role based on employee job title (e.g. Technician, HR, Manager, Dispatch, Executive, Admin).
+3. If not found in Odoo, system checks static technician roster (`src/brains/ops/tech_roster.py` / `doc/static_roster.json` merged into combined test data). If phone matches a roster entry, caller is treated as Technician.
+4. If not found in either, defaults to "customer" role (all internal_ops tools denied).
+5. Access is then allowed or denied per tool based on role (see doc/vapi/OPS_AGENT_TOOL_INTERACTION_GUIDE.md for role–tool matrix).
+
+### Related Documentation
+
+- **doc/vapi/OPS_AGENT_TOOL_INTERACTION_GUIDE.md** – How the OPS agent uses each tool, RBAC matrix, KB usage.
+- **doc/vapi/system_prompt_internal_ops.md** – Riley OPS system prompt (technician/HR/operations behavior).
+- **doc/vapi/kb/ops_intake_and_call_policy.txt** – Knowledge base for internal OPS (intake flow, policies).
+- **doc/vapi/tools/README.md** – Tool organization (customer_facing vs internal_ops) and handler locations.
+- **data/internal_ops_test_data.json** or **doc/internal_ops_test_data.json** – Single combined test data file (odoo_ids, employees, inventory, roster).
+
+---
+
+## 📊 Testing Methodology
+
+### Test Result Recording
+
+For each test, document:
+
+**Format:**
+
+```
+Test Date: __________
+Tester Name: __________
+Tester Phone Number: __________
+Tester Role: __________
+Test Duration: _____ minutes
+Tool Tested: __________
+Test Scenario: __________
+Actual Results: [What happened]
+PASS / FAIL: [ ]
+Issues Found: [Any problems]
+Odoo Verification: [What was checked in Odoo]
+```
+
+### Issue Priority Levels
+
+**🔴 CRITICAL** (Must fix before production):
+- RBAC failures (unauthorized access granted)
+- Data corruption in Odoo
+- Incorrect state updates
+- Security vulnerabilities
+- System crashes
+
+**🟡 HIGH PRIORITY** (Should fix soon):
+- Incorrect data returned
+- Missing error handling
+- Poor user experience
+- Integration errors
+
+**🟢 LOW PRIORITY** (Nice to have):
+- Minor UX improvements
+- Edge case refinements
+- Performance optimizations
+
+---
+
+## 🔧 SECTION 1: CONVERSIONFLOW™ - IVR CLOSE SALE
+
+### Tool: `ivr_close_sale`
+**Category:** Technician Tool  
+**Brain:** REVENUE-BRAIN  
+**Required Parameters:** `quote_id`, `proposal_selection`  
+**Optional Parameters:** `financing_option`, `deposit_amount`, `customer_phone`, `customer_name`
+
+---
+
+### Test 1.1: Basic Sale Closing - Quote ID (Good Proposal)
+
+**Test data:** Use a real quote ID from your test data JSON: `odoo_ids.sale_orders[].id` (e.g. first draft quote). Technician caller: use a phone from `roster[].phone` or `employees[]` with technician/manager role.
+
+**Test Steps:**
+
+1. Technician calls Internal OPS Line from authorized phone number (roster or Odoo employee phone).
+2. Technician says: "I need to close a sale"
+3. AI prompts for quote ID
+4. Technician provides: Real Odoo quote ID (from odoo_ids.sale_orders[].id)
+5. AI prompts for proposal selection
+6. Technician says: "Good"
+7. AI processes sale closing
+
+**Expected Behavior:**
+
+- ✅ AI routes to REVENUE-BRAIN via `ivr_close_sale` tool
+- ✅ AI confirms quote found in Odoo
+- ✅ AI reads quote details to technician
+- ✅ AI updates `sale.order` state from "draft" to "sale" via `action_confirm()`
+- ✅ AI creates chatter note with timestamp and details
+- ✅ AI provides confirmation: "Sale closed successfully. Quote [ID] has been converted to a sale."
+
+**Expected in Odoo:**
+
+- ✅ `sale.order` state changed from "draft" to "sale"
+- ✅ Chatter note created with:
+  - Timestamp
+  - Proposal selection: "good"
+  - Technician name/ID
+  - IVR closing method
+- ✅ All quote line items preserved
+- ✅ Customer information intact
+
+**RBAC Verification:**
+
+- ✅ Technician role: ✅ Allowed
+- ✅ Manager role: ✅ Allowed
+- ✅ Customer role: ❌ Denied
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+```
+[Document any issues]
+```
+
+**Odoo Verification:**
+
+- [ ] Quote state updated correctly
+- [ ] Chatter note created
+- [ ] All data preserved
+
+---
+
+### Test 1.2: Sale Closing - Lead ID (Better Proposal with Financing)
+
+**Test data:** Use a real lead ID from `odoo_ids.crm_leads[].id`. Caller: roster or Odoo technician/manager phone.
+
+**Test Steps:**
+
+1. Technician calls Internal OPS Line
+2. Technician says: "I need to close a sale from a lead"
+3. AI prompts for lead ID
+4. Technician provides: Real Odoo lead ID (from odoo_ids.crm_leads[].id)
+5. AI prompts for proposal selection
+6. Technician says: "Better"
+7. AI prompts for financing option
+8. Technician says: "GreenSky"
+9. AI prompts for deposit amount
+10. Technician says: "$500"
+11. AI processes sale closing
+
+**Expected Behavior:**
+
+- ✅ AI finds lead in Odoo
+- ✅ AI updates `crm.lead` stage to "Won"
+- ✅ If lead has associated quote, updates `sale.order` state
+- ✅ AI records: Proposal "better", Financing "GreenSky", Deposit "$500"
+- ✅ AI creates comprehensive chatter note
+- ✅ AI confirms: "Sale closed. Lead [ID] marked as Won. Financing: GreenSky. Deposit: $500."
+
+**Expected in Odoo:**
+
+- ✅ `crm.lead` stage updated to "Won"
+- ✅ Associated `sale.order` (if exists) state updated to "sale"
+- ✅ Chatter note includes:
+  - Proposal selection: "better"
+  - Financing option: "GreenSky"
+  - Deposit amount: "$500"
+  - Full audit trail
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 1.3: Sale Closing - Best Proposal with Cash Payment
+
+**Test Steps:**
+
+1. Technician calls Internal OPS Line
+2. Technician says: "Close sale, quote ID [real ID]"
+3. AI prompts for proposal
+4. Technician says: "Best"
+5. AI prompts for financing
+6. Technician says: "Cash"
+7. AI prompts for deposit
+8. Technician says: "$2000"
+9. AI processes
+
+**Expected Behavior:**
+
+- ✅ All fields recorded correctly
+- ✅ Cash payment option handled
+- ✅ High deposit amount recorded
+- ✅ Install crew dispatch triggered (if applicable)
+
+**Expected in Odoo:**
+
+- ✅ Proposal: "best"
+- ✅ Financing: "cash"
+- ✅ Deposit: "$2000"
+- ✅ Install crew notification (if applicable)
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 1.4: Error Handling - Invalid Quote ID
+
+**Test Steps:**
+
+1. Technician calls Internal OPS Line
+2. Technician says: "Close sale"
+3. AI prompts for quote ID
+4. Technician provides: Invalid/non-existent quote ID (e.g., "99999")
+5. AI handles error
+
+**Expected Behavior:**
+
+- ✅ AI searches Odoo for quote ID
+- ✅ AI recognizes quote not found
+- ✅ AI responds: "I couldn't find a quote with that ID. Please verify the quote ID and try again."
+- ✅ AI offers to help locate correct quote
+- ✅ No Odoo updates attempted
+- ✅ Error logged for audit
+
+**Expected Error Message:**
+
+- ✅ Clear, helpful error message
+- ✅ No technical jargon
+- ✅ Offers next steps
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 1.5: Error Handling - Quote Already Closed
+
+**Test Steps:**
+
+1. Technician calls Internal OPS Line
+2. Technician provides: Quote ID that's already in "sale" state
+3. AI handles gracefully
+
+**Expected Behavior:**
+
+- ✅ AI checks quote state
+- ✅ AI recognizes quote already closed
+- ✅ AI responds: "This quote has already been closed. The sale is already confirmed."
+- ✅ AI provides current sale status
+- ✅ No duplicate updates attempted
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 1.6: Error Handling - Missing Required Parameters
+
+**Test Steps:**
+
+1. Technician calls Internal OPS Line
+2. Technician says: "Close sale"
+3. Technician provides quote ID but doesn't provide proposal selection
+4. AI handles missing parameter
+
+**Expected Behavior:**
+
+- ✅ AI recognizes missing required parameter
+- ✅ AI prompts: "Which proposal did the customer select: Good, Better, or Best?"
+- ✅ AI waits for response
+- ✅ AI doesn't proceed without required data
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 1.7: RBAC - Unauthorized Access Attempt
+
+**Test Steps:**
+
+1. Call Internal OPS Line from unauthorized phone number (customer number)
+2. Attempt to use `ivr_close_sale` tool
+3. Verify access denied
+
+**Expected Behavior:**
+
+- ✅ AI recognizes caller as "customer" role
+- ✅ AI responds: "I'm sorry, this tool is only available to authorized employees. Let me transfer you to customer service."
+- ✅ No tool execution occurs
+- ✅ Attempt logged for security audit
+- ✅ Call transferred or ended gracefully
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 1.8: Concurrent Sale Closings
+
+**Test Steps:**
+
+1. Two technicians call simultaneously
+2. Both attempt to close different sales
+3. Verify both process correctly
+
+**Expected Behavior:**
+
+- ✅ Both calls handled independently
+- ✅ No data conflicts
+- ✅ Both sales closed successfully
+- ✅ No race conditions in Odoo updates
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+## 👥 SECTION 2: HR TOOLS - PAYROLL INQUIRY
+
+### Tool: `payroll_inquiry`
+**Category:** HR Tool  
+**Brain:** PEOPLE-BRAIN  
+**Required Parameters:** `employee_email`  
+**Optional Parameters:** `employee_name`
+
+---
+
+### Test 2.1: Basic Payroll Inquiry - By Email
+
+**Test data:** Use an email from `employees[].work_email` in your test data JSON. Caller: use that same employee’s phone (employees[].phone or work_phone) so RBAC allows HR/manager role.
+
+**Test Steps:**
+
+1. Employee calls Internal OPS Line from authorized phone number (Odoo employee phone for HR/manager role).
+2. Employee says: "I have a question about my payroll"
+3. AI prompts for employee email
+4. Employee provides: Real employee email (from employees[].work_email)
+5. AI provides payroll information
+
+**Expected Behavior:**
+
+- ✅ AI routes to PEOPLE-BRAIN via `payroll_inquiry` tool
+- ✅ AI identifies employee by email
+- ✅ AI provides: Current pay period, Commission details, Payment schedule
+- ✅ AI remains professional and confidential
+- ✅ AI does NOT provide sensitive financial details without verification
+
+**Expected Response:**
+
+- ✅ Pay period information
+- ✅ Commission breakdown (if applicable)
+- ✅ Next payment date
+- ✅ Payment method
+- ✅ Professional, helpful tone
+
+**RBAC Verification:**
+
+- ✅ HR role: ✅ Allowed
+- ✅ Manager role: ✅ Allowed
+- ✅ Technician role: ✅ Allowed (own payroll only)
+- ✅ Customer role: ❌ Denied
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 2.2: Payroll Inquiry - Phone Number Identification
+
+**Test Steps:**
+
+1. Employee calls Internal OPS Line
+2. Employee says: "What's my payroll status?"
+3. AI identifies employee by phone number (from RBAC lookup)
+4. AI provides payroll info without requiring email
+
+**Expected Behavior:**
+
+- ✅ AI uses phone number from RBAC to identify employee
+- ✅ AI looks up employee record in Odoo
+- ✅ AI provides payroll information
+- ✅ AI confirms employee identity: "I found your information, [Employee Name]"
+
+**Expected Response:**
+
+- ✅ Employee identified correctly
+- ✅ Payroll information provided
+- ✅ No email required if phone matches
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 2.3: Payroll Inquiry - Commission Details
+
+**Test Steps:**
+
+1. Technician calls Internal OPS Line
+2. Technician asks: "What's my commission for this month?"
+3. AI provides commission breakdown
+
+**Expected Behavior:**
+
+- ✅ AI calculates commission based on:
+  - Service work completed
+  - Equipment sold
+  - Tenure-based commission rate
+- ✅ AI provides breakdown:
+  - Service commission: $X
+  - Equipment bonus: $Y
+  - Total commission: $Z
+- ✅ AI mentions payment schedule
+
+**Expected Response:**
+
+- ✅ Detailed commission breakdown
+- ✅ Accurate calculations
+- ✅ Clear presentation
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 2.4: Error Handling - Invalid Email
+
+**Test Steps:**
+
+1. Employee calls Internal OPS Line
+2. Employee provides: Invalid or non-existent email
+3. AI handles error
+
+**Expected Behavior:**
+
+- ✅ AI searches Odoo for employee email
+- ✅ AI recognizes email not found
+- ✅ AI responds: "I couldn't find an employee with that email. Please verify your email address or provide your employee name."
+- ✅ AI offers alternative identification methods
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 2.5: RBAC - Unauthorized Access Attempt
+
+**Test Steps:**
+
+1. Call Internal OPS Line from customer phone number
+2. Attempt to use `payroll_inquiry` tool
+3. Verify access denied
+
+**Expected Behavior:**
+
+- ✅ AI recognizes unauthorized caller
+- ✅ AI responds: "I'm sorry, payroll information is only available to authorized employees."
+- ✅ No tool execution
+- ✅ Attempt logged
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+## 👥 SECTION 3: HR TOOLS - ONBOARDING INQUIRY
+
+### Tool: `onboarding_inquiry`
+**Category:** HR Tool  
+**Brain:** PEOPLE-BRAIN  
+**Required Parameters:** None  
+**Optional Parameters:** `employee_email`
+
+---
+
+### Test 3.1: Basic Onboarding Inquiry
+
+**Test Steps:**
+
+1. New employee calls Internal OPS Line
+2. Employee says: "I have questions about onboarding"
+3. AI provides onboarding information
+
+**Expected Behavior:**
+
+- ✅ AI routes to PEOPLE-BRAIN via `onboarding_inquiry` tool
+- ✅ AI provides: Onboarding checklist, Training schedule, Required documents
+- ✅ AI offers to connect with HR if needed
+- ✅ AI can identify employee by phone number (optional email)
+
+**Expected Response:**
+
+- ✅ Onboarding checklist items
+- ✅ Training schedule dates/times
+- ✅ Required documents list
+- ✅ Next steps information
+- ✅ HR contact information
+
+**RBAC Verification:**
+
+- ✅ HR role: ✅ Allowed
+- ✅ Manager role: ✅ Allowed
+- ✅ New employee: ✅ Allowed
+- ✅ Customer role: ❌ Denied
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 3.2: Onboarding Inquiry - Specific Questions
+
+**Test Steps:**
+
+1. New employee calls Internal OPS Line
+2. Employee asks: "What documents do I need to bring?"
+3. AI provides specific document requirements
+
+**Expected Behavior:**
+
+- ✅ AI provides detailed document list:
+  - Government-issued ID
+  - Social Security card
+  - Work authorization (if applicable)
+  - Certifications (EPA 608, TDLR, etc.)
+  - Direct deposit information
+- ✅ AI mentions where to bring documents
+- ✅ AI provides deadline information
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 3.3: Onboarding Inquiry - Training Schedule
+
+**Test Steps:**
+
+1. New employee calls Internal OPS Line
+2. Employee asks: "When is my training?"
+3. AI provides training schedule
+
+**Expected Behavior:**
+
+- ✅ AI provides training dates and times
+- ✅ AI mentions training location
+- ✅ AI provides training topics/modules
+- ✅ AI offers to schedule or reschedule if needed
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 3.4: RBAC - Unauthorized Access Attempt
+
+**Test Steps:**
+
+1. Call Internal OPS Line from customer phone number
+2. Attempt to use `onboarding_inquiry` tool
+3. Verify access denied
+
+**Expected Behavior:**
+
+- ✅ AI recognizes unauthorized caller
+- ✅ AI responds: "I'm sorry, onboarding information is only available to authorized employees."
+- ✅ No tool execution
+- ✅ Attempt logged
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+## 👥 SECTION 4: HR TOOLS - HIRING INQUIRY
+
+### Tool: `hiring_inquiry`
+**Category:** HR Tool  
+**Brain:** PEOPLE-BRAIN  
+**Required Parameters:** None  
+**Optional Parameters:** None
+
+---
+
+### Test 4.1: Basic Hiring Inquiry
+
+**Test Steps:**
+
+1. HR or Manager calls Internal OPS Line
+2. Caller says: "I need information about hiring"
+3. AI provides hiring information
+
+**Expected Behavior:**
+
+- ✅ AI routes to PEOPLE-BRAIN via `hiring_inquiry` tool
+- ✅ AI provides: Current job openings, Hiring requirements, Application process
+- ✅ AI can provide general information about positions
+- ✅ AI offers to connect with HR for specific questions
+
+**Expected Response:**
+
+- ✅ Current open positions
+- ✅ Job requirements for each position
+- ✅ Application process steps
+- ✅ Hiring timeline information
+- ✅ HR contact for questions
+
+**RBAC Verification:**
+
+- ✅ HR role: ✅ Allowed
+- ✅ Manager role: ✅ Allowed
+- ✅ Executive role: ✅ Allowed
+- ✅ Customer role: ❌ Denied
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 4.2: Hiring Inquiry - Specific Position
+
+**Test Steps:**
+
+1. Manager calls Internal OPS Line
+2. Manager asks: "What are the requirements for a technician position?"
+3. AI provides specific position requirements
+
+**Expected Behavior:**
+
+- ✅ AI provides detailed requirements:
+  - Required certifications (EPA 608, TDLR)
+  - Experience level
+  - Skills required
+  - Physical requirements
+  - Schedule availability
+- ✅ AI mentions compensation range (if appropriate)
+- ✅ AI provides application process
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 4.3: Hiring Inquiry - Application Status
+
+**Test Steps:**
+
+1. HR calls Internal OPS Line
+2. HR asks: "How many applications do we have for technician positions?"
+3. AI provides application statistics
+
+**Expected Behavior:**
+
+- ✅ AI provides application counts by position
+- ✅ AI mentions application stages
+- ✅ AI provides hiring pipeline status
+- ✅ AI offers to connect with HR system for detailed info
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 4.4: RBAC - Unauthorized Access Attempt
+
+**Test Steps:**
+
+1. Call Internal OPS Line from customer phone number
+2. Attempt to use `hiring_inquiry` tool
+3. Verify access denied
+
+**Expected Behavior:**
+
+- ✅ AI recognizes unauthorized caller
+- ✅ AI responds: "I'm sorry, hiring information is only available to authorized employees."
+- ✅ No tool execution
+- ✅ Attempt logged
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+## 📦 SECTION 5: OPERATIONS TOOLS - INVENTORY INQUIRY
+
+### Tool: `inventory_inquiry`
+**Category:** Operations Tool  
+**Brain:** CORE-BRAIN  
+**Required Parameters:** `part_name`  
+**Optional Parameters:** `part_number`, `quantity`
+
+---
+
+### Test 5.1: Basic Inventory Inquiry - Exact Match
+
+**Test data:** Use a part name from `inventory[].name` in your test data JSON (e.g. "Replace Fan Motor", "Defrost Determination Censor"). Caller: manager/dispatch/executive phone (employees[] or roster).
+
+**Test Steps:**
+
+1. Manager/technician calls Internal OPS Line from authorized phone number
+2. Caller says: "I need to check inventory"
+3. AI prompts for part name
+4. Caller provides: Part name from inventory[].name (e.g. exact or partial match)
+5. AI provides inventory information
+
+**Expected Behavior:**
+
+- ✅ AI routes to CORE-BRAIN via `inventory_inquiry` tool
+- ✅ AI searches Odoo `product.product` for matching parts
+- ✅ AI provides: Part name, Stock quantity, Location, Part number
+- ✅ AI provides real-time inventory data from Odoo
+
+**Expected Response:**
+
+- ✅ Part name: [Exact match]
+- ✅ Stock quantity: [Current quantity]
+- ✅ Location: [Warehouse/location]
+- ✅ Part number: [SKU/part number]
+- ✅ Unit of measure
+- ✅ Price (if applicable)
+
+**RBAC Verification:**
+
+- ✅ Technician role: ✅ Allowed
+- ✅ Manager role: ✅ Allowed
+- ✅ Operations role: ✅ Allowed
+- ✅ Customer role: ❌ Denied
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 5.2: Inventory Inquiry - Partial Match
+
+**Test Steps:**
+
+1. Technician calls Internal OPS Line
+2. Technician says: "Check inventory for refrigerant"
+3. AI searches for partial match
+4. AI provides results
+
+**Expected Behavior:**
+
+- ✅ AI searches Odoo with partial match
+- ✅ AI finds multiple matching parts
+- ✅ AI lists all matching parts:
+  - "R-410A Refrigerant - 25 lbs - Stock: 15"
+  - "R-22 Refrigerant - 30 lbs - Stock: 8"
+  - etc.
+- ✅ AI asks: "Which specific part are you looking for?"
+
+**Expected Response:**
+
+- ✅ Multiple results listed
+- ✅ Clear part descriptions
+- ✅ Stock quantities for each
+- ✅ Follow-up question for clarification
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 5.3: Inventory Inquiry - Out of Stock
+
+**Test Steps:**
+
+1. Technician calls Internal OPS Line
+2. Technician asks about part that's out of stock
+3. AI handles out-of-stock gracefully
+
+**Expected Behavior:**
+
+- ✅ AI finds part in Odoo
+- ✅ AI recognizes stock quantity is 0 or negative
+- ✅ AI responds: "That part is currently out of stock. Current quantity: 0"
+- ✅ AI offers alternatives:
+  - "Would you like me to check for similar parts?"
+  - "Would you like to create a purchase request?"
+- ✅ AI provides estimated restock date (if available)
+
+**Expected Response:**
+
+- ✅ Clear out-of-stock message
+- ✅ Current quantity: 0
+- ✅ Alternative options offered
+- ✅ Helpful next steps
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 5.4: Inventory Inquiry - With Quantity Check
+
+**Test Steps:**
+
+1. Technician calls Internal OPS Line
+2. Technician says: "Do we have 5 compressors in stock?"
+3. AI checks quantity requirement
+
+**Expected Behavior:**
+
+- ✅ AI finds part
+- ✅ AI checks if stock quantity >= requested quantity
+- ✅ If sufficient: "Yes, we have [X] in stock, which is enough for your request."
+- ✅ If insufficient: "We only have [X] in stock, which is less than the [Y] you need. Would you like to create a purchase request?"
+
+**Expected Response:**
+
+- ✅ Quantity comparison provided
+- ✅ Clear availability status
+- ✅ Suggestion for purchase request if needed
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 5.5: Error Handling - Part Not Found
+
+**Test Steps:**
+
+1. Technician calls Internal OPS Line
+2. Technician provides: Non-existent part name
+3. AI handles error
+
+**Expected Behavior:**
+
+- ✅ AI searches Odoo
+- ✅ AI recognizes part not found
+- ✅ AI responds: "I couldn't find a part matching '[part name]'. Please check the spelling or try a different part name."
+- ✅ AI offers: "Would you like me to search for similar parts?"
+- ✅ No errors thrown
+
+**Expected Response:**
+
+- ✅ Clear error message
+- ✅ Helpful suggestions
+- ✅ Professional tone
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 5.6: Inventory Inquiry - By Part Number
+
+**Test Steps:**
+
+1. Technician calls Internal OPS Line
+2. Technician provides: Part number (SKU)
+3. AI searches by part number
+
+**Expected Behavior:**
+
+- ✅ AI searches Odoo by part number
+- ✅ AI finds exact match
+- ✅ AI provides part information
+- ✅ AI confirms: "Found part [name] with part number [number]"
+
+**Expected Response:**
+
+- ✅ Part found by SKU
+- ✅ All inventory details provided
+- ✅ Confirmation of part number match
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 5.7: RBAC - Unauthorized Access Attempt
+
+**Test Steps:**
+
+1. Call Internal OPS Line from customer phone number
+2. Attempt to use `inventory_inquiry` tool
+3. Verify access denied
+
+**Expected Behavior:**
+
+- ✅ AI recognizes unauthorized caller
+- ✅ AI responds: "I'm sorry, inventory information is only available to authorized employees."
+- ✅ No tool execution
+- ✅ Attempt logged
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+## 📦 SECTION 6: OPERATIONS TOOLS - PURCHASE REQUEST
+
+### Tool: `purchase_request`
+**Category:** Operations Tool  
+**Brain:** CORE-BRAIN  
+**Required Parameters:** `customer_name`, `phone`, `part_name`, `quantity`  
+**Optional Parameters:** `part_number`, `urgency`
+
+---
+
+### Test 6.1: Basic Purchase Request - Standard Urgency
+
+**Test data:** Use `inventory[].name` for part name (e.g. from combined test data). Provide any test customer name and phone; quantity e.g. 1 or 2. Caller: manager/dispatch/executive phone.
+
+**Test Steps:**
+
+1. Manager/technician calls Internal OPS Line from authorized phone number
+2. Caller says: "I need to request a purchase"
+3. AI prompts for customer name
+4. Caller provides: Customer name (test customer)
+5. AI prompts for phone number
+6. Caller provides: Customer phone (test number)
+7. AI prompts for part name
+8. Caller provides: Part name from inventory[].name
+9. AI prompts for quantity
+10. Caller provides: Quantity (e.g., "2")
+11. AI creates purchase request
+
+**Expected Behavior:**
+
+- ✅ AI routes to CORE-BRAIN via `purchase_request` tool
+- ✅ AI collects all required information
+- ✅ AI validates part exists in inventory (or can be ordered)
+- ✅ AI creates purchase request in Odoo
+- ✅ AI provides confirmation and tracking info
+
+**Expected in Odoo:**
+
+- ✅ Purchase request created
+- ✅ Customer name: [Provided name]
+- ✅ Phone: [Provided phone]
+- ✅ Part name: [Provided part]
+- ✅ Quantity: [Provided quantity]
+- ✅ Status: "Requested" or "Pending Approval"
+- ✅ Urgency: "medium" (default)
+- ✅ Requested by: [Technician name from RBAC]
+- ✅ Timestamp recorded
+
+**RBAC Verification:**
+
+- ✅ Technician role: ✅ Allowed
+- ✅ Manager role: ✅ Allowed
+- ✅ Operations role: ✅ Allowed
+- ✅ Customer role: ❌ Denied
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 6.2: Purchase Request - High Urgency
+
+**Test Steps:**
+
+1. Technician calls Internal OPS Line
+2. Technician says: "I need to order parts urgently"
+3. Technician provides all required information
+4. Technician specifies: "High urgency"
+5. AI creates urgent purchase request
+
+**Expected Behavior:**
+
+- ✅ AI recognizes high urgency
+- ✅ AI sets urgency level to "high"
+- ✅ AI creates purchase request with high priority flag
+- ✅ AI notifies operations/management immediately
+- ✅ AI provides: "Your urgent purchase request has been created and flagged for immediate attention."
+
+**Expected in Odoo:**
+
+- ✅ Urgency: "high"
+- ✅ Priority flag set
+- ✅ Notification sent to operations team
+- ✅ Expedited processing flag
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 6.3: Purchase Request - Existing Customer
+
+**Test Steps:**
+
+1. Technician calls Internal OPS Line
+2. Technician provides: Customer name that exists in Odoo
+3. AI links request to existing customer
+
+**Expected Behavior:**
+
+- ✅ AI searches Odoo for customer by name/phone
+- ✅ AI finds existing customer record
+- ✅ AI links purchase request to customer
+- ✅ AI confirms: "I found customer [name] in our system. Purchase request linked to their account."
+
+**Expected in Odoo:**
+
+- ✅ Purchase request linked to existing `res.partner` record
+- ✅ Customer history accessible
+- ✅ Previous orders visible
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 6.4: Purchase Request - New Customer
+
+**Test Steps:**
+
+1. Technician calls Internal OPS Line
+2. Technician provides: Customer name not in Odoo
+3. AI creates new customer record
+
+**Expected Behavior:**
+
+- ✅ AI searches Odoo for customer
+- ✅ AI recognizes customer not found
+- ✅ AI creates new customer record in Odoo
+- ✅ AI links purchase request to new customer
+- ✅ AI confirms: "I've created a new customer record for [name] and linked your purchase request."
+
+**Expected in Odoo:**
+
+- ✅ New `res.partner` record created
+- ✅ Customer name and phone recorded
+- ✅ Purchase request linked to new customer
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 6.5: Error Handling - Invalid Part Name
+
+**Test Steps:**
+
+1. Technician calls Internal OPS Line
+2. Technician provides: Non-existent part name
+3. AI handles error
+
+**Expected Behavior:**
+
+- ✅ AI validates part exists (or can be ordered)
+- ✅ AI recognizes part not found
+- ✅ AI responds: "I couldn't find a part matching '[part name]'. Please verify the part name or provide the part number."
+- ✅ AI offers to search by part number
+- ✅ No purchase request created
+
+**Expected Response:**
+
+- ✅ Clear error message
+- ✅ Alternative search options
+- ✅ Helpful guidance
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 6.6: Error Handling - Missing Required Parameters
+
+**Test Steps:**
+
+1. Technician calls Internal OPS Line
+2. Technician provides: Customer name and phone, but forgets part name
+3. AI handles missing parameter
+
+**Expected Behavior:**
+
+- ✅ AI recognizes missing required parameter
+- ✅ AI prompts: "What part do you need to order?"
+- ✅ AI waits for part name
+- ✅ AI doesn't proceed without all required data
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 6.7: Purchase Request - With Part Number
+
+**Test Steps:**
+
+1. Technician calls Internal OPS Line
+2. Technician provides: Part number in addition to part name
+3. AI uses part number for validation
+
+**Expected Behavior:**
+
+- ✅ AI validates part using part number
+- ✅ AI confirms part found
+- ✅ AI creates purchase request with part number
+- ✅ AI confirms: "Purchase request created for part [name], part number [number]"
+
+**Expected in Odoo:**
+
+- ✅ Part number recorded
+- ✅ Part validated by SKU
+- ✅ Accurate part identification
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 6.8: RBAC - Unauthorized Access Attempt
+
+**Test Steps:**
+
+1. Call Internal OPS Line from customer phone number
+2. Attempt to use `purchase_request` tool
+3. Verify access denied
+
+**Expected Behavior:**
+
+- ✅ AI recognizes unauthorized caller
+- ✅ AI responds: "I'm sorry, purchase requests can only be made by authorized employees."
+- ✅ No tool execution
+- ✅ Attempt logged
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+## 🔒 SECTION 7: RBAC COMPREHENSIVE TESTING
+
+### Test 7.1: Role-Based Access Matrix
+
+**Test All Roles Against All Tools:**
+
+| Tool | Technician | HR | Manager | Executive | Admin | Customer |
+|------|-----------|----|---------|-----------|-------|----------|
+| `ivr_close_sale` | ✅ | ❌ | ✅ | ✅ | ✅ | ❌ |
+| `payroll_inquiry` | ✅ (own) | ✅ | ✅ | ✅ | ✅ | ❌ |
+| `onboarding_inquiry` | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| `hiring_inquiry` | ❌ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| `inventory_inquiry` | ✅ | ❌ | ✅ | ✅ | ✅ | ❌ |
+| `purchase_request` | ✅ | ❌ | ✅ | ✅ | ✅ | ❌ |
+
+**Test Steps:**
+
+1. For each role, call Internal OPS Line
+2. Attempt to use each tool
+3. Verify access matches matrix above
+
+**Expected Behavior:**
+
+- ✅ Access granted/denied matches matrix
+- ✅ Clear error messages for denied access
+- ✅ Successful execution for allowed access
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 7.2: Phone Number Lookup - Odoo Employee Records
+
+**Test Steps:**
+
+1. Verify employee phone numbers in Odoo `hr.employee`:
+   - `phone` field
+   - `mobile` field
+   - `work_phone` field
+2. Call Internal OPS Line from each phone number
+3. Verify RBAC identification works
+
+**Expected Behavior:**
+
+- ✅ System looks up phone in all three fields
+- ✅ Employee identified correctly
+- ✅ Role assigned based on employee record
+- ✅ Access granted/denied based on role
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 7.3: Fallback to Static Roster
+
+**Test data:** Use a phone from `roster[].phone` in `data/static_roster.json` or `data/internal_ops_test_data.json` (e.g. 512-555-0001, 512-555-0002, 512-555-0003). Call from that number; do not add it to Odoo hr.employee so the system falls back to static roster.
+
+**Test Steps:**
+
+1. Use phone number NOT in Odoo `hr.employee` (e.g. a roster-only number such as 512-555-0001).
+2. Ensure that phone number IS in static technician roster (see roster[] in static_roster.json or combined test data).
+3. Call Internal OPS Line from that number; attempt a technician-only tool (e.g. ivr_close_sale).
+4. Verify fallback identification works.
+
+**Expected Behavior:**
+
+- ✅ System checks Odoo first (not found)
+- ✅ System then checks static roster (tech_roster.py / static_roster.json)
+- ✅ Caller identified as Technician from roster
+- ✅ Technician tools (e.g. ivr_close_sale) allowed
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 7.4: Default to Customer Role
+
+**Test Steps:**
+
+1. Use phone number NOT in Odoo `hr.employee`
+2. Phone number NOT in static roster
+3. Verify defaults to "customer" role
+
+**Expected Behavior:**
+
+- ✅ System checks Odoo
+- ✅ System checks static roster
+- ✅ If not found, defaults to "customer"
+- ✅ All internal_ops tools denied
+- ✅ Clear "unauthorized" message
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+## 🔍 SECTION 8: EDGE CASES & ERROR HANDLING
+
+### Test 8.1: Odoo API Down / Integration Failure
+
+**Test Steps:**
+
+1. Simulate Odoo API unavailable
+2. Attempt to use any internal_ops tool
+3. Verify graceful degradation
+
+**Expected Behavior:**
+
+- ✅ AI recognizes Odoo connection failure
+- ✅ AI responds: "I'm experiencing a technical issue connecting to our system. Please try again in a few moments, or contact dispatch directly."
+- ✅ AI does NOT crash or hang
+- ✅ Error logged for technical team
+- ✅ No partial data updates
+
+**Tools to Test:**
+
+- [ ] `ivr_close_sale`
+- [ ] `payroll_inquiry`
+- [ ] `onboarding_inquiry`
+- [ ] `hiring_inquiry`
+- [ ] `inventory_inquiry`
+- [ ] `purchase_request`
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 8.2: Network Timeout
+
+**Test Steps:**
+
+1. Simulate slow network or timeout
+2. Attempt to use tool
+3. Verify timeout handling
+
+**Expected Behavior:**
+
+- ✅ AI recognizes timeout
+- ✅ AI responds: "The request is taking longer than expected. Please hold or try again."
+- ✅ AI provides timeout message after 3 seconds (per tool configuration)
+- ✅ No hanging or infinite wait
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 8.3: Invalid Data Format
+
+**Test Steps:**
+
+1. Provide invalid data format (e.g., text for numeric field)
+2. Verify validation and error handling
+
+**Expected Behavior:**
+
+- ✅ AI validates data format
+- ✅ AI recognizes invalid format
+- ✅ AI responds: "I need [field] in the correct format. [Example]"
+- ✅ AI re-prompts for correct data
+
+**Test Cases:**
+
+- [ ] Invalid quote ID format
+- [ ] Invalid email format
+- [ ] Invalid phone number format
+- [ ] Invalid quantity (negative, zero, text)
+- [ ] Invalid proposal selection (not good/better/best)
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 8.4: Concurrent Tool Usage
+
+**Test Steps:**
+
+1. Same employee calls multiple times simultaneously
+2. Uses different tools in each call
+3. Verify no conflicts
+
+**Expected Behavior:**
+
+- ✅ All calls handled independently
+- ✅ No data conflicts
+- ✅ All tools execute correctly
+- ✅ No race conditions
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 8.5: Very Long Call (>15 minutes)
+
+**Test Steps:**
+
+1. Call Internal OPS Line
+2. Use multiple tools in sequence
+3. Have extended conversation
+4. Verify system handles lengthy call
+
+**Expected Behavior:**
+
+- ✅ AI maintains context throughout
+- ✅ AI doesn't lose track of conversation
+- ✅ All tools work correctly
+- ✅ No performance degradation
+- ✅ Recording captures full call
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 8.6: Interrupted Call / Dropped Call
+
+**Test Steps:**
+
+1. Start tool execution
+2. Hang up mid-execution
+3. Verify system handles gracefully
+
+**Expected Behavior:**
+
+- ✅ No partial data updates in Odoo
+- ✅ Call logged as incomplete
+- ✅ No errors thrown
+- ✅ System ready for next call
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 8.7: Unclear Speech / Background Noise
+
+**Test Steps:**
+
+1. Call with heavy background noise
+2. Speak unclearly
+3. Verify AI handles gracefully
+
+**Expected Behavior:**
+
+- ✅ AI asks for clarification: "I'm sorry, I didn't catch that. Could you repeat?"
+- ✅ AI remains patient
+- ✅ AI offers alternatives: "Would you prefer to spell that out?"
+- ✅ AI doesn't give up after 1-2 failed attempts
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+## 📈 SECTION 9: PERFORMANCE & QUALITY METRICS
+
+### Test 9.1: Response Time
+
+**Measurement:**
+
+- Time from call start to AI greeting: _____ seconds
+- Time between user input and AI response: _____ seconds
+- Time for tool execution: _____ seconds
+
+**Targets:**
+
+- ✅ Greeting within 2 seconds
+- ✅ Response within 1-2 seconds
+- ✅ Tool execution within 3-5 seconds
+- ✅ No pauses >3 seconds
+
+**Tools to Measure:**
+
+- [ ] `ivr_close_sale` - Average: _____ seconds
+- [ ] `payroll_inquiry` - Average: _____ seconds
+- [ ] `onboarding_inquiry` - Average: _____ seconds
+- [ ] `hiring_inquiry` - Average: _____ seconds
+- [ ] `inventory_inquiry` - Average: _____ seconds
+- [ ] `purchase_request` - Average: _____ seconds
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+---
+
+### Test 9.2: Tool Execution Success Rate
+
+**Measurement:**
+
+- Total tool calls: _____
+- Successful executions: _____
+- Failed executions: _____
+- Success rate: _____%
+
+**Target:**
+
+- ✅ 95%+ success rate
+
+**Breakdown by Tool:**
+
+| Tool | Total Calls | Successful | Failed | Success Rate |
+|------|-------------|------------|--------|--------------|
+| `ivr_close_sale` | _____ | _____ | _____ | _____% |
+| `payroll_inquiry` | _____ | _____ | _____ | _____% |
+| `onboarding_inquiry` | _____ | _____ | _____ | _____% |
+| `hiring_inquiry` | _____ | _____ | _____ | _____% |
+| `inventory_inquiry` | _____ | _____ | _____ | _____% |
+| `purchase_request` | _____ | _____ | _____ | _____% |
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+---
+
+### Test 9.3: Data Accuracy
+
+**Measurement:**
+
+- Total fields collected: _____
+- Fields with correct data: _____
+- Accuracy rate: _____%
+
+**Target:**
+
+- ✅ 95%+ accuracy
+
+**Common Errors to Check:**
+
+- [ ] Wrong quote/lead IDs
+- [ ] Incorrect employee emails
+- [ ] Misspelled part names
+- [ ] Wrong quantities
+- [ ] Incorrect phone numbers
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+---
+
+### Test 9.4: RBAC Enforcement Rate
+
+**Measurement:**
+
+- Total unauthorized access attempts: _____
+- Access correctly denied: _____
+- False positives (authorized denied): _____
+- False negatives (unauthorized granted): _____
+- Enforcement rate: _____%
+
+**Target:**
+
+- ✅ 100% enforcement rate (0 false positives, 0 false negatives)
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+---
+
+### Test 9.5: Odoo Integration Success Rate
+
+**Measurement:**
+
+- Total Odoo operations: _____
+- Successful operations: _____
+- Failed operations: _____
+- Success rate: _____%
+
+**Target:**
+
+- ✅ 98%+ integration success rate
+
+**Operations to Measure:**
+
+- [ ] sale.order state updates
+- [ ] crm.lead stage updates
+- [ ] Chatter note creation
+- [ ] Employee lookups
+- [ ] Product/inventory queries
+- [ ] Purchase request creation
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+---
+
+## 🎯 SECTION 10: FINAL ACCEPTANCE CRITERIA
+
+### Critical Requirements (All Must Pass)
+
+- [ ] All 6 tools execute successfully with real Odoo data
+- [ ] RBAC enforcement 100% accurate (0 false positives, 0 false negatives)
+- [ ] All Odoo updates correct (state changes, data creation)
+- [ ] No security vulnerabilities found
+- [ ] All error cases handled gracefully
+- [ ] Response time <5 seconds for all tools
+- [ ] Tool execution success rate >95%
+- [ ] Data accuracy >95%
+
+### High Priority Requirements (90%+ Pass Rate)
+
+- [ ] All edge cases handled
+- [ ] Integration success rate >98%
+- [ ] User experience professional and helpful
+- [ ] Error messages clear and actionable
+- [ ] Concurrent usage works correctly
+- [ ] Long calls handled without issues
+
+### Nice to Have (70%+ Pass Rate)
+
+- [ ] Performance optimizations
+- [ ] Advanced features working
+- [ ] Complex scenarios resolved
+
+---
+
+## 📝 FINAL SUMMARY REPORT
+
+### Test Execution Summary
+
+**Total Tests:** _____  
+**Tests Passed:** _____  
+**Tests Failed:** _____  
+**Pass Rate:** _____%
+
+### Tool-Specific Results
+
+| Tool | Tests | Passed | Failed | Pass Rate |
+|------|-------|--------|--------|-----------|
+| `ivr_close_sale` | _____ | _____ | _____ | _____% |
+| `payroll_inquiry` | _____ | _____ | _____ | _____% |
+| `onboarding_inquiry` | _____ | _____ | _____ | _____% |
+| `hiring_inquiry` | _____ | _____ | _____ | _____% |
+| `inventory_inquiry` | _____ | _____ | _____ | _____% |
+| `purchase_request` | _____ | _____ | _____ | _____% |
+| RBAC Testing | _____ | _____ | _____ | _____% |
+| Edge Cases | _____ | _____ | _____ | _____% |
+| Performance | _____ | _____ | _____ | _____% |
+
+### Critical Issues Found
+
+1. 
+    
+    ---
+    
+2. 
+    
+    ---
+    
+3. 
+    
+    ---
+
+### High Priority Issues Found
+
+1. 
+    
+    ---
+    
+2. 
+    
+    ---
+    
+3. 
+    
+    ---
+
+### Low Priority Issues Found
+
+1. 
+    
+    ---
+    
+2. 
+    
+    ---
+
+### Client Sign-Off
+
+**Junior (Owner) Approval:**
+
+- [ ] Approved for production use
+- [ ] Requires additional fixes
+
+**Signature:** ___  
+**Date:** ___
+
+**Linda (Back Office Manager) Approval:**
+
+- [ ] Approved for production use
+- [ ] Requires additional fixes
+
+**Signature:** ___  
+**Date:** ___
+
+---
+
+## 🚀 GO-LIVE CHECKLIST
+
+**Before Production Launch:**
+
+- [ ] All critical issues resolved
+- [ ] 95%+ pass rate achieved
+- [ ] Client approval received
+- [ ] All 6 tools verified working
+- [ ] RBAC tested and verified (Odoo + static roster fallback)
+- [ ] Odoo integration tested
+- [ ] Error handling verified
+- [ ] Performance targets met
+- [ ] Documentation complete (including Test Data Management and Related Documentation)
+- [ ] Test data refresh process documented/run (scripts → combined JSON)
+- [ ] Team trained on tools and on using data/internal_ops_test_data.json (or doc/) for test IDs
+
+**Post-Launch Monitoring (First 48 Hours):**
+
+- [ ] Monitor all tool calls in real-time
+- [ ] Check Odoo integration hourly
+- [ ] Verify RBAC enforcement
+- [ ] Track error rates
+- [ ] Log any issues immediately
+- [ ] Daily check-in with management
+
+---
+
+## 📌 Quick Reference: Test Data Locations
+
+- **Combined (all in one):** `data/internal_ops_test_data.json` or `doc/internal_ops_test_data.json` – odoo_ids, employees, inventory, roster.
+- **Static roster only:** `data/static_roster.json` or `doc/static_roster.json` – edit here to add/change technicians; run `merge_internal_ops_test_data.py` to refresh combined file.
+- **Refresh scripts (project root, venv active):** `find_real_odoo_ids.py`, `find_real_inventory_data.py`, `find_real_employee_data.py`, `export_static_roster.py`, `merge_internal_ops_test_data.py`.
+
+---
+
+**Internal OPS Tools Testing Protocol Complete!** 🎉

@@ -80,6 +80,7 @@ todos:
     status: completed
     dependencies:
       - add_integration_tests
+isProject: false
 ---
 
 # Implement Full Appointment Scheduling with Odoo Integration
@@ -141,125 +142,106 @@ flowchart TD
     S --> T[Vapi Response]
 ```
 
+
+
 ## Implementation Plan
 
 ### Phase 1: Odoo Calendar Integration Module
 
-**File: `src/integrations/odoo_appointments.py`** (new file)
+**File: `src/integrations/odoo_appointments.py**` (new file)
 
 Create a new module following the pattern of `odoo_leads.py`:
 
 1. **AppointmentService class**
-
-   - Initialize with `OdooClient`
-   - Cache `calendar.event` fields
-   - Safe field mapping with capability checking
-
+  - Initialize with `OdooClient`
+  - Cache `calendar.event` fields
+  - Safe field mapping with capability checking
 2. **Core methods:**
-
-   - `create_appointment()` - Create calendar event in Odoo
-   - `find_appointment_by_contact()` - Lookup by phone/email
-   - `update_appointment()` - Reschedule existing appointment
-   - `cancel_appointment()` - Cancel appointment
-   - `get_technician_calendar_events()` - Get existing appointments for tech
-   - `link_appointment_to_lead()` - Link calendar event to CRM lead
-
+  - `create_appointment()` - Create calendar event in Odoo
+  - `find_appointment_by_contact()` - Lookup by phone/email
+  - `update_appointment()` - Reschedule existing appointment
+  - `cancel_appointment()` - Cancel appointment
+  - `get_technician_calendar_events()` - Get existing appointments for tech
+  - `link_appointment_to_lead()` - Link calendar event to CRM lead
 3. **Field mapping:**
-
-   - Map to `calendar.event` fields: `name`, `start`, `stop`, `partner_ids`, `user_id` (technician), `description`, `location`
-   - Support `res_id`/`res_model` for linking to `crm.lead`
-   - Handle timezone conversion (Odoo uses UTC)
+  - Map to `calendar.event` fields: `name`, `start`, `stop`, `partner_ids`, `user_id` (technician), `description`, `location`
+  - Support `res_id`/`res_model` for linking to `crm.lead`
+  - Handle timezone conversion (Odoo uses UTC)
 
 ### Phase 2: Update Scheduling Handlers
 
-**File: `src/brains/ops/handlers.py`**
+**File: `src/brains/ops/handlers.py**`
 
 Update the three handler functions:
 
-1. **`_handle_schedule_appointment()`**
-
-   - Validate required fields (phone/email, service type, preferred time)
-   - Use `scheduling_rules.py` to find available slot
-   - Get existing appointments from Odoo via `AppointmentService`
-   - Assign technician using `tech_roster.py`
-   - Create calendar event in Odoo
-   - Link to CRM lead if one exists
-   - Return success with appointment details
-
-2. **`_handle_reschedule_appointment()`**
-
-   - Lookup existing appointment by phone/email
-   - Validate new time slot using scheduling rules
-   - Update calendar event in Odoo
-   - Notify via email/SMS (if configured)
-   - Return success with updated details
-
-3. **`_handle_cancel_appointment()`**
-
-   - Lookup existing appointment
-   - Cancel calendar event (set active=False or delete)
-   - Update linked CRM lead status if needed
-   - Send cancellation confirmation
-   - Return success
+1. `**_handle_schedule_appointment()**`
+  - Validate required fields (phone/email, service type, preferred time)
+  - Use `scheduling_rules.py` to find available slot
+  - Get existing appointments from Odoo via `AppointmentService`
+  - Assign technician using `tech_roster.py`
+  - Create calendar event in Odoo
+  - Link to CRM lead if one exists
+  - Return success with appointment details
+2. `**_handle_reschedule_appointment()**`
+  - Lookup existing appointment by phone/email
+  - Validate new time slot using scheduling rules
+  - Update calendar event in Odoo
+  - Notify via email/SMS (if configured)
+  - Return success with updated details
+3. `**_handle_cancel_appointment()**`
+  - Lookup existing appointment
+  - Cancel calendar event (set active=False or delete)
+  - Update linked CRM lead status if needed
+  - Send cancellation confirmation
+  - Return success
 
 ### Phase 3: Integrate Scheduling Rules with Odoo
 
-**File: `src/integrations/odoo_appointments.py`**
+**File: `src/integrations/odoo_appointments.py**`
 
 Add helper methods:
 
-1. **`get_technician_availability()`**
-
-   - Fetch technician's calendar events from Odoo
-   - Convert to `TimeSlot` objects for `scheduling_rules.py`
-   - Filter by date range
-
-2. **`find_next_available_slot()`**
-
-   - Use `scheduling_rules.get_next_available_slot()`
-   - Query Odoo for existing appointments
-   - Return suggested time slots
-
-3. **`validate_slot_availability()`**
-
-   - Use `scheduling_rules.validate_scheduling_request()`
-   - Cross-check with Odoo calendar events
-   - Return validation result
+1. `**get_technician_availability()**`
+  - Fetch technician's calendar events from Odoo
+  - Convert to `TimeSlot` objects for `scheduling_rules.py`
+  - Filter by date range
+2. `**find_next_available_slot()**`
+  - Use `scheduling_rules.get_next_available_slot()`
+  - Query Odoo for existing appointments
+  - Return suggested time slots
+3. `**validate_slot_availability()**`
+  - Use `scheduling_rules.validate_scheduling_request()`
+  - Cross-check with Odoo calendar events
+  - Return validation result
 
 ### Phase 4: Link Appointments to CRM Leads
 
-**File: `src/integrations/odoo_appointments.py`**
+**File: `src/integrations/odoo_appointments.py**`
 
 1. **Link creation:**
-
-   - When creating appointment, link to existing `crm.lead` via `res_id`/`res_model`
-   - Use `partner_id` from lead for customer link
-   - Update lead stage if appropriate
-
+  - When creating appointment, link to existing `crm.lead` via `res_id`/`res_model`
+  - Use `partner_id` from lead for customer link
+  - Update lead stage if appropriate
 2. **Lead lookup:**
-
-   - Search for existing lead by phone/email
-   - Create link in calendar event: `res_model='crm.lead'`, `res_id=<lead_id>`
-   - This enables two-way navigation in Odoo
+  - Search for existing lead by phone/email
+  - Create link in calendar event: `res_model='crm.lead'`, `res_id=<lead_id>`
+  - This enables two-way navigation in Odoo
 
 ### Phase 5: Integrate with Vapi Server URL
 
-**File: `src/api/vapi_server.py`**
+**File: `src/api/vapi_server.py**`
 
 Update `execute_hael_route()`:
 
 1. **For schedule/reschedule/cancel intents:**
-
-   - After OPS brain returns result, check if appointment was created
-   - Extract appointment details from `OpsResult.data`
-   - Include appointment info in response (time, technician, confirmation)
-
+  - After OPS brain returns result, check if appointment was created
+  - Extract appointment details from `OpsResult.data`
+  - Include appointment info in response (time, technician, confirmation)
 2. **Response format:**
-
-   - Include `appointment_id` (Odoo calendar.event ID)
-   - Include `scheduled_time` (ISO format)
-   - Include `technician_name` if assigned
-   - Update `speak` message with appointment confirmation
+  - Include `appointment_id` (Odoo calendar.event ID)
+  - Include `scheduled_time` (ISO format)
+  - Include `technician_name` if assigned
+  - Update `speak` message with appointment confirmation
 
 ### Phase 6: Update Context and Tests
 
@@ -305,36 +287,29 @@ sequenceDiagram
     VS-->>V: Speak + appointment details
 ```
 
+
+
 ## Key Design Decisions
 
-1. **Use `calendar.event` not `project.task`**
-
-   - Calendar events are simpler and better suited for appointments
-   - Can link to leads via `res_id`/`res_model`
-   - Standard Odoo calendar integration
-
+1. **Use `calendar.event` not `project.task**`
+  - Calendar events are simpler and better suited for appointments
+  - Can link to leads via `res_id`/`res_model`
+  - Standard Odoo calendar integration
 2. **Idempotency via phone/email lookup**
-
-   - Check for existing appointments before creating
-   - Prevent duplicate appointments for same customer/time
-
+  - Check for existing appointments before creating
+  - Prevent duplicate appointments for same customer/time
 3. **Scheduling rules integration**
-
-   - Use existing `scheduling_rules.py` logic
-   - Query Odoo for actual availability
-   - Combine business rules with real data
-
+  - Use existing `scheduling_rules.py` logic
+  - Query Odoo for actual availability
+  - Combine business rules with real data
 4. **Technician assignment**
-
-   - Reuse `tech_roster.py` assignment logic
-   - Filter by service area and skill
-   - Assign `user_id` in calendar event for Odoo user
-
+  - Reuse `tech_roster.py` assignment logic
+  - Filter by service area and skill
+  - Assign `user_id` in calendar event for Odoo user
 5. **CRM Lead linking**
-
-   - Always link appointments to leads when possible
-   - Enables full workflow visibility in Odoo
-   - Update lead stages appropriately
+  - Always link appointments to leads when possible
+  - Enables full workflow visibility in Odoo
+  - Update lead stages appropriately
 
 ## Error Handling
 
@@ -346,24 +321,19 @@ sequenceDiagram
 ## Testing Strategy
 
 1. **Unit tests:**
-
-   - `AppointmentService` methods with mocked Odoo client
-   - Scheduling rule integration
-   - Field mapping validation
-
+  - `AppointmentService` methods with mocked Odoo client
+  - Scheduling rule integration
+  - Field mapping validation
 2. **Integration tests:**
-
-   - End-to-end appointment creation via Vapi
-   - Reschedule/cancel flows
-   - CRM lead linking
-   - Technician assignment logic
-
+  - End-to-end appointment creation via Vapi
+  - Reschedule/cancel flows
+  - CRM lead linking
+  - Technician assignment logic
 3. **Edge cases:**
-
-   - No available technicians
-   - All slots booked
-   - Timezone handling
-   - Weekend/holiday scheduling
+  - No available technicians
+  - All slots booked
+  - Timezone handling
+  - Weekend/holiday scheduling
 
 ## Configuration
 
@@ -415,3 +385,4 @@ No new environment variables needed. Uses existing:
 9. Integrate with Vapi Server URL
 10. Add tests
 11. Update context.json
+

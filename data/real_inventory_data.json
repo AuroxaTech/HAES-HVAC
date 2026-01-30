@@ -1,0 +1,162 @@
+[
+  {
+    "id": 24493,
+    "name": "Defrost Determination Censor",
+    "code": false,
+    "quantity_available": 0.0,
+    "category": "Misc.",
+    "type": "consu"
+  },
+  {
+    "id": 24492,
+    "name": "Adjust gas pressure",
+    "code": false,
+    "quantity_available": 0.0,
+    "category": "Misc.",
+    "type": "consu"
+  },
+  {
+    "id": 24491,
+    "name": "Replace Fan Motor",
+    "code": false,
+    "quantity_available": 0.0,
+    "category": "1. Service - Parent / 1.Electrical and Parts / Motor",
+    "type": "consu"
+  },
+  {
+    "id": 24490,
+    "name": "Replace Fan Motor",
+    "code": false,
+    "quantity_available": 0.0,
+    "category": "1. Service - Parent / 1.Electrical and Parts / Motor",
+    "type": "consu"
+  },
+  {
+    "id": 24489,
+    "name": "Replace Fan Motor",
+    "code": false,
+    "quantity_available": 0.0,
+    "category": "1. Service - Parent / 1.Electrical and Parts / Motor",
+    "type": "consu"
+  },
+  {
+    "id": 24488,
+    "name": "Replace Fan Motor",
+    "code": false,
+    "quantity_available": 0.0,
+    "category": "1. Service - Parent / 1.Electrical and Parts / Motor",
+    "type": "consu"
+  },
+  {
+    "id": 24487,
+    "name": "Replace Fan Motor",
+    "code": false,
+    "quantity_available": 0.0,
+    "category": "1. Service - Parent / 1.Electrical and Parts / Motor",
+    "type": "consu"
+  },
+  {
+    "id": 24486,
+    "name": "Replace Fan Motor",
+    "code": false,
+    "quantity_available": 0.0,
+    "category": "1. Service - Parent / 1.Electrical and Parts / Motor",
+    "type": "consu"
+  },
+  {
+    "id": 24485,
+    "name": "Replace Fan Motor",
+    "code": false,
+    "quantity_available": 0.0,
+    "category": "1. Service - Parent / 1.Electrical and Parts / Motor",
+    "type": "consu"
+  },
+  {
+    "id": 24484,
+    "name": "Replace Fan Motor",
+    "code": false,
+    "quantity_available": 0.0,
+    "category": "1. Service - Parent / 1.Electrical and Parts / Motor",
+    "type": "consu"
+  },
+  {
+    "id": 24483,
+    "name": "Replace Fan Motor",
+    "code": false,
+    "quantity_available": 0.0,
+    "category": "1. Service - Parent / 1.Electrical and Parts / Motor",
+    "type": "consu"
+  },
+  {
+    "id": 24482,
+    "name": "Replace Fan Motor",
+    "code": false,
+    "quantity_available": 0.0,
+    "category": "1. Service - Parent / 1.Electrical and Parts / Motor",
+    "type": "consu"
+  },
+  {
+    "id": 24481,
+    "name": "Lift",
+    "code": false,
+    "quantity_available": 0.0,
+    "category": "Misc.",
+    "type": "consu"
+  },
+  {
+    "id": 24480,
+    "name": "Disposal",
+    "code": false,
+    "quantity_available": 0.0,
+    "category": "Misc.",
+    "type": "consu"
+  },
+  {
+    "id": 24479,
+    "name": "Install Filter*",
+    "code": false,
+    "quantity_available": 0.0,
+    "category": "1. Service - Parent / 3. Cleanliness",
+    "type": "consu"
+  },
+  {
+    "id": 24478,
+    "name": "Repair flue Pipe",
+    "code": false,
+    "quantity_available": 0.0,
+    "category": "Misc.",
+    "type": "consu"
+  },
+  {
+    "id": 24477,
+    "name": "Single Outlet",
+    "code": false,
+    "quantity_available": 0.0,
+    "category": "Misc.",
+    "type": "consu"
+  },
+  {
+    "id": 24476,
+    "name": "REPAIRS-PAY-LTH ",
+    "code": false,
+    "quantity_available": 0.0,
+    "category": "HVAC SERVICES / REPAIRS / PAYROLL ENGINES",
+    "type": "service"
+  },
+  {
+    "id": 24475,
+    "name": "GOODMAN-AC-4T-14.3-FULL-INSTALL ",
+    "code": false,
+    "quantity_available": 0.0,
+    "category": "HVAC SERVICES / INSTALLATION / RESIDENTIAL INSTALLS / GOODMAN FULL SYSTEMS / AC SPLIT SYSTEMS / 3 Ton",
+    "type": "consu"
+  },
+  {
+    "id": 24474,
+    "name": "equip test kit",
+    "code": false,
+    "quantity_available": 0.0,
+    "category": "Misc.",
+    "type": "consu"
+  }
+]

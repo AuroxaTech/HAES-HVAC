@@ -20,9 +20,17 @@ Comprehensive testing protocol to verify all AI voice agent functionality, 4-bra
 
 ### Test Phone Numbers
 
-**Primary Test Number:** +1 (855) 768-3265 (Existing Twilio)  
+**Customer Line (Riley Customer - Inbound):**
+- **Test Number:** +1 (972) 597-1644 (8x8 forwarded)
+- **Production Number:** (972) 372-4458 (To be ported)
+- **Purpose:** Customer-facing calls (Sections 1-6, 8-11)
+- **Tools:** 17 customer-facing tools
 
-**Production Number:** (972) 372-4458 (To be ported)
+**Internal OPS Line (Riley OPS):**
+- **Test Number:** +1 (855) 768-3265 (Twilio)
+- **Purpose:** Internal employee calls (Section 7: Internal OPS Tools)
+- **Tools:** 6 internal_ops tools (ivr_close_sale, payroll_inquiry, onboarding_inquiry, hiring_inquiry, inventory_inquiry, purchase_request)
+- **Access:** RBAC enforced - only authorized employees (Technicians, HR, Managers, Executives, Admins)
 
 ### Test Contacts (Use REAL Phone Numbers)
 
@@ -1316,12 +1324,15 @@ Call and say: "I'm very upset about the service I received"
 
 ### Test 5.2: ConversionFlow™ - IVR Closing System
 
+**Note:** This test covers the business workflow. For detailed technical testing of the `ivr_close_sale` tool, see **Section 7.1: ConversionFlow™ - IVR Close Sale (Technician Tool)**.
+
 **Test Steps:**
 
 1. Simulate: Tech identifies install candidate
-2. Tech calls IVR "Close Line"
-3. AI presents proposal to customer
-4. Customer voice-approves
+2. Tech calls Internal OPS Line (+1-855-768-3265)
+3. Tech uses `ivr_close_sale` tool with Quote/Lead ID
+4. AI processes sale closing in Odoo
+5. Customer voice-approves (if applicable)
 
 **Expected IVR Flow:**
 
@@ -1333,11 +1344,11 @@ Call and say: "I'm very upset about the service I received"
 
 **Expected in Odoo:**
 
-- ✅ Pipeline: Quote Approved - Waiting for Parts
-- ✅ Recording stored
+- ✅ sale.order state updated to "sale" via `action_confirm()`
+- ✅ crm.lead stage updated to "Won" (if lead-based)
+- ✅ Chatter note created with full audit trail
 - ✅ Financing selection recorded
-- ✅ Consent captured
-- ✅ Signature capture
+- ✅ Deposit amount recorded
 - ✅ Install crew auto-dispatched
 
 **Controls Verified:**
@@ -1345,6 +1356,7 @@ Call and say: "I'm very upset about the service I received"
 - ✅ No field discounting
 - ✅ Auto financing enforcement
 - ✅ All closings logged
+- ✅ RBAC enforced (only authorized technicians/managers)
 
 **Actual Results:**
 
@@ -1613,7 +1625,263 @@ Expected: Qualified as COLD, nurture automation
 
 ---
 
-## 💬 SECTION 7: WEBSITE CHAT BOT TESTS
+## 🔧 SECTION 7: INTERNAL OPS TOOLS TESTS
+
+**CRITICAL:** These tests use the **Internal OPS Line: +1 (855) 768-3265** (Riley OPS assistant)
+
+**Access Control:** Only authorized internal employees (Technicians, HR, Managers, Executives, Admins) can access these tools. RBAC is enforced by phone number lookup in Odoo `hr.employee` records.
+
+---
+
+### Test 7.1: ConversionFlow™ - IVR Close Sale (Technician Tool)
+
+**Test Steps:**
+
+1. Technician calls Internal OPS Line from authorized phone number
+2. Technician says: "I need to close a sale"
+3. AI prompts for: Quote ID or Lead ID
+4. Technician provides: Quote/Lead ID, Proposal selection (Good/Better/Best), Financing option, Deposit amount
+5. AI processes sale closing
+
+**Expected Behavior:**
+
+- ✅ AI routes to REVENUE-BRAIN via `ivr_close_sale` tool
+- ✅ AI confirms quote/lead found in Odoo
+- ✅ AI updates sale.order state to "sale" via `action_confirm()`
+- ✅ AI updates crm.lead stage to "Won" if applicable
+- ✅ AI creates chatter note with full audit trail
+- ✅ AI records: Proposal selection, Financing option, Deposit amount
+- ✅ AI triggers install crew dispatch if applicable
+- ✅ AI provides confirmation to technician
+
+**Expected in Odoo:**
+
+- ✅ sale.order state changed from "draft" to "sale"
+- ✅ crm.lead stage updated to "Won" (if lead-based)
+- ✅ Chatter note created with timestamp and details
+- ✅ All fields updated correctly
+
+**RBAC Verification:**
+
+- ✅ Technician role: ✅ Allowed
+- ✅ Manager role: ✅ Allowed
+- ✅ Customer role: ❌ Denied (should receive "unauthorized" message)
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 7.2: Payroll Inquiry (HR Tool)
+
+**Test Steps:**
+
+1. Employee calls Internal OPS Line from authorized phone number
+2. Employee says: "I have a question about my payroll"
+3. AI prompts for: Employee email (optional, can identify by phone)
+4. Employee provides: Email or confirms identity
+5. AI provides payroll information
+
+**Expected Behavior:**
+
+- ✅ AI routes to PEOPLE-BRAIN via `payroll_inquiry` tool
+- ✅ AI identifies employee by phone number or email
+- ✅ AI provides: Pay period info, Commission details, Payment schedule
+- ✅ AI remains professional and confidential
+- ✅ AI does NOT provide sensitive financial details without verification
+
+**RBAC Verification:**
+
+- ✅ HR role: ✅ Allowed
+- ✅ Manager role: ✅ Allowed
+- ✅ Technician role: ✅ Allowed (own payroll only)
+- ✅ Customer role: ❌ Denied
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 7.3: Onboarding Inquiry (HR Tool)
+
+**Test Steps:**
+
+1. New employee calls Internal OPS Line
+2. Employee says: "I have questions about onboarding"
+3. AI provides onboarding information
+
+**Expected Behavior:**
+
+- ✅ AI routes to PEOPLE-BRAIN via `onboarding_inquiry` tool
+- ✅ AI provides: Onboarding checklist, Training schedule, Required documents
+- ✅ AI can identify employee by phone number (optional email)
+- ✅ AI offers to connect with HR if needed
+
+**RBAC Verification:**
+
+- ✅ HR role: ✅ Allowed
+- ✅ Manager role: ✅ Allowed
+- ✅ New employee: ✅ Allowed
+- ✅ Customer role: ❌ Denied
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 7.4: Hiring Inquiry (HR Tool)
+
+**Test Steps:**
+
+1. HR or Manager calls Internal OPS Line
+2. Caller says: "I need information about hiring"
+3. AI provides hiring information
+
+**Expected Behavior:**
+
+- ✅ AI routes to PEOPLE-BRAIN via `hiring_inquiry` tool
+- ✅ AI provides: Current job openings, Hiring requirements, Application process
+- ✅ AI can provide general information about positions
+- ✅ AI offers to connect with HR for specific questions
+
+**RBAC Verification:**
+
+- ✅ HR role: ✅ Allowed
+- ✅ Manager role: ✅ Allowed
+- ✅ Executive role: ✅ Allowed
+- ✅ Customer role: ❌ Denied
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 7.5: Inventory Inquiry (Operations Tool)
+
+**Test Steps:**
+
+1. Technician or Manager calls Internal OPS Line
+2. Caller says: "I need to check inventory"
+3. AI prompts for: Part name
+4. Caller provides: Part name (e.g., "compressor", "refrigerant R-410A")
+5. AI provides inventory information
+
+**Expected Behavior:**
+
+- ✅ AI routes to CORE-BRAIN via `inventory_inquiry` tool
+- ✅ AI searches Odoo `product.product` for matching parts
+- ✅ AI provides: Part name, Stock quantity, Location, Part number
+- ✅ AI handles partial matches and suggests alternatives if exact match not found
+- ✅ AI provides real-time inventory data from Odoo
+
+**Expected in Odoo:**
+
+- ✅ Query searches `product.product` model
+- ✅ Returns accurate stock quantities
+- ✅ Handles out-of-stock gracefully
+
+**RBAC Verification:**
+
+- ✅ Technician role: ✅ Allowed
+- ✅ Manager role: ✅ Allowed
+- ✅ Operations role: ✅ Allowed
+- ✅ Customer role: ❌ Denied
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 7.6: Purchase Request (Operations Tool)
+
+**Test Steps:**
+
+1. Technician or Manager calls Internal OPS Line
+2. Caller says: "I need to request a purchase"
+3. AI prompts for: Customer name, Phone, Part name, Quantity
+4. Caller provides: All required information
+5. AI creates purchase request
+
+**Expected Behavior:**
+
+- ✅ AI routes to CORE-BRAIN via `purchase_request` tool
+- ✅ AI collects: Customer name, Phone number, Part name, Quantity
+- ✅ AI validates part exists in inventory
+- ✅ AI creates purchase request in Odoo
+- ✅ AI provides confirmation and tracking info
+
+**Expected in Odoo:**
+
+- ✅ Purchase request created
+- ✅ Linked to customer if exists
+- ✅ Part information validated
+- ✅ Quantity recorded
+- ✅ Status: "Requested" or "Pending Approval"
+
+**RBAC Verification:**
+
+- ✅ Technician role: ✅ Allowed
+- ✅ Manager role: ✅ Allowed
+- ✅ Operations role: ✅ Allowed
+- ✅ Customer role: ❌ Denied
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+### Test 7.7: RBAC Enforcement - Unauthorized Access
+
+**Test Steps:**
+
+1. Call Internal OPS Line from unauthorized phone number (customer number)
+2. Attempt to use any internal_ops tool
+3. Verify access is denied
+
+**Expected Behavior:**
+
+- ✅ AI recognizes caller as "customer" role
+- ✅ AI responds: "I'm sorry, this tool is only available to authorized employees"
+- ✅ AI offers to transfer to customer service line
+- ✅ No internal tool execution occurs
+- ✅ Attempt is logged for security audit
+
+**Tools to Test:**
+
+- ❌ `ivr_close_sale` - Should be denied
+- ❌ `payroll_inquiry` - Should be denied
+- ❌ `onboarding_inquiry` - Should be denied
+- ❌ `hiring_inquiry` - Should be denied
+- ❌ `inventory_inquiry` - Should be denied
+- ❌ `purchase_request` - Should be denied
+
+**Actual Results:**
+
+**PASS / FAIL:** [ ]
+
+**Issues Found:**
+
+---
+
+## 💬 SECTION 8: WEBSITE CHAT BOT TESTS
 
 ### Test 7.1: Chat Widget Appearance
 
@@ -1733,7 +2001,7 @@ Expected: Qualified as COLD, nurture automation
 
 ---
 
-## 🔍 SECTION 8: EDGE CASES & ERROR HANDLING
+## 🔍 SECTION 9: EDGE CASES & ERROR HANDLING
 
 ### Test 8.1: Call Interruption / Dropped Call
 
@@ -1903,7 +2171,7 @@ Expected: Qualified as COLD, nurture automation
 
 ---
 
-## 📈 SECTION 9: PERFORMANCE & QUALITY METRICS
+## 📈 SECTION 10: PERFORMANCE & QUALITY METRICS
 
 ### Test 9.1: Response Time
 
@@ -2022,7 +2290,7 @@ Expected: Qualified as COLD, nurture automation
 
 ---
 
-## 🎯 SECTION 10: FINAL ACCEPTANCE CRITERIA
+## 🎯 SECTION 11: FINAL ACCEPTANCE CRITERIA
 
 ### Critical Requirements (All Must Pass)
 

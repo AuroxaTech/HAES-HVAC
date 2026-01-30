@@ -368,7 +368,6 @@ todos:
     status: completed
     dependencies:
       - implement_conversionflow_ivr_close
-    notes: "Fixed partner_phone/partner_email field errors, implemented action_confirm() for readonly state field, improved error extraction, tested with real Odoo data (100% pass rate)"
   - id: enhance_duplicate_call_ux
     content: Enhance duplicate call UX - recognize returning customer, friendly message, reference existing appointment, prevent duplicate leads (Test 8.7)
     status: completed
@@ -412,7 +411,6 @@ todos:
     status: completed
     dependencies:
       - implement_conversionflow_ivr_close
-    notes: "Tool fully functional, tested with 40+ scenarios, 100% pass rate, production-ready. Fixed invalid field names, implemented proper state updates, comprehensive error handling."
 isProject: false
 ---
 
@@ -483,123 +481,94 @@ src/vapi/tools/
 ### OPS-BRAIN Tools (6 tools)
 
 1. **create_service_request**
-
-   - Purpose: Create emergency or standard service request (including warranty claims)
-   - Parameters: customer_name, phone, email, address, issue_description, urgency, system_type, indoor_temperature_f, property_type, is_warranty (optional), previous_service_id (optional), previous_technician_id (optional)
-   - Handler: `_handle_service_request` from `src/brains/ops/handlers.py` (enhanced for warranty handling)
-   - Creates: Odoo CRM lead with emergency tagging, technician assignment
-   - Warranty handling: When `is_warranty=true`, looks up service history, assigns to same technician, sets priority to 2nd highest, waives diagnostic fee
-   - Service area validation: Validates address is within 35-mile radius before creating lead
-
+  - Purpose: Create emergency or standard service request (including warranty claims)
+  - Parameters: customer_name, phone, email, address, issue_description, urgency, system_type, indoor_temperature_f, property_type, is_warranty (optional), previous_service_id (optional), previous_technician_id (optional)
+  - Handler: `_handle_service_request` from `src/brains/ops/handlers.py` (enhanced for warranty handling)
+  - Creates: Odoo CRM lead with emergency tagging, technician assignment
+  - Warranty handling: When `is_warranty=true`, looks up service history, assigns to same technician, sets priority to 2nd highest, waives diagnostic fee
+  - Service area validation: Validates address is within 35-mile radius before creating lead
 2. **schedule_appointment**
-
-   - Purpose: Schedule a new appointment
-   - Parameters: customer_name, phone, email, address, service_type, preferred_time_windows, problem_description, property_type
-   - Handler: `_handle_schedule_appointment` from `src/brains/ops/handlers.py`
-   - Creates: Odoo calendar event, links to CRM lead
-   - Service area validation: Validates address is within 35-mile radius before creating appointment
-
+  - Purpose: Schedule a new appointment
+  - Parameters: customer_name, phone, email, address, service_type, preferred_time_windows, problem_description, property_type
+  - Handler: `_handle_schedule_appointment` from `src/brains/ops/handlers.py`
+  - Creates: Odoo calendar event, links to CRM lead
+  - Service area validation: Validates address is within 35-mile radius before creating appointment
 3. **check_availability**
-
-   - Purpose: Check next available appointment slots
-   - Parameters: service_type, preferred_date (optional), property_type
-   - Handler: New handler or extend `_handle_schedule_appointment` with availability-only mode
-   - Returns: List of available time slots
-
+  - Purpose: Check next available appointment slots
+  - Parameters: service_type, preferred_date (optional), property_type
+  - Handler: New handler or extend `_handle_schedule_appointment` with availability-only mode
+  - Returns: List of available time slots
 4. **reschedule_appointment**
-
-   - Purpose: Reschedule existing appointment
-   - Parameters: customer_name, phone, address, preferred_time_windows, appointment_id (optional)
-   - Handler: `_handle_reschedule_appointment` from `src/brains/ops/handlers.py`
-   - Updates: Odoo calendar event, sends confirmation
-
+  - Purpose: Reschedule existing appointment
+  - Parameters: customer_name, phone, address, preferred_time_windows, appointment_id (optional)
+  - Handler: `_handle_reschedule_appointment` from `src/brains/ops/handlers.py`
+  - Updates: Odoo calendar event, sends confirmation
 5. **cancel_appointment**
-
-   - Purpose: Cancel existing appointment
-   - Parameters: customer_name, phone, address, appointment_id (optional), cancellation_reason (optional)
-   - Handler: `_handle_cancel_appointment` from `src/brains/ops/handlers.py`
-   - Updates: Odoo calendar event (set active=False), updates CRM lead
-
+  - Purpose: Cancel existing appointment
+  - Parameters: customer_name, phone, address, appointment_id (optional), cancellation_reason (optional)
+  - Handler: `_handle_cancel_appointment` from `src/brains/ops/handlers.py`
+  - Updates: Odoo calendar event (set active=False), updates CRM lead
 6. **check_appointment_status**
-
-   - Purpose: Check status of existing appointment
-   - Parameters: customer_name, phone, address, appointment_id (optional)
-   - Handler: `_handle_status_update` from `src/brains/ops/handlers.py`
-   - Returns: Appointment details, technician info, ETA
+  - Purpose: Check status of existing appointment
+  - Parameters: customer_name, phone, address, appointment_id (optional)
+  - Handler: `_handle_status_update` from `src/brains/ops/handlers.py`
+  - Returns: Appointment details, technician info, ETA
 
 ### REVENUE-BRAIN Tools (3 tools)
 
-7. **request_quote**
-
-   - Purpose: Request installation/equipment quote
-   - Parameters: customer_name, phone, email, address, property_type, square_footage, system_age_years, budget_range, timeline, system_type (optional)
-   - Handler: `_handle_quote_request` from `src/brains/revenue/handlers.py`
-   - Creates: Odoo CRM lead with qualification (hot/warm/cold), assigns to sales team
-
-8. **check_lead_status**
-
-   - Purpose: Check status of existing quote/lead
-   - Parameters: customer_name, phone, email, lead_id (optional)
-   - Handler: New handler to lookup CRM lead in Odoo
-   - Returns: Lead status, pipeline stage, quote details
-
-9. **request_membership_enrollment**
-
-   - Purpose: Request maintenance membership enrollment
-   - Parameters: customer_name, phone, email, address, property_type, membership_type (basic/commercial), system_details (optional)
-   - Handler: New handler in REVENUE-BRAIN (or extend `_handle_quote_request` with membership type)
-   - Creates: Odoo CRM lead with "Membership Inquiry" type
-   - Explains: Plans ($279 basic, $379 commercial) and benefits
-   - Starts: Enrollment flow (sends contract via SMS/email, payment link, enrollment confirmation)
-   - Note: Can use `get_maintenance_plans` utility tool first to explain plans, then this tool to create lead and start enrollment
+1. **request_quote**
+  - Purpose: Request installation/equipment quote
+  - Parameters: customer_name, phone, email, address, property_type, square_footage, system_age_years, budget_range, timeline, system_type (optional)
+  - Handler: `_handle_quote_request` from `src/brains/revenue/handlers.py`
+  - Creates: Odoo CRM lead with qualification (hot/warm/cold), assigns to sales team
+2. **check_lead_status**
+  - Purpose: Check status of existing quote/lead
+  - Parameters: customer_name, phone, email, lead_id (optional)
+  - Handler: New handler to lookup CRM lead in Odoo
+  - Returns: Lead status, pipeline stage, quote details
+3. **request_membership_enrollment**
+  - Purpose: Request maintenance membership enrollment
+  - Parameters: customer_name, phone, email, address, property_type, membership_type (basic/commercial), system_details (optional)
+  - Handler: New handler in REVENUE-BRAIN (or extend `_handle_quote_request` with membership type)
+  - Creates: Odoo CRM lead with "Membership Inquiry" type
+  - Explains: Plans ($279 basic, $379 commercial) and benefits
+  - Starts: Enrollment flow (sends contract via SMS/email, payment link, enrollment confirmation)
+  - Note: Can use `get_maintenance_plans` utility tool first to explain plans, then this tool to create lead and start enrollment
 
 ### CORE-BRAIN Tools (7 tools)
 
-9. **billing_inquiry**
-
-   - Purpose: Check billing information and outstanding balance
-   - Parameters: customer_name, phone, email, invoice_number (optional)
-   - Handler: `_handle_billing_inquiry` from `src/brains/core/handlers.py`
-   - Returns: Balance, due date, payment methods, late fees
-
-10. **payment_terms_inquiry**
-
-    - Purpose: Get payment terms for customer segment
+1. **billing_inquiry**
+  - Purpose: Check billing information and outstanding balance
+  - Parameters: customer_name, phone, email, invoice_number (optional)
+  - Handler: `_handle_billing_inquiry` from `src/brains/core/handlers.py`
+  - Returns: Balance, due date, payment methods, late fees
+2. **payment_terms_inquiry**
+  - Purpose: Get payment terms for customer segment
     - Parameters: customer_name, phone, email, property_type (optional)
     - Handler: `_handle_payment_terms_inquiry` from `src/brains/core/handlers.py`
     - Returns: Payment terms, due days, late fee policy
-
-11. **invoice_request**
-
-    - Purpose: Request invoice copy or send invoice
+3. **invoice_request**
+  - Purpose: Request invoice copy or send invoice
     - Parameters: customer_name, phone, email, invoice_number (optional)
     - Handler: `_handle_invoice_request` from `src/brains/core/handlers.py`
     - Returns: Invoice details, sends email if configured
-
-12. **inventory_inquiry**
-
-    - Purpose: Check parts/equipment availability
+4. **inventory_inquiry**
+  - Purpose: Check parts/equipment availability
     - Parameters: part_name, part_number (optional), quantity (optional)
     - Handler: `_handle_inventory_inquiry` from `src/brains/core/handlers.py`
     - Returns: Inventory status, availability, reorder info
-
-13. **purchase_request**
-
-    - Purpose: Request parts/equipment purchase
+5. **purchase_request**
+  - Purpose: Request parts/equipment purchase
     - Parameters: customer_name, phone, part_name, part_number, quantity, urgency
     - Handler: `_handle_purchase_request` from `src/brains/core/handlers.py`
     - Creates: Purchase order request in Odoo (if approved)
-
-14. **get_pricing**
-
-    - Purpose: Get service pricing for customer type
+6. **get_pricing**
+  - Purpose: Get service pricing for customer type
     - Parameters: property_type, service_type, urgency (optional), is_weekend (optional), is_after_hours (optional)
     - Handler: New handler using `calculate_service_pricing` from `src/brains/core/handlers.py`
     - Returns: Pricing tier, diagnostic fee, trip charge, premiums
-
-15. **create_complaint**
-
-    - Purpose: Create complaint/escalation ticket
+7. **create_complaint**
+  - Purpose: Create complaint/escalation ticket
     - Parameters: customer_name, phone, email, complaint_details, service_date (optional), service_id (optional)
     - Handler: New handler in CORE-BRAIN (or extend existing handler)
     - Creates: Escalation ticket in Odoo, notifies management (Junior + Linda)
@@ -608,46 +577,36 @@ src/vapi/tools/
 
 ### PEOPLE-BRAIN Tools (3 tools)
 
-15. **hiring_inquiry**
-
-    - Purpose: Get hiring information and requirements
+1. **hiring_inquiry**
+  - Purpose: Get hiring information and requirements
     - Parameters: None (general inquiry)
     - Handler: `_handle_hiring_inquiry` from `src/brains/people/handlers.py`
     - Returns: Hiring requirements, interview stages, approval process
-
-16. **onboarding_inquiry**
-
-    - Purpose: Get onboarding checklist and training info
+2. **onboarding_inquiry**
+  - Purpose: Get onboarding checklist and training info
     - Parameters: employee_email (optional), employee_name (optional)
     - Handler: `_handle_onboarding_inquiry` from `src/brains/people/handlers.py`
     - Returns: Onboarding checklist, training program details
-
-17. **payroll_inquiry**
-
-    - Purpose: Get payroll/commission information
+3. **payroll_inquiry**
+  - Purpose: Get payroll/commission information
     - Parameters: employee_email, employee_name (optional)
     - Handler: `_handle_payroll_inquiry` from `src/brains/people/handlers.py`
     - Returns: Payroll summary, commission rules, pay period info
 
 ### Utility Tools (3 tools)
 
-18. **check_business_hours**
-
-    - Purpose: Check if currently business hours
+1. **check_business_hours**
+  - Purpose: Check if currently business hours
     - Parameters: None
     - Handler: New utility function
     - Returns: Is business hours, current time, next business day
-
-19. **get_service_area_info**
-
-    - Purpose: Get service area coverage information
+2. **get_service_area_info**
+  - Purpose: Get service area coverage information
     - Parameters: zip_code (optional), address (optional)
     - Handler: New utility function
     - Returns: Service area coverage, zone info, technician availability
-
-20. **get_maintenance_plans**
-
-    - Purpose: Get maintenance plan information and pricing
+3. **get_maintenance_plans**
+  - Purpose: Get maintenance plan information and pricing
     - Parameters: property_type (optional)
     - Handler: New utility function using CORE pricing catalog
     - Returns: Plan options, pricing, benefits, enrollment info
@@ -717,48 +676,33 @@ Create JSON schema files in `doc/vapi/tools/`:
 ## Migration Strategy
 
 1. **Phase 1: Create tool infrastructure**
-
-   - Create `src/vapi/tools/` directory structure
-   - Implement base tool handler
-   - Create tool registry
-
+  - Create `src/vapi/tools/` directory structure
+  - Implement base tool handler
+  - Create tool registry
 2. **Phase 2: Implement OPS tools (highest priority)**
-
-   - Service request tool
-   - Appointment tools (schedule, reschedule, cancel, check status, check availability)
-   - Test with real Vapi calls
-
+  - Service request tool
+  - Appointment tools (schedule, reschedule, cancel, check status, check availability)
+  - Test with real Vapi calls
 3. **Phase 3: Implement REVENUE tools**
-
-   - Quote request tool
-   - Lead status tool
-   - Membership enrollment tool
-
+  - Quote request tool
+  - Lead status tool
+  - Membership enrollment tool
 4. **Phase 4: Implement CORE tools**
-
-   - Billing, payment terms, invoice tools
-   - Pricing tool
-   - Inventory and purchase tools
-
+  - Billing, payment terms, invoice tools
+  - Pricing tool
+  - Inventory and purchase tools
 5. **Phase 5: Implement PEOPLE tools**
-
-   - Hiring, onboarding, payroll tools
-
+  - Hiring, onboarding, payroll tools
 6. **Phase 6: Implement utility tools**
-
-   - Business hours, service area, maintenance plans
-
+  - Business hours, service area, maintenance plans
 7. **Phase 7: Update Vapi configuration**
-
-   - Deploy all tool schemas to Vapi
-   - Update assistant configuration
-   - Update system prompt to reference specific tools
-
+  - Deploy all tool schemas to Vapi
+  - Update assistant configuration
+  - Update system prompt to reference specific tools
 8. **Phase 8: Deprecate hael_route (optional)**
-
-   - Keep for backward compatibility initially
-   - Monitor usage
-   - Remove after full migration
+  - Keep for backward compatibility initially
+  - Monitor usage
+  - Remove after full migration
 
 ## Key Design Decisions
 
@@ -909,95 +853,71 @@ Create JSON schema files in `doc/vapi/tools/`:
 ### Tool Response Enhancements
 
 1. **request_quote tool**:
-
-   - Include financing options (Greensky, FTL, Microft) in response
-   - Include price range based on system type in response
-   - Reference KB for detailed financing information
-
+  - Include financing options (Greensky, FTL, Microft) in response
+  - Include price range based on system type in response
+  - Reference KB for detailed financing information
 2. **get_pricing tool**:
-
-   - Accept `customer_type` parameter (Retail, Default-PM, Commercial, Com-Lessen, Hotels/Multi)
-   - Return complete pricing matrix including trip charges and premiums
-   - Format response for AI to read naturally
-
+  - Accept `customer_type` parameter (Retail, Default-PM, Commercial, Com-Lessen, Hotels/Multi)
+  - Return complete pricing matrix including trip charges and premiums
+  - Format response for AI to read naturally
 3. **billing_inquiry tool**:
-
-   - Include payment terms based on customer type
-   - Include late fee information (1% if overdue)
-   - Format response with all payment methods
-
+  - Include payment terms based on customer type
+  - Include late fee information (1% if overdue)
+  - Format response with all payment methods
 4. **create_service_request tool**:
-
-   - Check business hours and apply after-hours premium messaging
-   - Check if weekend and apply weekend messaging
-   - Include warranty terms in response when `is_warranty=true` (30-day labor, 1-year equipment)
-   - Return polite rejection for out-of-service area with expansion offer
-
+  - Check business hours and apply after-hours premium messaging
+  - Check if weekend and apply weekend messaging
+  - Include warranty terms in response when `is_warranty=true` (30-day labor, 1-year equipment)
+  - Return polite rejection for out-of-service area with expansion offer
 5. **schedule_appointment tool**:
-
-   - Check business hours and adjust messaging
-   - Check if weekend and apply weekend messaging
-   - Return polite rejection for out-of-service area
-
+  - Check business hours and adjust messaging
+  - Check if weekend and apply weekend messaging
+  - Return polite rejection for out-of-service area
 6. **cancel_appointment tool**:
-
-   - Apply cancellation policy if applicable
-   - Include cancellation policy details in response
+  - Apply cancellation policy if applicable
+  - Include cancellation policy details in response
 
 ### System Prompt Updates
 
 1. **Prohibited Phrases Enforcement**:
-
-   - Add explicit list of prohibited phrases to system prompt
-   - Include examples of what NOT to say for complaints
-   - Reference `doc/vapi/kb/ops_intake_and_call_policy.md` for detailed guidance
-
+  - Add explicit list of prohibited phrases to system prompt
+  - Include examples of what NOT to say for complaints
+  - Reference `doc/vapi/kb/ops_intake_and_call_policy.md` for detailed guidance
 2. **After-Hours/Weekend Messaging**:
-
-   - Add specific messaging templates for after-hours calls
-   - Add specific messaging templates for weekend calls
-   - Include emergency vs non-emergency handling guidance
-
+  - Add specific messaging templates for after-hours calls
+  - Add specific messaging templates for weekend calls
+  - Include emergency vs non-emergency handling guidance
 3. **Technical Question Detection**:
-
-   - Add guidance for detecting complex technical questions
-   - Add instructions for transferring to human or creating callback task
-   - Include prohibited phrases for technical questions
+  - Add guidance for detecting complex technical questions
+  - Add instructions for transferring to human or creating callback task
+  - Include prohibited phrases for technical questions
 
 ### New Utility Tools/Features
 
 1. **transfer_to_human** (optional utility tool):
-
-   - Purpose: Initiate transfer to human customer service
-   - Parameters: reason (optional), urgency (optional)
-   - Handler: Uses Vapi transfer capability or creates callback task
-   - Returns: Transfer status or callback confirmation
-
+  - Purpose: Initiate transfer to human customer service
+  - Parameters: reason (optional), urgency (optional)
+  - Handler: Uses Vapi transfer capability or creates callback task
+  - Returns: Transfer status or callback confirmation
 2. **SMS Fallback Mechanism** (in `src/api/vapi_server.py`):
-
-   - Detect incomplete calls (call ended before completion)
-   - Create partial lead with "Incomplete" status
-   - Send SMS: "Thanks for calling HVACR FINEST. We'd love to help! Please reply with your service needs or call us back at (972) 372-4458."
-   - Create follow-up task in Odoo
-   - Notify dispatch team
+  - Detect incomplete calls (call ended before completion)
+  - Create partial lead with "Incomplete" status
+  - Send SMS: "Thanks for calling HVACR FINEST. We'd love to help! Please reply with your service needs or call us back at (972) 372-4458."
+  - Create follow-up task in Odoo
+  - Notify dispatch team
 
 ### Knowledge Base Updates
 
 1. **Financing Information** (`doc/vapi/kb/customer_faq.md`):
-
-   - Add detailed information about Greensky, FTL, Microft
-   - Include approval process and terms
-   - Reference in `request_quote` tool response
-
+  - Add detailed information about Greensky, FTL, Microft
+  - Include approval process and terms
+  - Reference in `request_quote` tool response
 2. **Warranty Terms** (`doc/vapi/kb/policies.md` or `customer_faq.md`):
-
-   - Add specific warranty terms: Repairs - 30-day labor warranty, Equipment - 1-year labor warranty
-   - Reference in `create_service_request` tool response when warranty claim
-
+  - Add specific warranty terms: Repairs - 30-day labor warranty, Equipment - 1-year labor warranty
+  - Reference in `create_service_request` tool response when warranty claim
 3. **Cancellation Policy** (`doc/vapi/kb/policies.md`):
-
-   - Add cancellation policy details
-   - Reference in `cancel_appointment` tool response
+  - Add cancellation policy details
+  - Reference in `cancel_appointment` tool response
 
 ## Test Coverage Analysis (Tests 2.1-2.5: HAEL Routing Tests)
 
@@ -1229,10 +1149,10 @@ dependencies: [implement_revenue_quote]
 
 - ⚠️ **Partially Covered**: `send_emergency_staff_notification` exists for emergency leads
 - ❌ **Gap**: No general lead notification function for non-emergency leads
-- ❌ **Gap**: Recipients may not include all required: Junior, Linda, Dispatch Team, info@hvacrfinest.com
+- ❌ **Gap**: Recipients may not include all required: Junior, Linda, Dispatch Team, [info@hvacrfinest.com](mailto:info@hvacrfinest.com)
 - ❌ **Gap**: Email content may not include all required fields: Customer name, Phone, Address, Service type, Priority level, Assigned technician, Link to Odoo lead
 - **Fix**: Create `send_new_lead_notification` function in `src/integrations/email_notifications.py` that:
-  - Sends to: Junior, Linda, Dispatch Team, info@hvacrfinest.com
+  - Sends to: Junior, Linda, Dispatch Team, [info@hvacrfinest.com](mailto:info@hvacrfinest.com)
   - Includes all required fields in email body
   - Includes link to Odoo lead
   - Called from `create_service_request` and `schedule_appointment` tools after lead creation
@@ -1617,7 +1537,7 @@ dependencies: [implement_people_payroll]
 - ⚠️ **Gap**: Lead source may not be set to "Website Chat" (currently uses `LeadSource.PHONE` or `LeadSource.WEBSITE` based on channel)
 - ⚠️ **Gap**: Lead creation may not happen immediately (within 60 seconds) - depends on brain handler
 - ✅ **Covered**: Auto-assignment logic exists in brain handlers
-- ⚠️ **Gap**: Notifications may not be sent to all required recipients (Dispatch Team, Linda, info@hvacrfinest.com)
+- ⚠️ **Gap**: Notifications may not be sent to all required recipients (Dispatch Team, Linda, [info@hvacrfinest.com](mailto:info@hvacrfinest.com))
 - **Fix**: 
   - Ensure `LeadSource.WEBSITE` is used for chat messages (already handled via `Channel.CHAT`)
   - Verify lead creation happens immediately in brain handlers
@@ -1668,7 +1588,7 @@ dependencies: [implement_ops_service_request, implement_revenue_quote]
 
 - id: enhance_chat_lead_notifications
 
-content: Ensure chat lead creation sends notifications to Dispatch Team, Linda, and info@hvacrfinest.com (Test 7.3)
+content: Ensure chat lead creation sends notifications to Dispatch Team, Linda, and [info@hvacrfinest.com](mailto:info@hvacrfinest.com) (Test 7.3)
 
 dependencies: [implement_ops_service_request, implement_revenue_quote]
 

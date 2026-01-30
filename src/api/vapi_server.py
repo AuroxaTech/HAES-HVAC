@@ -793,47 +793,116 @@ async def vapi_server_url(request: Request) -> dict[str, Any]:
                 if not existing:
                     checker.start(VAPI_TOOL_SCOPE, idempotency_key)
                 
-                # Extract caller phone from Vapi message
+                # Extract call context from Vapi message
+                # Vapi can send phone number in multiple locations depending on message type
                 call_obj = message.get("call", {})
-                caller_phone = (
+                call_type = (call_obj.get("type") or "").strip().lower()
+
+                # Web call test mode: use static identity when enabled (for testing internal OPS from Vapi web)
+                settings = get_settings()
+                use_web_test_identity = settings.VAPI_WEB_CALLS_USE_TEST_IDENTITY
+                is_web_call = call_type in ("webcall", "web", "vapi.websocketcall")
+                # Fallback: no phone + test mode enabled → treat as web test (e.g. Vapi web doesn't send type)
+                caller_phone_raw = (
                     call_obj.get("customer", {}).get("number") or
                     call_obj.get("from") or
                     call_obj.get("customerNumber") or
-                    message.get("call", {}).get("customer", {}).get("number")
+                    call_obj.get("phoneNumber") or
+                    call_obj.get("phone") or
+                    message.get("call", {}).get("customer", {}).get("number") or
+                    message.get("from") or
+                    message.get("phoneNumber") or
+                    message.get("phone")
                 )
-                
-                # Identify caller (Layer 1: Hybrid lookup)
-                caller_identity = None
-                if caller_phone:
-                    try:
-                        from src.utils.caller_identification import identify_caller
-                        caller_identity = await identify_caller(caller_phone)
-                        
+                use_web_test = use_web_test_identity and (is_web_call or not caller_phone_raw)
+
+                if use_web_test:
+                    from src.utils.caller_identification import (
+                        CallerIdentity,
+                        CallerRole,
+                        get_permissions_for_role,
+                    )
+                    test_role_str = settings.VAPI_WEB_TEST_ROLE
+                    _WEB_TEST_ROLE_MAP = {
+                        "technician": CallerRole.TECHNICIAN,
+                        "hr": CallerRole.HR,
+                        "billing": CallerRole.BILLING,
+                        "manager": CallerRole.MANAGER,
+                        "dispatch": CallerRole.DISPATCH,
+                        "executive": CallerRole.EXECUTIVE,
+                        "admin": CallerRole.ADMIN,
+                    }
+                    test_role = _WEB_TEST_ROLE_MAP[test_role_str]
+                    caller_identity = CallerIdentity(
+                        phone="web-test",
+                        role=test_role,
+                        employee_id="web-test",
+                        name=f"Web Test ({test_role.value})",
+                        is_active=True,
+                        permissions=get_permissions_for_role(test_role),
+                    )
+                    caller_phone = "web-test"
+                    logger.info(
+                        f"Web call using test identity: role={test_role.value} "
+                        f"(VAPI_WEB_CALLS_USE_TEST_IDENTITY=true, VAPI_WEB_TEST_ROLE={test_role_str})"
+                    )
+                else:
+                    caller_phone = caller_phone_raw
+
+                    # Log extracted phone for debugging
+                    if caller_phone:
                         logger.info(
-                            f"Caller identified: phone={caller_phone[:5] if len(caller_phone) > 5 else caller_phone}***, "
-                            f"role={caller_identity.role.value}, "
-                            f"name={caller_identity.name or 'Unknown'}"
+                            f"Extracted caller phone from Vapi message: "
+                            f"{caller_phone[:5] if len(caller_phone) > 5 else caller_phone}***"
                         )
-                    except Exception as ident_err:
-                        logger.warning(f"Caller identification failed: {ident_err}")
-                        # Continue with default customer role
+                    else:
+                        logger.warning(
+                            f"No caller phone found in Vapi message. "
+                            f"call.type={call_type or 'N/A'}, "
+                            f"Message keys: {list(message.keys())}, "
+                            f"Call keys: {list(call_obj.keys()) if call_obj else 'N/A'}"
+                        )
+                        if call_obj:
+                            logger.debug(f"Call object sample: {str(call_obj)[:200]}")
+
+                    # Identify caller (Layer 1: Hybrid lookup)
+                    caller_identity = None
+                    if caller_phone:
+                        try:
+                            from src.utils.caller_identification import identify_caller
+                            caller_identity = await identify_caller(caller_phone)
+
+                            logger.info(
+                                f"Caller identified: phone={caller_phone[:5] if len(caller_phone) > 5 else caller_phone}***, "
+                                f"role={caller_identity.role.value}, "
+                                f"name={caller_identity.name or 'Unknown'}, "
+                                f"employee_id={caller_identity.employee_id or 'N/A'}"
+                            )
+                        except Exception as ident_err:
+                            logger.warning(
+                                f"Caller identification failed for {caller_phone[:5] if len(caller_phone) > 5 else caller_phone}***: {ident_err}",
+                                exc_info=True
+                            )
+                            from src.utils.caller_identification import CallerIdentity, CallerRole, get_permissions_for_role
+                            caller_identity = CallerIdentity(
+                                phone=caller_phone or "",
+                                role=CallerRole.CUSTOMER,
+                                is_active=True,
+                                permissions=get_permissions_for_role(CallerRole.CUSTOMER),
+                            )
+                    else:
+                        logger.warning(
+                            "No caller phone number available in Vapi message. "
+                            "Defaulting to 'customer' role. Internal OPS tools will be denied."
+                        )
                         from src.utils.caller_identification import CallerIdentity, CallerRole, get_permissions_for_role
                         caller_identity = CallerIdentity(
-                            phone=caller_phone or "",
+                            phone="",
                             role=CallerRole.CUSTOMER,
                             is_active=True,
                             permissions=get_permissions_for_role(CallerRole.CUSTOMER),
                         )
-                else:
-                    # No phone number - default to customer
-                    from src.utils.caller_identification import CallerIdentity, CallerRole, get_permissions_for_role
-                    caller_identity = CallerIdentity(
-                        phone="",
-                        role=CallerRole.CUSTOMER,
-                        is_active=True,
-                        permissions=get_permissions_for_role(CallerRole.CUSTOMER),
-                    )
-                
+
                 # Check access (Layer 3: Permission check)
                 from src.vapi.tools.base import BaseToolHandler
                 handler = BaseToolHandler(tool_name)

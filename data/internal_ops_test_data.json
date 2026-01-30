@@ -1,0 +1,573 @@
+{
+  "_meta": {
+    "description": "Combined real Odoo test data + technician roster for internal OPS tool testing.",
+    "usage": {
+      "ivr_close_sale": "Use odoo_ids.sale_orders[].id or crm_leads[].id as quote_id; proposal_selection: good|better|best",
+      "payroll_inquiry": "Use employees[].work_email as employee_email",
+      "onboarding_inquiry": "Use employees[].work_email (optional)",
+      "hiring_inquiry": "No parameters",
+      "inventory_inquiry": "Use inventory[].name as part_name",
+      "purchase_request": "Use inventory[].name as part_name; provide customer_name, phone, quantity",
+      "roster_caller_id": "Use roster[].phone as caller number to test technician identification on Internal OPS line (+1-855-768-3265)",
+      "web_testing": "To test internal OPS from Vapi web (no phone): in .env set VAPI_WEB_CALLS_USE_TEST_IDENTITY=true and VAPI_WEB_TEST_ROLE=technician (or hr|manager|dispatch|executive|admin). Loaded from src/config/settings.py. Only applies when call is web or has no caller phone. Leave false in production."
+    }
+  },
+  "odoo_ids": {
+    "sale_orders": [
+      {
+        "id": 1235,
+        "name": "S01235",
+        "state": "draft",
+        "partner_id": {
+          "id": 21887,
+          "name": "2. Lessen/ SMS Assist LLC, Da'Jasia McClue - 107 S Getzendaner S"
+        },
+        "amount_total": 171.01
+      },
+      {
+        "id": 1234,
+        "name": "S01234",
+        "state": "sale",
+        "partner_id": {
+          "id": 10505,
+          "name": "2. Lessen/ SMS Assist LLC"
+        },
+        "amount_total": 150.5
+      },
+      {
+        "id": 1233,
+        "name": "S01233",
+        "state": "draft",
+        "partner_id": {
+          "id": 21894,
+          "name": "2. Lessen/ SMS Assist LLC, Christopher Jacobs - 3823 Branch Hollow Cir"
+        },
+        "amount_total": 248.02
+      },
+      {
+        "id": 1232,
+        "name": "S01232",
+        "state": "draft",
+        "partner_id": {
+          "id": 21895,
+          "name": "2. Lessen/ SMS Assist LLC, Tanniesha Franklin - 6919 Cedar Knoll Dr"
+        },
+        "amount_total": 138.03
+      },
+      {
+        "id": 1231,
+        "name": "S01231",
+        "state": "draft",
+        "partner_id": {
+          "id": 10505,
+          "name": "2. Lessen/ SMS Assist LLC"
+        },
+        "amount_total": 138.03
+      },
+      {
+        "id": 1230,
+        "name": "S01230",
+        "state": "sale",
+        "partner_id": {
+          "id": 10505,
+          "name": "2. Lessen/ SMS Assist LLC"
+        },
+        "amount_total": 300.0
+      },
+      {
+        "id": 1229,
+        "name": "S01229",
+        "state": "draft",
+        "partner_id": {
+          "id": 21873,
+          "name": "2. Lessen/ SMS Assist LLC, Jasmine Williams - 2328 Snowdon Dr"
+        },
+        "amount_total": 311.24
+      },
+      {
+        "id": 1228,
+        "name": "S01228",
+        "state": "sale",
+        "partner_id": {
+          "id": 10505,
+          "name": "2. Lessen/ SMS Assist LLC"
+        },
+        "amount_total": 187.5
+      },
+      {
+        "id": 1227,
+        "name": "S01227",
+        "state": "sale",
+        "partner_id": {
+          "id": 10505,
+          "name": "2. Lessen/ SMS Assist LLC"
+        },
+        "amount_total": 150.5
+      },
+      {
+        "id": 1226,
+        "name": "S01226",
+        "state": "sale",
+        "partner_id": {
+          "id": 10505,
+          "name": "2. Lessen/ SMS Assist LLC"
+        },
+        "amount_total": 300.0
+      }
+    ],
+    "crm_leads": [
+      {
+        "id": 2763,
+        "name": "Service Request - 8047",
+        "stage_id": {
+          "id": 1,
+          "name": "New"
+        },
+        "partner_id": {
+          "id": 21897,
+          "name": "L D"
+        },
+        "expected_revenue": 0.0
+      },
+      {
+        "id": 2762,
+        "name": "\ud83d\udea8 URGENT: Complaint/Escalation - Fonda Henson",
+        "stage_id": {
+          "id": 1,
+          "name": "New"
+        },
+        "partner_id": false,
+        "expected_revenue": 0.0
+      },
+      {
+        "id": 2761,
+        "name": "\ud83d\udea8 EMERGENCY: Service Request - 8047",
+        "stage_id": {
+          "id": 1,
+          "name": "New"
+        },
+        "partner_id": {
+          "id": 21892,
+          "name": "Britney"
+        },
+        "expected_revenue": 0.0
+      },
+      {
+        "id": 2760,
+        "name": "Service Request - 4700",
+        "stage_id": {
+          "id": 1,
+          "name": "New"
+        },
+        "partner_id": {
+          "id": 21891,
+          "name": "sibtain"
+        },
+        "expected_revenue": 0.0
+      },
+      {
+        "id": 2759,
+        "name": "\ud83d\udea8 EMERGENCY: Service Request - 4700",
+        "stage_id": {
+          "id": 1,
+          "name": "New"
+        },
+        "partner_id": {
+          "id": 21890,
+          "name": "test"
+        },
+        "expected_revenue": 0.0
+      },
+      {
+        "id": 2758,
+        "name": "\ud83d\udea8 EMERGENCY: Service Request - 4700",
+        "stage_id": {
+          "id": 1,
+          "name": "New"
+        },
+        "partner_id": {
+          "id": 21890,
+          "name": "test"
+        },
+        "expected_revenue": 0.0
+      },
+      {
+        "id": 2757,
+        "name": "Service Request - 5453",
+        "stage_id": {
+          "id": 1,
+          "name": "New"
+        },
+        "partner_id": {
+          "id": 21889,
+          "name": "Fonda Henson"
+        },
+        "expected_revenue": 0.0
+      },
+      {
+        "id": 2756,
+        "name": "Heater is making a really loud noise",
+        "stage_id": {
+          "id": 4,
+          "name": "Won"
+        },
+        "partner_id": {
+          "id": 10225,
+          "name": "Julie Gutierrez"
+        },
+        "expected_revenue": 0.0
+      },
+      {
+        "id": 2755,
+        "name": "\ud83d\udea8 URGENT: Complaint/Escalation - Andrea Sosa",
+        "stage_id": {
+          "id": 4,
+          "name": "Won"
+        },
+        "partner_id": false,
+        "expected_revenue": 0.0
+      },
+      {
+        "id": 2754,
+        "name": "Service Request - 4375",
+        "stage_id": {
+          "id": 4,
+          "name": "Won"
+        },
+        "partner_id": {
+          "id": 21875,
+          "name": "JD"
+        },
+        "expected_revenue": 0.0
+      }
+    ]
+  },
+  "employees": [
+    {
+      "id": 1,
+      "name": "Admin(I)",
+      "work_email": "linda@hvacrfinest.com",
+      "phone": "+1 972-372-4458",
+      "work_phone": "9723724458",
+      "active": true,
+      "job_title": "Technician",
+      "job_id": {
+        "id": 1,
+        "name": "Service Technician"
+      }
+    },
+    {
+      "id": 2,
+      "name": "Office",
+      "work_email": "info@hvacrfinest.com",
+      "phone": "+1 972-372-4458",
+      "work_phone": "9723724458",
+      "active": true,
+      "job_title": "HVAC Office Administrator",
+      "job_id": {
+        "id": 2,
+        "name": "HVAC Office Administrator"
+      }
+    },
+    {
+      "id": 3,
+      "name": "Tech",
+      "work_email": "tm@hvacrfinest.com",
+      "phone": false,
+      "work_phone": "9723724458",
+      "active": true,
+      "job_title": false,
+      "job_id": false
+    },
+    {
+      "id": 7,
+      "name": "Bounthon Dikousman",
+      "work_email": "b.dikousman@yahoo.com",
+      "phone": "+1 972-372-4458",
+      "work_phone": "+1 972-372-4458",
+      "active": true,
+      "job_title": "Field Manager",
+      "job_id": {
+        "id": 4,
+        "name": "Field Manager"
+      }
+    },
+    {
+      "id": 10,
+      "name": "Anna Phaoviseth",
+      "work_email": "phaoviseth@hotmail.com",
+      "phone": "+1 209-602-7865",
+      "work_phone": "2096027865",
+      "active": true,
+      "job_title": "HVAC Office Administrator",
+      "job_id": {
+        "id": 2,
+        "name": "HVAC Office Administrator"
+      }
+    },
+    {
+      "id": 11,
+      "name": "Linda Dikousman",
+      "work_email": "klphaoviseth@gmail.com",
+      "phone": false,
+      "work_phone": "+1 972-372-4458 opt 2",
+      "active": true,
+      "job_title": "HVAC Office Administrator",
+      "job_id": {
+        "id": 2,
+        "name": "HVAC Office Administrator"
+      }
+    },
+    {
+      "id": 14,
+      "name": "Isaiah Calderon",
+      "work_email": "isaiahcalderon214@gmail.com",
+      "phone": false,
+      "work_phone": "+1 972-372-4458",
+      "active": true,
+      "job_title": false,
+      "job_id": false
+    },
+    {
+      "id": 15,
+      "name": "Aubry Ritchie",
+      "work_email": "ritchie74@gmail.com",
+      "phone": "\u202a(910) 238-0011\u202c",
+      "work_phone": "+1 972-372-4458",
+      "active": true,
+      "job_title": "Service Technician",
+      "job_id": {
+        "id": 1,
+        "name": "Service Technician"
+      }
+    }
+  ],
+  "inventory": [
+    {
+      "id": 24493,
+      "name": "Defrost Determination Censor",
+      "code": false,
+      "quantity_available": 0.0,
+      "category": "Misc.",
+      "type": "consu"
+    },
+    {
+      "id": 24492,
+      "name": "Adjust gas pressure",
+      "code": false,
+      "quantity_available": 0.0,
+      "category": "Misc.",
+      "type": "consu"
+    },
+    {
+      "id": 24491,
+      "name": "Replace Fan Motor",
+      "code": false,
+      "quantity_available": 0.0,
+      "category": "1. Service - Parent / 1.Electrical and Parts / Motor",
+      "type": "consu"
+    },
+    {
+      "id": 24490,
+      "name": "Replace Fan Motor",
+      "code": false,
+      "quantity_available": 0.0,
+      "category": "1. Service - Parent / 1.Electrical and Parts / Motor",
+      "type": "consu"
+    },
+    {
+      "id": 24489,
+      "name": "Replace Fan Motor",
+      "code": false,
+      "quantity_available": 0.0,
+      "category": "1. Service - Parent / 1.Electrical and Parts / Motor",
+      "type": "consu"
+    },
+    {
+      "id": 24488,
+      "name": "Replace Fan Motor",
+      "code": false,
+      "quantity_available": 0.0,
+      "category": "1. Service - Parent / 1.Electrical and Parts / Motor",
+      "type": "consu"
+    },
+    {
+      "id": 24487,
+      "name": "Replace Fan Motor",
+      "code": false,
+      "quantity_available": 0.0,
+      "category": "1. Service - Parent / 1.Electrical and Parts / Motor",
+      "type": "consu"
+    },
+    {
+      "id": 24486,
+      "name": "Replace Fan Motor",
+      "code": false,
+      "quantity_available": 0.0,
+      "category": "1. Service - Parent / 1.Electrical and Parts / Motor",
+      "type": "consu"
+    },
+    {
+      "id": 24485,
+      "name": "Replace Fan Motor",
+      "code": false,
+      "quantity_available": 0.0,
+      "category": "1. Service - Parent / 1.Electrical and Parts / Motor",
+      "type": "consu"
+    },
+    {
+      "id": 24484,
+      "name": "Replace Fan Motor",
+      "code": false,
+      "quantity_available": 0.0,
+      "category": "1. Service - Parent / 1.Electrical and Parts / Motor",
+      "type": "consu"
+    },
+    {
+      "id": 24483,
+      "name": "Replace Fan Motor",
+      "code": false,
+      "quantity_available": 0.0,
+      "category": "1. Service - Parent / 1.Electrical and Parts / Motor",
+      "type": "consu"
+    },
+    {
+      "id": 24482,
+      "name": "Replace Fan Motor",
+      "code": false,
+      "quantity_available": 0.0,
+      "category": "1. Service - Parent / 1.Electrical and Parts / Motor",
+      "type": "consu"
+    },
+    {
+      "id": 24481,
+      "name": "Lift",
+      "code": false,
+      "quantity_available": 0.0,
+      "category": "Misc.",
+      "type": "consu"
+    },
+    {
+      "id": 24480,
+      "name": "Disposal",
+      "code": false,
+      "quantity_available": 0.0,
+      "category": "Misc.",
+      "type": "consu"
+    },
+    {
+      "id": 24479,
+      "name": "Install Filter*",
+      "code": false,
+      "quantity_available": 0.0,
+      "category": "1. Service - Parent / 3. Cleanliness",
+      "type": "consu"
+    },
+    {
+      "id": 24478,
+      "name": "Repair flue Pipe",
+      "code": false,
+      "quantity_available": 0.0,
+      "category": "Misc.",
+      "type": "consu"
+    },
+    {
+      "id": 24477,
+      "name": "Single Outlet",
+      "code": false,
+      "quantity_available": 0.0,
+      "category": "Misc.",
+      "type": "consu"
+    },
+    {
+      "id": 24476,
+      "name": "REPAIRS-PAY-LTH ",
+      "code": false,
+      "quantity_available": 0.0,
+      "category": "HVAC SERVICES / REPAIRS / PAYROLL ENGINES",
+      "type": "service"
+    },
+    {
+      "id": 24475,
+      "name": "GOODMAN-AC-4T-14.3-FULL-INSTALL ",
+      "code": false,
+      "quantity_available": 0.0,
+      "category": "HVAC SERVICES / INSTALLATION / RESIDENTIAL INSTALLS / GOODMAN FULL SYSTEMS / AC SPLIT SYSTEMS / 3 Ton",
+      "type": "consu"
+    },
+    {
+      "id": 24474,
+      "name": "equip test kit",
+      "code": false,
+      "quantity_available": 0.0,
+      "category": "Misc.",
+      "type": "consu"
+    }
+  ],
+  "roster": [
+    {
+      "id": "bounthon",
+      "name": "Bounthon",
+      "phone": "512-555-0001",
+      "email": "bounthon@haes.com",
+      "skill_level": "master",
+      "certifications": [
+        "epa_608",
+        "nate",
+        "tdlr",
+        "osha_10",
+        "commercial"
+      ],
+      "service_areas": [
+        "787",
+        "786",
+        "785",
+        "752",
+        "750"
+      ],
+      "can_handle_emergency": true,
+      "can_handle_commercial": true,
+      "daily_capacity_hours": 8.0
+    },
+    {
+      "id": "junior",
+      "name": "Junior",
+      "phone": "512-555-0002",
+      "email": "junior@haes.com",
+      "skill_level": "master",
+      "certifications": [
+        "epa_608",
+        "nate",
+        "tdlr",
+        "commercial"
+      ],
+      "service_areas": [
+        "787",
+        "786",
+        "785",
+        "751"
+      ],
+      "can_handle_emergency": true,
+      "can_handle_commercial": true,
+      "daily_capacity_hours": 8.0
+    },
+    {
+      "id": "aubry",
+      "name": "Aubry",
+      "phone": "512-555-0003",
+      "email": "aubry@haes.com",
+      "skill_level": "senior",
+      "certifications": [
+        "epa_608",
+        "tdlr"
+      ],
+      "service_areas": [
+        "787",
+        "786"
+      ],
+      "can_handle_emergency": true,
+      "can_handle_commercial": false,
+      "daily_capacity_hours": 8.0
+    }
+  ]
+}
