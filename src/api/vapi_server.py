@@ -933,6 +933,22 @@ async def vapi_server_url(request: Request) -> dict[str, Any]:
                 parameters["_caller_id"] = caller_identity.employee_id
                 parameters["_caller_name"] = caller_identity.name
                 parameters["_caller_phone"] = caller_identity.phone
+
+                # Returning customer: when caller is customer, look up partner by phone
+                if caller_identity.role.value == "customer" and caller_phone:
+                    try:
+                        from src.integrations.odoo_leads import create_lead_service
+                        lead_svc = await create_lead_service()
+                        returning = await lead_svc.find_partner_by_phone(caller_phone)
+                        if returning:
+                            parameters["_returning_customer"] = {
+                                "name": returning.get("name"),
+                                "partner_id": returning.get("partner_id"),
+                                "address": returning.get("address"),
+                            }
+                            logger.info(f"Returning customer context: partner_id={returning.get('partner_id')}, name={returning.get('name')}")
+                    except Exception as rc_err:
+                        logger.warning(f"Returning customer lookup failed: {rc_err}")
                 
                 # Check for wrong number and profanity/abuse detection early
                 from src.vapi.tools.base import BaseToolHandler

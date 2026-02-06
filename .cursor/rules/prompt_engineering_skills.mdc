@@ -1,0 +1,26 @@
+---
+description: When editing Vapi system prompts or KB - keep prompts minimal, follow portable prompt skills
+globs: doc/vapi/system_prompt_*.md, doc/vapi/kb/**/*
+---
+
+# Prompt Engineering Skills Rule
+
+When editing **system prompts** (`doc/vapi/system_prompt_*.md`) or **Knowledge Base** files (`doc/vapi/kb/**`), you MUST follow the guidelines in the portable skills doc so prompts stay minimal and effective.
+
+## What to do
+
+1. **Read** `skills/PromptEngineeringSkills.md` (or the project path where it lives) before making prompt or KB changes.
+2. **Apply** its guidelines:
+   - Keep the system prompt **minimal**; put SOPs and long content in the KB.
+   - Put **critical rules first** (STOP rule, prohibited phrases, safety); use short bullets.
+   - **Do not duplicate** KB content in the prompt; reference it.
+   - When adding behavior, prefer **KB first**, then tool descriptions, then a short prompt line only if critical.
+3. **Avoid bloat:** Do not paste long procedures into the prompt. Add one short instruction or move content to KB.
+
+## Quick checklist
+
+- Critical rules at top, one idea per bullet.
+- New procedures/SOPs → KB (or tool description), not the main prompt.
+- Prompt only references KB and states when to use it.
+
+For the full list of guidelines, see `skills/PromptEngineeringSkills.md`. That file is **portable** and can be copied to other projects for reuse.

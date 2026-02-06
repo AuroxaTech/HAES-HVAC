@@ -2,7 +2,7 @@
 HAES HVAC - Main FastAPI Application
 
 AI-powered HVAC Business Automation System integrating with
-Odoo 18 Enterprise, Vapi.ai, and Twilio.
+Odoo 18 Enterprise, Vapi.ai, 8x8 (customer inbound), and Twilio (SMS).
 """
 
 import time

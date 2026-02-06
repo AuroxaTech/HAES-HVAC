@@ -203,7 +203,22 @@ class TestCreateServiceRequest:
 
 class TestScheduleAppointment:
     """Tests for schedule_appointment tool."""
-    
+
+    # Actual data used for two-slot flow validation (service area: DeSoto TX)
+    FIRST_CALL_PARAMS = {
+        "customer_name": "Jane Smith",
+        "phone": "+19725551234",
+        "address": "456 Oak Ave, DeSoto, TX 75115",
+    }
+    SLOT_1_START = "2026-02-02T10:00:00"
+    SLOT_1_END = "2026-02-02T12:00:00"
+    SLOT_2_START = "2026-02-03T14:00:00"
+    SLOT_2_END = "2026-02-03T16:00:00"
+    TWO_SLOTS_MESSAGE = (
+        "I have Monday, February 2 at 10:00 AM or Tuesday, February 3 at 02:00 PM. "
+        "Which works better for you?"
+    )
+
     @pytest.mark.asyncio
     async def test_schedule_appointment_requires_phone(self):
         """Should require phone number."""
@@ -223,9 +238,148 @@ class TestScheduleAppointment:
     
     @pytest.mark.asyncio
     @patch("src.vapi.tools.ops.schedule_appointment.handle_ops_command")
+    @patch("src.vapi.tools.ops.schedule_appointment.is_within_service_area")
+    async def test_schedule_appointment_first_call_returns_two_slots(
+        self, mock_service_area, mock_ops_handler
+    ):
+        """
+        First call with only name, phone, address (no chosen_slot_start) must return
+        two time options and next_available_slots. Validates the two-slot flow
+        used by the prompt (call tool first, then present options).
+        """
+        from src.brains.ops.schema import OpsResult, OpsStatus
+
+        mock_service_area.return_value = (True, None)  # in service area
+        mock_ops_handler.return_value = OpsResult(
+            status=OpsStatus.NEEDS_HUMAN,
+            message=self.TWO_SLOTS_MESSAGE,
+            requires_human=True,
+            data={
+                "next_available_slots": [
+                    {"start": self.SLOT_1_START, "end": self.SLOT_1_END, "technician_id": "junior"},
+                    {"start": self.SLOT_2_START, "end": self.SLOT_2_END, "technician_id": "junior"},
+                ],
+                "choose_then_book": True,
+            },
+        )
+
+        with patch(
+            "src.vapi.tools.ops.schedule_appointment.BaseToolHandler.check_duplicate_call",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            response = await handle_schedule_appointment(
+                tool_call_id="tc_sched_two_001",
+                parameters=dict(self.FIRST_CALL_PARAMS),
+                call_id="call_sched_two_001",
+            )
+
+        assert response.action == "needs_human"
+        assert "next_available_slots" in response.data
+        slots = response.data["next_available_slots"]
+        assert len(slots) == 2
+        assert slots[0]["start"] == self.SLOT_1_START and slots[0]["end"] == self.SLOT_1_END
+        assert slots[1]["start"] == self.SLOT_2_START and slots[1]["end"] == self.SLOT_2_END
+        assert "Which works better" in response.speak
+
+    @pytest.mark.asyncio
+    @patch("src.vapi.tools.ops.schedule_appointment.handle_ops_command")
+    @patch("src.vapi.tools.ops.schedule_appointment.is_within_service_area")
+    async def test_schedule_appointment_first_call_returns_two_slots_no_extra_params(
+        self, mock_service_area, mock_ops_handler
+    ):
+        """
+        First call must NOT require service_type or preferred_time_windows.
+        Backend returns two options with only name, phone, address.
+        """
+        from src.brains.ops.schema import OpsResult, OpsStatus
+
+        mock_service_area.return_value = (True, None)
+        mock_ops_handler.return_value = OpsResult(
+            status=OpsStatus.NEEDS_HUMAN,
+            message=self.TWO_SLOTS_MESSAGE,
+            requires_human=True,
+            data={
+                "next_available_slots": [
+                    {"start": self.SLOT_1_START, "end": self.SLOT_1_END},
+                    {"start": self.SLOT_2_START, "end": self.SLOT_2_END},
+                ],
+            },
+        )
+
+        with patch(
+            "src.vapi.tools.ops.schedule_appointment.BaseToolHandler.check_duplicate_call",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            response = await handle_schedule_appointment(
+                tool_call_id="tc_sched_two_002",
+                parameters=dict(self.FIRST_CALL_PARAMS),  # no service_type, no preferred_time_windows
+                call_id="call_sched_two_002",
+            )
+
+        assert response.action == "needs_human"
+        assert len(response.data.get("next_available_slots", [])) == 2
+        mock_ops_handler.assert_called_once()
+        call_kwargs = mock_ops_handler.call_args
+        # Command should have been built from the params we passed (no chosen_slot in metadata for first call)
+        assert call_kwargs is not None
+
+    @pytest.mark.asyncio
+    @patch("src.vapi.tools.ops.schedule_appointment.handle_ops_command")
+    @patch("src.vapi.tools.ops.schedule_appointment.is_within_service_area")
+    async def test_schedule_appointment_second_call_books_chosen_slot(
+        self, mock_service_area, mock_ops_handler
+    ):
+        """
+        Second call with chosen_slot_start (from first response) must book the appointment
+        and return appointment_id. Validates the full two-slot flow end-to-end.
+        """
+        from src.brains.ops.schema import OpsResult, OpsStatus
+
+        mock_service_area.return_value = (True, None)
+        future_time = datetime.now() + timedelta(days=1)
+        mock_ops_handler.return_value = OpsResult(
+            status=OpsStatus.SUCCESS,
+            message="Your appointment is scheduled for Monday, February 2 at 10:00 AM.",
+            requires_human=False,
+            data={
+                "appointment_id": "evt_2001",
+                "scheduled_time": self.SLOT_1_START,
+                "scheduled_time_end": self.SLOT_1_END,
+                "assigned_technician": {"name": "Junior"},
+            },
+        )
+
+        parameters = {
+            **self.FIRST_CALL_PARAMS,
+            "chosen_slot_start": self.SLOT_1_START,
+        }
+        with patch(
+            "src.vapi.tools.ops.schedule_appointment.BaseToolHandler.check_duplicate_call",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            response = await handle_schedule_appointment(
+                tool_call_id="tc_sched_two_003",
+                parameters=parameters,
+                call_id="call_sched_two_003",
+            )
+
+        assert response.action == "completed"
+        assert response.data.get("appointment_id") == "evt_2001"
+        assert "scheduled" in response.speak.lower() or "appointment" in response.speak.lower()
+        mock_ops_handler.assert_called_once()
+        # Verify chosen_slot_start was passed through (in metadata)
+        call_args = mock_ops_handler.call_args[0]
+        assert len(call_args) >= 1
+        command = call_args[0]
+        assert command.metadata.get("chosen_slot_start") == self.SLOT_1_START
+    
+    @pytest.mark.asyncio
+    @patch("src.vapi.tools.ops.schedule_appointment.handle_ops_command")
     async def test_schedule_appointment_success(self, mock_ops_handler):
         """Should successfully schedule appointment."""
-        from datetime import datetime, timedelta
         from src.brains.ops.schema import OpsResult, OpsStatus
         future_time = datetime.now() + timedelta(hours=4)
         
@@ -261,8 +415,12 @@ class TestScheduleAppointment:
 
 
 class TestCheckAvailability:
-    """Tests for check_availability tool."""
-    
+    """Tests for check_availability tool.
+
+    check_availability uses create_appointment_service().find_next_two_available_slots()
+    (not handle_ops_command) and should return 2 slots when the service returns 2.
+    """
+
     @pytest.mark.asyncio
     async def test_check_availability_works_without_phone(self):
         """Should work without phone number (just checking general availability)."""
@@ -280,58 +438,123 @@ class TestCheckAvailability:
         assert response.action in ["completed", "needs_human"]
     
     @pytest.mark.asyncio
-    @patch("src.vapi.tools.ops.check_availability.create_appointment_service")
-    @patch("src.vapi.tools.ops.check_availability.handle_ops_command")
-    async def test_check_availability_success(self, mock_ops_handler, mock_appointment_service):
-        """Should successfully find available slots."""
-        from datetime import datetime, timedelta
-        from src.brains.ops.schema import OpsResult, OpsStatus
-        
-        future_time = datetime.now() + timedelta(hours=4)
-        
-        # Mock OPS handler
-        mock_ops_handler.return_value = OpsResult(
-            status=OpsStatus.SUCCESS,
-            message="Available slots found",
-            requires_human=False,
-            data={
-                "available_slots": [
-                    {
-                        "start": future_time.isoformat(),
-                        "end": (future_time + timedelta(hours=2)).isoformat(),
-                        "status": "available",
-                    }
-                ]
-            },
-        )
-        
-        # Mock appointment service (async function returns async service)
-        mock_service_instance = AsyncMock()
-        mock_appointment_service.return_value = mock_service_instance
+    @patch("src.vapi.tools.ops.check_availability.create_appointment_service", new_callable=AsyncMock)
+    async def test_check_availability_returns_two_slots(self, mock_create_appointment_service):
+        """check_availability should return exactly 2 slots and 'Which works better for you?' when service returns 2."""
         from src.brains.ops.scheduling_rules import TimeSlot, SlotStatus
-        mock_slot = TimeSlot(
-            start=future_time,
-            end=future_time + timedelta(hours=2),
+
+        future1 = datetime.now() + timedelta(days=1, hours=10)
+        future2 = datetime.now() + timedelta(days=2, hours=14)
+        slot1 = TimeSlot(
+            start=future1,
+            end=future1 + timedelta(hours=2),
             status=SlotStatus.AVAILABLE,
         )
-        # find_next_available_slot is async, so use return_value
-        mock_service_instance.find_next_available_slot = AsyncMock(return_value=mock_slot)
-        
+        slot2 = TimeSlot(
+            start=future2,
+            end=future2 + timedelta(hours=2),
+            status=SlotStatus.AVAILABLE,
+        )
+
+        mock_service_instance = AsyncMock()
+        mock_service_instance.find_next_two_available_slots = AsyncMock(return_value=[slot1, slot2])
+        mock_create_appointment_service.return_value = mock_service_instance
+
         parameters = {
-            "preferred_date": "tomorrow",
-            "service_type": "diagnostic",
+            "service_type": "maintenance",
         }
-        
+
         response = await handle_check_availability(
             tool_call_id="tc_avail_002",
             parameters=parameters,
             call_id="call_avail_002",
         )
-        
-        # check_availability returns "needs_human" to ask for confirmation before scheduling
-        assert response.action == "needs_human" or response.action == "completed"
-        assert "available" in response.speak.lower() or "slot" in response.speak.lower()
-        assert "slot" in str(response.data) or "availability" in str(response.data)
+
+        assert response.action == "needs_human"
+        assert "next_available_slots" in response.data
+        slots = response.data["next_available_slots"]
+        assert len(slots) == 2
+        assert slots[0]["start"] == future1.isoformat()
+        assert slots[1]["start"] == future2.isoformat()
+        assert "Which works better" in response.speak
+    
+    @pytest.mark.asyncio
+    @patch("src.vapi.tools.ops.check_availability.create_appointment_service", new_callable=AsyncMock)
+    async def test_check_availability_success_one_slot(self, mock_create_appointment_service):
+        """When service returns 1 slot, should return that slot (no IndexError)."""
+        from src.brains.ops.scheduling_rules import TimeSlot, SlotStatus
+
+        future_time = datetime.now() + timedelta(hours=4)
+        mock_slot = TimeSlot(
+            start=future_time,
+            end=future_time + timedelta(hours=2),
+            status=SlotStatus.AVAILABLE,
+        )
+        mock_service_instance = AsyncMock()
+        mock_service_instance.find_next_two_available_slots = AsyncMock(return_value=[mock_slot])
+        mock_create_appointment_service.return_value = mock_service_instance
+
+        parameters = {"service_type": "diagnostic"}
+
+        response = await handle_check_availability(
+            tool_call_id="tc_avail_003",
+            parameters=parameters,
+            call_id="call_avail_003",
+        )
+
+        assert response.action == "needs_human"
+        assert len(response.data.get("next_available_slots", [])) == 1
+        assert "slot" in response.speak.lower() or "available" in response.speak.lower()
+    
+    @pytest.mark.asyncio
+    @patch("src.vapi.tools.ops.check_availability.create_appointment_service", new_callable=AsyncMock)
+    async def test_check_availability_no_slots_available(self, mock_create_appointment_service):
+        """When service returns 0 slots, should return friendly message and no_slots_available."""
+        mock_service_instance = AsyncMock()
+        mock_service_instance.find_next_two_available_slots = AsyncMock(return_value=[])
+        mock_create_appointment_service.return_value = mock_service_instance
+
+        parameters = {"service_type": "maintenance"}
+
+        response = await handle_check_availability(
+            tool_call_id="tc_avail_004",
+            parameters=parameters,
+            call_id="call_avail_004",
+        )
+
+        assert response.action == "needs_human"
+        assert response.data.get("no_slots_available") is True
+        assert "couldn't find" in response.speak.lower() or "available" in response.speak.lower()
+    
+    @pytest.mark.asyncio
+    @patch("src.vapi.tools.ops.check_availability.create_appointment_service", new_callable=AsyncMock)
+    async def test_check_availability_success(self, mock_create_appointment_service):
+        """Should successfully find available slots (legacy test name; now uses two slots)."""
+        from src.brains.ops.scheduling_rules import TimeSlot, SlotStatus
+
+        future_time = datetime.now() + timedelta(hours=4)
+        slot1 = TimeSlot(start=future_time, end=future_time + timedelta(hours=2), status=SlotStatus.AVAILABLE)
+        slot2 = TimeSlot(
+            start=future_time + timedelta(days=1),
+            end=future_time + timedelta(days=1, hours=2),
+            status=SlotStatus.AVAILABLE,
+        )
+        mock_service_instance = AsyncMock()
+        mock_service_instance.find_next_two_available_slots = AsyncMock(return_value=[slot1, slot2])
+        mock_create_appointment_service.return_value = mock_service_instance
+
+        parameters = {"preferred_date": "tomorrow", "service_type": "diagnostic"}
+
+        response = await handle_check_availability(
+            tool_call_id="tc_avail_002b",
+            parameters=parameters,
+            call_id="call_avail_002b",
+        )
+
+        assert response.action == "needs_human"
+        assert "next_available_slots" in response.data
+        assert len(response.data["next_available_slots"]) >= 1
+        assert "which works better" in response.speak.lower() or "slot" in response.speak.lower() or "have" in response.speak.lower()
 
 
 class TestRescheduleAppointment:

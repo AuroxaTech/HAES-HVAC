@@ -6,7 +6,7 @@
     "type": "function",
     "function": {
       "name": "schedule_appointment",
-      "description": "Schedule a new service appointment. Use this when customer wants to book an appointment or asks about availability.",
+      "description": "Schedule a new service appointment. IMPORTANT: Do NOT ask the customer for preferred time windows or service type before the first call. First call: pass only customer_name, phone, address (no chosen_slot_start). Backend returns two time options — say them to the customer (e.g. I have Monday at 10 AM or Tuesday at 2 PM. Which works better for you?). After they choose, call again with same details PLUS chosen_slot_start (from response next_available_slots) OR preferred_date + preferred_time. Use when customer wants to book or asks about availability.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -28,12 +28,12 @@
           },
           "service_type": {
             "type": "string",
-            "description": "Type of service needed"
+            "description": "Optional. Do not ask before first call; only include if already known (e.g. maintenance)."
           },
           "preferred_time_windows": {
             "type": "array",
             "items": {"type": "string"},
-            "description": "List of preferred time windows"
+            "description": "Optional. Do not ask before first call; backend returns two options without it."
           },
           "problem_description": {
             "type": "string",
@@ -43,6 +43,27 @@
             "type": "string",
             "enum": ["residential", "commercial", "property_management"],
             "description": "Type of property"
+          },
+          "chosen_slot_start": {
+            "type": "string",
+            "description": "On second call when booking: ISO datetime of the slot the customer chose (e.g. 2026-01-27T10:00:00). Copy from previous response next_available_slots[].start. Do not send on first call."
+          },
+          "confirmed_partner_id": {
+            "type": "integer",
+            "description": "Use this existing Odoo partner ID when customer confirmed their profile from lookup_customer_profile"
+          },
+          "caller_type": {
+            "type": "string",
+            "enum": ["tenant", "property_management"],
+            "description": "Whether the caller is a tenant or part of the property management team"
+          },
+          "preferred_date": {
+            "type": "string",
+            "description": "Date of chosen slot (YYYY-MM-DD). Use with preferred_time when booking the chosen slot if chosen_slot_start is not available."
+          },
+          "preferred_time": {
+            "type": "string",
+            "description": "Time of chosen slot (e.g. 10:00). Use with preferred_date when booking the chosen slot if chosen_slot_start is not available."
           }
         },
         "required": ["customer_name", "phone", "address"]

@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Lookup Customer Profile",
+  "description": "Look up existing customer by phone and address",
+  "tool_definition": {
+    "type": "function",
+    "function": {
+      "name": "lookup_customer_profile",
+      "description": "Look up an existing customer profile by phone (address optional). Use in two cases: (1) At call start — call with just the caller's phone to try to greet by name if returning customer; (2) After customer says yes to warranty question — call with phone and address to confirm profile. Use returned name and partner_id for the rest of the call.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string",
+            "description": "Customer's phone number (required)"
+          },
+          "address": {
+            "type": "string",
+            "description": "Service address to help match the correct profile"
+          }
+        },
+        "required": ["phone"]
+      }
+    },
+    "async": false,
+    "server": {
+      "url": "https://haes-hvac.fly.dev/vapi/server"
+    }
+  }
+}

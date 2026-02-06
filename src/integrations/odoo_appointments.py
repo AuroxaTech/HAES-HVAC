@@ -586,7 +586,29 @@ class AppointmentService:
         
         # Use scheduling rules to find next slot
         return get_next_available_slot(after, duration_minutes, tech_id, existing_bookings)
-    
+
+    async def find_next_two_available_slots(
+        self,
+        tech_id: str,
+        after: datetime,
+        duration_minutes: int,
+    ) -> list[TimeSlot]:
+        """
+        Find the next two distinct available slots for a technician.
+        Used to offer the customer two time options (e.g. "Tuesday 10 AM or Wednesday 2 PM").
+
+        Returns:
+            List of 0, 1, or 2 TimeSlots.
+        """
+        from src.brains.ops.scheduling_rules import get_next_two_available_slots
+
+        existing_bookings = await self.get_technician_availability(
+            tech_id, after, after + timedelta(days=30)
+        )
+        return get_next_two_available_slots(
+            after, duration_minutes, tech_id, existing_bookings
+        )
+
     async def validate_slot_availability(
         self,
         requested_start: datetime,

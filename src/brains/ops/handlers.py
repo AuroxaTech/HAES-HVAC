@@ -19,6 +19,7 @@ from src.brains.ops.schema import (
     WorkOrderStatus,
 )
 from src.brains.ops.emergency_rules import qualify_emergency
+from src.brains.ops.scheduling_rules import TimeSlot
 from src.brains.ops.service_catalog import infer_service_type_from_description
 from src.brains.ops.tech_roster import assign_technician
 
@@ -312,17 +313,17 @@ async def _handle_schedule_appointment(command: HaelCommand) -> OpsResult:
                 if tech:
                     tech_id = tech.id
             
-            # Find next available slot
+            # Find next two available slots (offer customer a choice)
             now = datetime.now()
             preferred_start = now + timedelta(hours=2)  # Default: 2 hours from now
-            
-            slot = await appointment_service.find_next_available_slot(
+
+            slots = await appointment_service.find_next_two_available_slots(
                 tech_id=tech_id,
                 after=preferred_start,
                 duration_minutes=duration_minutes,
             )
-            
-            if not slot:
+
+            if not slots:
                 missing_fields = []
                 if not has_identity:
                     missing_fields.append("contact information (phone, email, or name)")
@@ -339,27 +340,33 @@ async def _handle_schedule_appointment(command: HaelCommand) -> OpsResult:
                         "duration_minutes": duration_minutes,
                     },
                 )
-            
-            # Return availability without creating appointment
-            slot_time_str = slot.start.strftime("%A, %B %d at %I:%M %p")
+
+            # Return one or two slots; prompt asks which works better
+            next_available_slots = [
+                {"start": s.start.isoformat(), "end": s.end.isoformat(), "technician_id": tech_id}
+                for s in slots
+            ]
+            slot_time_strs = [s.start.strftime("%A, %B %d at %I:%M %p") for s in slots]
+            if len(slot_time_strs) == 2:
+                message = f"I can schedule your {service_type.name.lower()}. I have {slot_time_strs[0]} or {slot_time_strs[1]}. Which works better for you?"
+            else:
+                message = f"I can schedule your {service_type.name.lower()}. The next available slot is {slot_time_strs[0]}. To book this appointment, I'll need: "
             missing_fields = []
             if not has_identity:
                 missing_fields.append("contact information (phone, email, or name)")
             if not has_location:
                 missing_fields.append("service address")
-            
+            if missing_fields:
+                message += ", ".join(missing_fields) + "."
             return OpsResult(
                 status=OpsStatus.NEEDS_HUMAN,
-                message=f"I can schedule your {service_type.name.lower()}. The next available slot is {slot_time_str}. To book this appointment, I'll need: {', '.join(missing_fields)}.",
+                message=message,
                 requires_human=True,
                 missing_fields=missing_fields,
                 data={
                     "availability_check": True,
-                    "next_available_slot": {
-                        "start": slot.start.isoformat(),
-                        "end": slot.end.isoformat(),
-                        "technician_id": tech_id,
-                    },
+                    "next_available_slots": next_available_slots,
+                    "next_available_slot": next_available_slots[0] if next_available_slots else None,
                     "service_type": service_type.name,
                     "duration_minutes": duration_minutes,
                 },
@@ -377,8 +384,10 @@ async def _handle_schedule_appointment(command: HaelCommand) -> OpsResult:
         # Create appointment service
         appointment_service = await create_appointment_service()
         
-        # Look for existing partner (for linking)
+        # Look for existing partner (for linking); use returning customer if present
         lead_service = await create_lead_service()
+        returning = (command.metadata or {}).get("_returning_customer")
+        existing_partner_id = returning.get("partner_id") if isinstance(returning, dict) else None
         partner_id = await lead_service.ensure_partner(
             phone=entities.phone,
             email=entities.email,
@@ -386,6 +395,7 @@ async def _handle_schedule_appointment(command: HaelCommand) -> OpsResult:
             address=entities.address,
             city=entities.city,
             zip_code=entities.zip_code,
+            existing_partner_id=existing_partner_id,
         )
         
         # Try to find existing lead for linking (simplified - will be linked after appointment creation if needed)
@@ -404,22 +414,69 @@ async def _handle_schedule_appointment(command: HaelCommand) -> OpsResult:
             if tech:
                 tech_id = tech.id
         
-        # Find available slot
-        from datetime import datetime, timedelta
+        tech_id = tech_id or "junior"
         now = datetime.now()
-        preferred_start = now + timedelta(hours=2)  # Default: 2 hours from now
+        # Use timezone-aware now for comparisons (avoid naive vs aware)
+        now_aware = now.astimezone() if now.tzinfo else now.replace(tzinfo=datetime.now().astimezone().tzinfo)
+        preferred_start = now_aware + timedelta(hours=2)  # Default: 2 hours from now
         
         # Try to parse preferred time if provided
         if entities.preferred_time_windows:
-            # Use first preferred window (simplified - could be enhanced)
-            preferred_start = now + timedelta(hours=4)  # Default fallback
+            preferred_start = now_aware + timedelta(hours=4)  # Default fallback
         
-        # Find next available slot
-        slot = await appointment_service.find_next_available_slot(
-            tech_id=tech_id or "junior",  # Default to junior if no tech assigned
-            after=preferred_start,
-            duration_minutes=duration_minutes,
-        )
+        chosen_slot_start = command.metadata.get("chosen_slot_start") if command.metadata else None
+        slot = None
+        
+        if chosen_slot_start:
+            # Customer chose one of the two offered slots - parse and use it
+            try:
+                s = chosen_slot_start.strip().replace("Z", "+00:00")
+                chosen_start = datetime.fromisoformat(s)
+                if chosen_start.tzinfo is None:
+                    chosen_start = chosen_start.replace(tzinfo=now_aware.tzinfo)
+                chosen_end = chosen_start + timedelta(minutes=duration_minutes)
+                if chosen_start >= now_aware:
+                    slot = TimeSlot(start=chosen_start, end=chosen_end)
+                    logger.info("Schedule appointment: using chosen_slot_start=%s", chosen_slot_start)
+                else:
+                    logger.warning(
+                        "Schedule appointment: chosen_slot_start %s is in the past (now=%s)",
+                        chosen_slot_start,
+                        now_aware.isoformat(),
+                    )
+            except (ValueError, TypeError) as e:
+                logger.warning(
+                    "Schedule appointment: failed to parse chosen_slot_start=%r: %s",
+                    chosen_slot_start,
+                    e,
+                )
+        
+        if not slot:
+            # Offer two slots and ask which works better (do not create yet)
+            slots = await appointment_service.find_next_two_available_slots(
+                tech_id=tech_id,
+                after=preferred_start,
+                duration_minutes=duration_minutes,
+            )
+            if slots:
+                next_available_slots = [
+                    {"start": s.start.isoformat(), "end": s.end.isoformat(), "technician_id": tech_id}
+                    for s in slots
+                ]
+                slot_time_strs = [s.start.strftime("%A, %B %d at %I:%M %p") for s in slots]
+                if len(slot_time_strs) == 2:
+                    return OpsResult(
+                        status=OpsStatus.NEEDS_HUMAN,
+                        message=f"I have {slot_time_strs[0]} or {slot_time_strs[1]}. Which works better for you?",
+                        requires_human=True,
+                        data={
+                            "next_available_slots": next_available_slots,
+                            "service_type": service_type.name,
+                            "duration_minutes": duration_minutes,
+                            "choose_then_book": True,
+                        },
+                    )
+                slot = slots[0] if slots else None
         
         if not slot:
             # No slot found - return needs human with suggestion

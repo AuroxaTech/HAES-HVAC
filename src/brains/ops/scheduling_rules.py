@@ -172,6 +172,45 @@ def get_next_available_slot(
     )
 
 
+def get_next_two_available_slots(
+    after: datetime,
+    duration_minutes: int,
+    technician_id: str | None = None,
+    existing_bookings: list[TimeSlot] | None = None,
+) -> list[TimeSlot]:
+    """
+    Find the next two distinct available scheduling slots.
+    Used to offer the customer a choice (e.g. "Tuesday 10 AM or Wednesday 2 PM").
+
+    Args:
+        after: Find slots after this time
+        duration_minutes: Required duration per slot
+        technician_id: Filter by technician
+        existing_bookings: Current bookings to avoid
+
+    Returns:
+        List of 0, 1, or 2 TimeSlots (at most two).
+    """
+    existing_bookings = existing_bookings or []
+    slots: list[TimeSlot] = []
+    cursor = after
+
+    for _ in range(2):
+        slot = get_next_available_slot(
+            cursor,
+            duration_minutes,
+            technician_id=technician_id,
+            existing_bookings=existing_bookings,
+        )
+        if not slot:
+            break
+        slots.append(slot)
+        # Next slot starts after this one ends, plus buffer
+        cursor = slot.end + timedelta(minutes=MIN_TIME_BETWEEN_APPOINTMENTS_MINUTES)
+
+    return slots
+
+
 def validate_scheduling_request(
     requested_start: datetime,
     duration_minutes: int,

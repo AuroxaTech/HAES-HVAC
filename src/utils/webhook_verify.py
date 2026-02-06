@@ -162,27 +162,41 @@ class WebhookVerificationMiddleware(BaseHTTPMiddleware):
             provider = self.WEBHOOK_PATHS[path]
 
             if provider == "vapi":
-                # Get signature from header
+                settings = get_settings()
+                secret = (settings.VAPI_WEBHOOK_SECRET or "").strip()
                 signature = request.headers.get("X-Vapi-Signature", "")
                 timestamp = request.headers.get("X-Vapi-Timestamp")
+                # Vapi credential-based auth: static secret in header (legacy X-Vapi-Secret or Bearer)
+                vapi_secret_header = request.headers.get("X-Vapi-Secret", "")
+                auth_header = request.headers.get("Authorization", "")
+                bearer_token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
 
-                if not signature:
-                    # Check if verification is required in production
-                    settings = get_settings()
-                    if settings.is_production and settings.VAPI_WEBHOOK_SECRET:
-                        logger.error("Missing webhook signature in production")
+                # Accept HMAC signature, or static secret (X-Vapi-Secret / Bearer) when it matches
+                if signature:
+                    # HMAC verification: need body
+                    body = await request.body()
+                    if not verify_vapi_signature(body, signature, timestamp):
+                        return JSONResponse(
+                            status_code=401,
+                            content={"error": "Invalid webhook signature"},
+                        )
+                    # Re-inject body so the route handler can read it
+                    async def receive():
+                        return {"type": "http.request", "body": body, "more_body": False}
+                    scope = dict(request.scope)
+                    request = Request(scope, receive)
+                elif secret and (hmac.compare_digest(vapi_secret_header, secret) or hmac.compare_digest(bearer_token, secret)):
+                    # Static secret match (Vapi Custom Credential: X-Vapi-Secret or Bearer)
+                    return await call_next(request)
+                elif not signature and not vapi_secret_header and not bearer_token:
+                    if settings.is_production and secret:
+                        logger.error("Missing webhook signature or secret in production")
                         return JSONResponse(
                             status_code=401,
                             content={"error": "Missing webhook signature"},
                         )
-                    # Allow in development
                     return await call_next(request)
-
-                # Read body for verification
-                body = await request.body()
-
-                # Verify signature
-                if not verify_vapi_signature(body, signature, timestamp):
+                else:
                     return JSONResponse(
                         status_code=401,
                         content={"error": "Invalid webhook signature"},

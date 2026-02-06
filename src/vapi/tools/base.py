@@ -298,9 +298,15 @@ class BaseToolHandler:
                     AuditLog.created_at >= recent_cutoff,
                     AuditLog.channel == "voice",
                 ]
-                # Exclude current call by checking request_id if call_id is provided
+                # Exclude current call: logs from same call_id (stored in command_json) are same conversation
                 if call_id:
-                    filter_conditions.append(AuditLog.request_id != call_id)
+                    filter_conditions.append(
+                        or_(
+                            AuditLog.command_json.is_(None),
+                            AuditLog.command_json['call_id'].astext.is_(None),
+                            AuditLog.command_json['call_id'].astext != call_id,
+                        )
+                    )
                 
                 recent_calls_query = session.query(AuditLog).filter(and_(*filter_conditions))
                 

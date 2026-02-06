@@ -8,7 +8,7 @@
 - **Modular Monolith** - Single FastAPI service with internal module separation
 - **Deployment**: Fly.io (Dallas region)
 - **Database**: PostgreSQL (managed by Fly.io)
-- **Integrations**: Odoo 18 Enterprise (JSON-RPC), Vapi.ai (voice), Twilio (phone numbers)
+- **Integrations**: Odoo 18 Enterprise (JSON-RPC), Vapi.ai (voice), 8x8 (customer inbound), Twilio (SMS)
 
 ---
 

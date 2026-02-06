@@ -126,6 +126,15 @@ async def handle_schedule_appointment(
         property_type=parameters.get("property_type"),
     )
     
+    # Build chosen_slot_start: use explicit param or preferred_date + preferred_time (for Vapi tools that only have preferred_date/preferred_time)
+    chosen_slot_start = parameters.get("chosen_slot_start")
+    if not chosen_slot_start and parameters.get("preferred_date") and parameters.get("preferred_time"):
+        pd = str(parameters["preferred_date"]).strip()
+        pt = str(parameters["preferred_time"]).strip()
+        if len(pt) <= 5 and ":" in pt:
+            pt = pt + ":00"  # 10:00 -> 10:00:00
+        chosen_slot_start = f"{pd}T{pt}" if pt else None
+
     # Build HaelCommand
     request_id = generate_request_id()
     command = HaelCommand(
@@ -142,6 +151,12 @@ async def handle_schedule_appointment(
         metadata={
             "tool_call_id": tool_call_id,
             "call_id": call_id,
+            "chosen_slot_start": chosen_slot_start,
+            "_returning_customer": (
+                {"partner_id": parameters["confirmed_partner_id"]}
+                if parameters.get("confirmed_partner_id") is not None
+                else parameters.get("_returning_customer")
+            ),
         },
     )
     
@@ -191,13 +206,49 @@ async def handle_schedule_appointment(
                 session_factory = get_session_factory()
                 db = session_factory()
                 try:
-                    # Format appointment date/time for SMS
+                    # Format appointment date/time for SMS and email
                     appointment_date = scheduled_time.strftime("%A, %B %d")
                     appointment_time = scheduled_time.strftime("%I:%M %p")
                     
-                    # Get technician name if available
+                    # Get technician name and service type
                     tech_info = result.data.get("assigned_technician", {})
                     tech_name = tech_info.get("name") if tech_info else None
+                    service_type = result.data.get("service_type")
+                    customer_name = parameters.get("customer_name")
+
+                    # Send immediate confirmation SMS to customer
+                    try:
+                        from src.integrations.twilio_sms import send_service_confirmation_sms
+                        sms_result = await send_service_confirmation_sms(
+                            to_phone=phone,
+                            customer_name=customer_name,
+                            appointment_date=appointment_date,
+                            appointment_time=appointment_time,
+                            tech_name=tech_name,
+                            service_type=service_type,
+                        )
+                        if sms_result.get("status") == "sent":
+                            logger.info(f"Sent new appointment confirmation SMS to {phone}")
+                            response_data["confirmation_sms_sent"] = True
+                    except Exception as sms_err:
+                        logger.warning(f"Failed to send appointment confirmation SMS: {sms_err}")
+
+                    # Send immediate confirmation email to customer (if email provided)
+                    customer_email = handler.normalize_email(parameters.get("email")) if parameters.get("email") else None
+                    if customer_email:
+                        try:
+                            from src.integrations.email_notifications import send_service_confirmation_email
+                            email_result = await send_service_confirmation_email(
+                                to_email=customer_email,
+                                customer_name=customer_name,
+                                is_same_day=False,
+                                appointment_date=f"{appointment_date} at {appointment_time}",
+                            )
+                            if email_result.get("status") == "sent":
+                                logger.info(f"Sent new appointment confirmation email to {customer_email}")
+                                response_data["confirmation_email_sent"] = True
+                        except Exception as email_err:
+                            logger.warning(f"Failed to send appointment confirmation email: {email_err}")
                     
                     # Schedule reminder
                     job_id = schedule_appointment_reminder(

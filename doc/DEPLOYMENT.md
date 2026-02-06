@@ -61,7 +61,7 @@ If you prefer manual setup:
    # Vapi
    fly secrets set VAPI_API_KEY="<your-vapi-api-key>" --app haes-hvac
    
-   # Twilio
+   # Twilio (SMS only; customer inbound voice is 8x8)
    fly secrets set TWILIO_ACCOUNT_SID="<your-twilio-account-sid>" --app haes-hvac
    fly secrets set TWILIO_AUTH_TOKEN="<your-twilio-auth-token>" --app haes-hvac
    fly secrets set TWILIO_PHONE_NUMBER="<your-twilio-phone-number>" --app haes-hvac

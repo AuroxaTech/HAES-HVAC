@@ -16,6 +16,18 @@ from src.utils.errors import OdooRPCError, OdooTransportError
 
 logger = logging.getLogger(__name__)
 
+
+def _partner_to_profile(p: dict[str, Any]) -> dict[str, Any]:
+    """Build profile dict from res.partner record."""
+    address_parts = [p.get("street"), p.get("city"), p.get("zip")]
+    address = ", ".join(str(x) for x in address_parts if x)
+    return {
+        "partner_id": p["id"],
+        "name": p.get("name"),
+        "address": address or None,
+    }
+
+
 # Fields we commonly write to crm.lead
 # We'll verify these exist before writing
 CRM_LEAD_FIELDS = [
@@ -101,6 +113,78 @@ class LeadService:
         """Filter out fields that don't exist in the model."""
         return {k: v for k, v in values.items() if k in valid_fields and v is not None}
     
+    async def find_partner_by_phone(self, phone: str | None) -> dict[str, Any] | None:
+        """
+        Find at most one res.partner by phone (for returning-customer context).
+        
+        Returns:
+            Dict with id, name, street, city, zip, or None if not found or multiple.
+        """
+        if not phone:
+            return None
+        try:
+            await self._ensure_authenticated()
+            clean_phone = re.sub(r"[^\d+]", "", phone)
+            if len(clean_phone) < 10:
+                return None
+            partners = await self.client.search_read(
+                "res.partner",
+                [("phone", "ilike", clean_phone[-10:])],
+                fields=["id", "name", "street", "city", "zip", "phone"],
+                limit=2,
+            )
+            if len(partners) != 1:
+                return None
+            out = _partner_to_profile(partners[0])
+            out["street"] = partners[0].get("street")
+            out["city"] = partners[0].get("city")
+            out["zip"] = partners[0].get("zip")
+            return out
+        except Exception as e:
+            logger.warning(f"find_partner_by_phone failed: {e}")
+            return None
+
+    async def find_partner_by_phone_and_address(
+        self, phone: str | None, address: str | None
+    ) -> dict[str, Any] | None:
+        """
+        Find at most one res.partner by phone and optionally address (for warranty "yes" confirmation).
+        If address is provided, prefer a partner whose street/zip matches.
+        
+        Returns:
+            Dict with partner_id, name, address (street, city, zip), or None.
+        """
+        if not phone:
+            return None
+        try:
+            await self._ensure_authenticated()
+            clean_phone = re.sub(r"[^\d+]", "", phone)
+            if len(clean_phone) < 10:
+                return None
+            partners = await self.client.search_read(
+                "res.partner",
+                [("phone", "ilike", clean_phone[-10:])],
+                fields=["id", "name", "street", "city", "zip", "phone"],
+                limit=10,
+            )
+            if not partners:
+                return None
+            # If address given, try to match by zip or street
+            addr_lower = (address or "").lower().strip()
+            zip_in_addr = re.search(r"\b(\d{5})(?:-\d{4})?\b", address or "") if address else None
+            for p in partners:
+                p_zip = (p.get("zip") or "").strip()
+                p_street = (p.get("street") or "").lower()
+                p_city = (p.get("city") or "").lower()
+                if addr_lower and zip_in_addr and p_zip == zip_in_addr.group(1):
+                    return _partner_to_profile(p)
+                if addr_lower and (addr_lower in p_street or addr_lower in p_city):
+                    return _partner_to_profile(p)
+            return _partner_to_profile(partners[0])
+        except Exception as e:
+            logger.warning(f"find_partner_by_phone_and_address failed: {e}")
+            return None
+
     async def ensure_partner(
         self,
         phone: str | None = None,
@@ -109,11 +193,13 @@ class LeadService:
         address: str | None = None,
         city: str | None = None,
         zip_code: str | None = None,
+        existing_partner_id: int | None = None,
     ) -> int | None:
         """
         Find or create a res.partner (contact) in Odoo.
         
-        Searches by phone first, then email. Creates new if not found OR if
+        When existing_partner_id is provided, returns it without searching or creating.
+        Otherwise searches by phone first, then email. Creates new if not found OR if
         the existing partner's name doesn't match (to avoid updating wrong contact).
         
         Args:
@@ -123,11 +209,16 @@ class LeadService:
             address: Street address
             city: City
             zip_code: ZIP/postal code
+            existing_partner_id: If set, use this partner and skip search/create
             
         Returns:
             Partner ID if found/created, None if failed
         """
         try:
+            if existing_partner_id is not None:
+                logger.debug(f"Using existing partner_id={existing_partner_id}")
+                return existing_partner_id
+            
             await self._ensure_authenticated()
             
             # Normalize phone for search
@@ -728,12 +819,24 @@ class LeadService:
                 "type": "lead",  # Keep as lead until converted
             }
             
-            # Set lead source based on channel
-            if channel == "chat":
+            # Set lead source: prefer structured lead_source, else channel default
+            if structured_params and structured_params.get("lead_source"):
+                raw = (structured_params.get("lead_source") or "").strip().lower()
+                _lead_source_map = {
+                    "google": "Google",
+                    "referral": "Referral",
+                    "referrals": "Referral",
+                    "social": "Social media",
+                    "social media": "Social media",
+                    "previous customer": "Previous customer",
+                    "existing customer": "Previous customer",
+                    "other": "Other",
+                }
+                source_name = _lead_source_map.get(raw) or (raw.title() if raw else "Other")
+            elif channel == "chat":
                 source_name = "Website Chat"
             else:
-                source_name = "AI Voice Agent"  # Default for voice
-            
+                source_name = "AI Voice Agent"
             source_id = await self.ensure_lead_source(source_name)
             if source_id:
                 # Try both source_id and source fields
@@ -768,6 +871,18 @@ class LeadService:
                 customer_type = "Property Management"
                 pricing_tier = "Default-PM Pricing"
                 tags_to_add.append("Property Management")
+            # Caller type: tenant vs property_management (for tagging and notification)
+            caller_type = (structured_params or {}).get("caller_type")
+            if caller_type == "tenant":
+                tags_to_add.append("Tenant")
+                desc_html.insert(-1, f'<tr><td style="padding:3px;">Caller:</td><td style="padding:3px;">Tenant</td></tr>')
+                description = "".join(desc_html)
+                lead_values["description"] = description
+            elif caller_type == "property_management":
+                tags_to_add.append("Property Management Caller")
+                desc_html.insert(-1, f'<tr><td style="padding:3px;">Caller:</td><td style="padding:3px;">Property Management</td></tr>')
+                description = "".join(desc_html)
+                lead_values["description"] = description
                 
                 # Extract PM company name from metadata or description
                 pm_company_name = None
@@ -842,7 +957,10 @@ class LeadService:
                 description = "".join(desc_html)
                 lead_values["description"] = description
             
-            # Try to link partner if we can create/find one
+            # Try to link partner if we can create/find one (use returning customer if present)
+            existing_partner_id = None
+            if structured_params and isinstance(structured_params.get("_returning_customer"), dict):
+                existing_partner_id = structured_params["_returning_customer"].get("partner_id")
             partner_id = await self.ensure_partner(
                 phone=entities.phone,
                 email=entities.email,
@@ -850,6 +968,7 @@ class LeadService:
                 address=entities.address,
                 city=entities.city,
                 zip_code=entities.zip_code,
+                existing_partner_id=existing_partner_id,
             )
             if partner_id:
                 lead_values["partner_id"] = partner_id

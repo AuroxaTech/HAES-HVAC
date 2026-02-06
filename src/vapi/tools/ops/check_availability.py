@@ -77,14 +77,15 @@ async def handle_check_availability(
             except:
                 pass
         
-        # Find next available slot
-        slot = await appointment_service.find_next_available_slot(
+        # Find next available slots (offer at most 2 so agent only says 2)
+        raw_slots = await appointment_service.find_next_two_available_slots(
             tech_id=tech_id,
             after=preferred_start,
             duration_minutes=duration_minutes,
         )
+        slots = (raw_slots or [])[:2]  # Cap at 2; prompt/agent then only need to say 2
         
-        if not slot:
+        if not slots:
             return ToolResponse(
                 speak=f"I couldn't find an available slot for {service_type.name.lower()} at this time. Would you like me to check with our scheduling team?",
                 action="needs_human",
@@ -95,19 +96,33 @@ async def handle_check_availability(
                 },
             )
         
-        # Format slot time
-        slot_time_str = slot.start.strftime("%A, %B %d at %I:%M %p")
+        next_available_slots = [
+            {"start": s.start.isoformat(), "end": s.end.isoformat(), "technician_id": tech_id}
+            for s in slots
+        ]
+        slot_time_strs = [s.start.strftime("%A, %B %d at %I:%M %p") for s in slots]
+        if len(slot_time_strs) >= 2:
+            speak = f"I have {slot_time_strs[0]} or {slot_time_strs[1]} for {service_type.name.lower()}. Which works better for you?"
+        elif len(slot_time_strs) == 1:
+            speak = f"The next available slot for {service_type.name.lower()} is {slot_time_strs[0]}. Would you like me to schedule this appointment?"
+        else:
+            return ToolResponse(
+                speak=f"I couldn't find an available slot for {service_type.name.lower()} at this time. Would you like me to check with our scheduling team?",
+                action="needs_human",
+                data={
+                    "availability_check": True,
+                    "service_type": service_type.name,
+                    "no_slots_available": True,
+                },
+            )
         
         return ToolResponse(
-            speak=f"The next available slot for {service_type.name.lower()} is {slot_time_str}. Would you like me to schedule this appointment?",
+            speak=speak,
             action="needs_human",  # Needs confirmation before scheduling
             data={
                 "availability_check": True,
-                "next_available_slot": {
-                    "start": slot.start.isoformat(),
-                    "end": slot.end.isoformat(),
-                    "technician_id": tech_id,
-                },
+                "next_available_slots": next_available_slots,
+                "next_available_slot": next_available_slots[0] if next_available_slots else None,
                 "service_type": service_type.name,
                 "duration_minutes": duration_minutes,
             },

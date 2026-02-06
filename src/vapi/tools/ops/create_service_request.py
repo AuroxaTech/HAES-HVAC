@@ -249,6 +249,15 @@ async def handle_create_service_request(
                     # Determine channel from command
                     channel_str = "voice" if command.channel == Channel.VOICE else "chat"
                     
+                    structured_params = {}
+                    if parameters.get("lead_source"):
+                        structured_params["lead_source"] = parameters.get("lead_source")
+                    if parameters.get("confirmed_partner_id") is not None:
+                        structured_params["_returning_customer"] = {"partner_id": parameters["confirmed_partner_id"]}
+                    elif parameters.get("_returning_customer"):
+                        structured_params["_returning_customer"] = parameters.get("_returning_customer")
+                    if parameters.get("caller_type"):
+                        structured_params["caller_type"] = parameters.get("caller_type")
                     try:
                         lead_id = await asyncio.wait_for(
                             lead_service.upsert_service_lead(
@@ -260,6 +269,7 @@ async def handle_create_service_request(
                                 raw_text=conversation_context or parameters.get("issue_description", ""),
                                 request_id=request_id,
                                 channel=channel_str,
+                                structured_params=structured_params or None,
                             ),
                             timeout=15.0,  # 15 second timeout for Odoo call
                         )

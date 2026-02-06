@@ -13,6 +13,7 @@ from src.vapi.tools.ops.check_availability import handle_check_availability
 from src.vapi.tools.ops.reschedule_appointment import handle_reschedule_appointment
 from src.vapi.tools.ops.cancel_appointment import handle_cancel_appointment
 from src.vapi.tools.ops.check_appointment_status import handle_check_appointment_status
+from src.vapi.tools.ops.lookup_customer_profile import handle_lookup_customer_profile
 
 # REVENUE tools
 from src.vapi.tools.revenue.request_quote import handle_request_quote
@@ -49,6 +50,7 @@ def register_all_tools():
     register_tool("reschedule_appointment", handle_reschedule_appointment)
     register_tool("cancel_appointment", handle_cancel_appointment)
     register_tool("check_appointment_status", handle_check_appointment_status)
+    register_tool("lookup_customer_profile", handle_lookup_customer_profile)
     
     # REVENUE tools
     register_tool("request_quote", handle_request_quote)

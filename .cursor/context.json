@@ -2,7 +2,7 @@
   "project": {
     "name": "HAES HVAC",
     "repo_root": "/Users/mac/Developer/HAES HVAC",
-    "description": "AI-powered HVAC Business Automation System integrating with Odoo 18 Enterprise, Vapi.ai, and Twilio"
+    "description": "AI-powered HVAC Business Automation System integrating with Odoo 18 Enterprise, Vapi.ai, 8x8 (customer inbound), and Twilio (SMS)"
   },
   "documentation": {
     "folder": "doc/",

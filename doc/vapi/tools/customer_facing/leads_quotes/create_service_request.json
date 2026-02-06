@@ -6,7 +6,7 @@
     "type": "function",
     "function": {
       "name": "create_service_request",
-      "description": "Create a service request for HVAC repair or maintenance. Use this when customer reports a problem (no heat, no AC, system not working, etc.). Handles emergency qualification, technician assignment, and lead creation.",
+      "description": "Create a service request for HVAC repair or maintenance. Use when customer reports a problem (no heat, no AC, etc.). Before calling, ask 'How did you hear about us?' and pass the answer as lead_source (Google, Referral, Social media, Previous customer, or Other). Handles emergency qualification, technician assignment, and lead creation.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -59,6 +59,20 @@
           "previous_technician_id": {
             "type": "string",
             "description": "Previous technician ID for warranty claims"
+          },
+          "lead_source": {
+            "type": "string",
+            "description": "Required for lead: how the customer heard about us. Ask 'How did you hear about us?' before finalizing. Normalize to one of the enum values.",
+            "enum": ["Google", "Referral", "Social media", "Previous customer", "Other"]
+          },
+          "confirmed_partner_id": {
+            "type": "integer",
+            "description": "Use this existing Odoo partner ID when customer confirmed their profile from lookup_customer_profile"
+          },
+          "caller_type": {
+            "type": "string",
+            "enum": ["tenant", "property_management"],
+            "description": "Whether the caller is a tenant or part of the property management team"
           }
         },
         "required": ["phone", "address", "issue_description"]

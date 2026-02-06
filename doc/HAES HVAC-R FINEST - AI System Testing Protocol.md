@@ -80,7 +80,7 @@ Comprehensive testing protocol to verify all AI voice agent functionality, 4-bra
 ### ✅ Pre-Testing Checklist
 
 - [ ]  Vapi assistant configured and active
-- [ ]  Twilio phone number forwarding to Vapi
+- [ ]  8x8 (customer line) and Twilio (OPS line) forwarding to Vapi
 - [ ]  [Fly.io](http://Fly.io) backend is deployed and healthy
 - [ ]  Odoo API connection tested
 - [ ]  All 4 AI Brains loaded (CORE, OPS, REVENUE, PEOPLE)
@@ -96,7 +96,7 @@ Comprehensive testing protocol to verify all AI voice agent functionality, 4-bra
 - [ ]  Vapi dashboard access (to review call logs)
 - [ ]  Odoo admin access (to verify lead creation)
 - [ ]  [Fly.io](http://Fly.io) logs access (to debug issues)
-- [ ]  Twilio call logs access
+- [ ]  8x8 / Twilio call logs access (customer / OPS lines)
 - [ ]  Email access (Junior & Linda accounts)
 
 ---
