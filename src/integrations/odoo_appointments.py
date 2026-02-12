@@ -141,15 +141,14 @@ class AppointmentService:
             
             domain = [("active", "=", True)]
             
-            # Build partner search domain
+            # Build partner search domain; keep phone_suffix for fallback (crm.lead by phone)
             partner_domain = []
+            phone_suffix = None
             if phone:
                 # Normalize phone: remove all non-digits, then use last 10 digits
                 clean_phone = re.sub(r"[^\d]", "", phone)  # Remove all non-digits (including +)
                 if clean_phone:
-                    # Use last 10 digits for matching (US numbers, or last 10 of international)
                     phone_suffix = clean_phone[-10:] if len(clean_phone) >= 10 else clean_phone
-                    # Search for phone containing these last 10 digits (handles +1, country codes, etc.)
                     partner_domain.append(("phone", "ilike", f"%{phone_suffix}"))
                     logger.info(f"Searching for partner with phone suffix: {phone_suffix} (from {phone})")
             if email:
@@ -186,10 +185,41 @@ class AppointmentService:
                 limit=50,
                 order="start desc",
             )
-            
+
+            # Fallback: if no events via partner_ids, find by CRM lead phone (appointments linked to leads)
+            if not events and phone_suffix:
+                try:
+                    # Match phone or mobile (Odoo crm.lead can store contact in either)
+                    lead_domain = [
+                        "|",
+                        ("phone", "ilike", phone_suffix),
+                        ("mobile", "ilike", phone_suffix),
+                    ]
+                    lead_ids = await self.client.search("crm.lead", lead_domain, limit=20)
+                    if lead_ids:
+                        event_domain = [
+                            ("active", "=", True),
+                            ("res_model", "=", "crm.lead"),
+                            ("res_id", "in", lead_ids),
+                        ]
+                        if date_from:
+                            event_domain.append(("start", ">=", date_from.strftime("%Y-%m-%d %H:%M:%S")))
+                        if date_to:
+                            event_domain.append(("start", "<=", date_to.strftime("%Y-%m-%d %H:%M:%S")))
+                        events = await self.client.search_read(
+                            "calendar.event",
+                            event_domain,
+                            fields=["id", "name", "start", "stop", "partner_ids", "user_id", "location", "res_id", "res_model"],
+                            limit=50,
+                            order="start desc",
+                        )
+                        logger.info(f"Found {len(events)} appointments via crm.lead fallback (phone suffix {phone_suffix})")
+                except Exception as fallback_e:
+                    logger.warning(f"Fallback find appointments by crm.lead phone failed: {fallback_e}")
+
             logger.info(f"Found {len(events)} appointments for contact (phone={bool(phone)}, email={bool(email)})")
             return events
-            
+
         except Exception as e:
             logger.error(f"Failed to find appointments by contact: {e}")
             return []

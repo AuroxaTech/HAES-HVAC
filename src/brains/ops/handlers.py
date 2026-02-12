@@ -77,7 +77,7 @@ async def handle_ops_command(command: HaelCommand) -> OpsResult:
         elif command.intent == Intent.CANCEL_APPOINTMENT:
             return await _handle_cancel_appointment(command)
         elif command.intent == Intent.STATUS_UPDATE_REQUEST:
-            return _handle_status_update(command)
+            return await _handle_status_update(command)
         else:
             return OpsResult(
                 status=OpsStatus.ERROR,
@@ -1243,27 +1243,107 @@ async def _handle_cancel_appointment(command: HaelCommand) -> OpsResult:
         )
 
 
-def _handle_status_update(command: HaelCommand) -> OpsResult:
-    """Handle status inquiry request."""
+async def _handle_status_update(command: HaelCommand) -> OpsResult:
+    """Handle status inquiry: look up upcoming appointment by phone/email and return date/time."""
     entities = command.entities
-    
-    # Need identity to lookup
+
     if not (entities.phone or entities.email):
         return OpsResult(
             status=OpsStatus.NEEDS_HUMAN,
-            message="Need contact information to look up your service status",
+            message="I need your phone number or email to look up your appointment.",
             requires_human=True,
             missing_fields=["phone or email"],
         )
-    
-    # For MVP, indicate lookup will happen
-    return OpsResult(
-        status=OpsStatus.SUCCESS,
-        message="Looking up your service status. A representative will provide an update shortly.",
-        requires_human=False,
-        data={
-            "contact_phone": entities.phone,
-            "contact_email": entities.email,
-        },
-    )
+
+    from src.integrations.odoo_appointments import create_appointment_service
+
+    try:
+        appointment_service = await create_appointment_service()
+        now = datetime.now()
+        date_to = now + timedelta(days=90)
+        events = await appointment_service.find_appointment_by_contact(
+            phone=entities.phone,
+            email=entities.email,
+            date_from=now,
+            date_to=date_to,
+        )
+        # Keep only future (or today) appointments, sort by start ascending, take next
+        future_events = []
+        for ev in events:
+            start_str = ev.get("start")
+            if not start_str:
+                continue
+            try:
+                start_dt = datetime.fromisoformat(start_str.replace("Z", "+00:00"))
+                if start_dt.tzinfo:
+                    start_dt = start_dt.replace(tzinfo=None)
+                if start_dt >= now:
+                    future_events.append((start_dt, ev))
+            except (ValueError, TypeError):
+                continue
+        future_events.sort(key=lambda x: x[0])
+
+        if not future_events:
+            customer_name = (entities.full_name or "You").strip() or "You"
+            return OpsResult(
+                status=OpsStatus.SUCCESS,
+                message=f"I don't see an upcoming appointment for {customer_name}. Would you like me to schedule one?",
+                requires_human=False,
+                data={
+                    "found": False,
+                    "contact_phone": entities.phone,
+                    "contact_email": entities.email,
+                },
+            )
+
+        start_dt, ev = future_events[0]
+        stop_str = ev.get("stop") or ""
+        try:
+            end_dt = datetime.fromisoformat(stop_str.replace("Z", "+00:00")) if stop_str else start_dt + timedelta(hours=4)
+            if end_dt.tzinfo:
+                end_dt = end_dt.replace(tzinfo=None)
+        except (ValueError, TypeError):
+            end_dt = start_dt + timedelta(hours=4)
+
+        # Format date: "Thursday, February 15th"
+        day = start_dt.day
+        suffix = "th" if 4 <= day % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
+        date_str = start_dt.strftime("%A, %B ") + str(day) + suffix
+
+        # 4-hour window: "10 AM - 2 PM"
+        h_start = start_dt.hour % 12 or 12
+        ampm_start = "AM" if start_dt.hour < 12 else "PM"
+        h_end = end_dt.hour % 12 or 12
+        ampm_end = "AM" if end_dt.hour < 12 else "PM"
+        time_window = f"{h_start} {ampm_start} - {h_end} {ampm_end}"
+
+        customer_name = (entities.full_name or "You").strip() or "You"
+        message = f"{customer_name} has an appointment scheduled for {date_str} between {time_window}."
+
+        return OpsResult(
+            status=OpsStatus.SUCCESS,
+            message=message,
+            requires_human=False,
+            data={
+                "found": True,
+                "appointment_date": start_dt.strftime("%Y-%m-%d"),
+                "time_window": time_window,
+                "appointment_datetime_start": start_dt.isoformat(),
+                "appointment_datetime_end": end_dt.isoformat(),
+                "contact_phone": entities.phone,
+                "contact_email": entities.email,
+            },
+        )
+    except Exception as e:
+        logger.exception(f"Error looking up appointment status: {e}")
+        return OpsResult(
+            status=OpsStatus.ERROR,
+            message="I had trouble looking up your appointment. Please try again or call us directly.",
+            requires_human=True,
+            data={
+                "contact_phone": entities.phone,
+                "contact_email": entities.email,
+                "error": str(e),
+            },
+        )
 
