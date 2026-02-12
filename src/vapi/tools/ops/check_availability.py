@@ -24,6 +24,18 @@ from src.brains.ops.service_catalog import infer_service_type_from_description
 
 logger = logging.getLogger(__name__)
 
+# 4-hour block display: "8 AM", "12 PM" (no leading zero, no minutes when :00)
+def _format_time_block(dt: datetime) -> str:
+    h = dt.hour % 12 or 12
+    ampm = "AM" if dt.hour < 12 else "PM"
+    return f"{h} {ampm}"
+
+
+def _format_slot_as_4hr_block(start: datetime, end: datetime) -> str:
+    """Format a slot as 'Monday, January 27, 8 AM to 12 PM' (4-hour block)."""
+    day_part = start.strftime("%A, %B %d")
+    return f"{day_part}, {_format_time_block(start)} to {_format_time_block(end)}"
+
 
 async def handle_check_availability(
     tool_call_id: str,
@@ -100,7 +112,8 @@ async def handle_check_availability(
             {"start": s.start.isoformat(), "end": s.end.isoformat(), "technician_id": tech_id}
             for s in slots
         ]
-        slot_time_strs = [s.start.strftime("%A, %B %d at %I:%M %p") for s in slots]
+        # Format each slot as a 4-hour block: "Monday, January 27, 8 AM to 12 PM"
+        slot_time_strs = [_format_slot_as_4hr_block(s.start, s.end) for s in slots]
         if len(slot_time_strs) >= 2:
             speak = f"I have {slot_time_strs[0]} or {slot_time_strs[1]} for {service_type.name.lower()}. Which works better for you?"
         elif len(slot_time_strs) == 1:

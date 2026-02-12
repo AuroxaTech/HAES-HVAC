@@ -59,7 +59,7 @@ router = APIRouter(prefix="/vapi", tags=["vapi-server"])
 BUSINESS_TZ = ZoneInfo("America/Chicago")
 BUSINESS_HOURS_START = 8  # 8 AM
 BUSINESS_HOURS_END = 17   # 5 PM (17:00)
-TRANSFER_NUMBER = "+19723724458"
+TRANSFER_NUMBER = "+19729271800"
 
 
 # ============================================================================

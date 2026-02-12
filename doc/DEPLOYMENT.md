@@ -128,6 +128,10 @@ This endpoint handles:
 
 ### Vapi Dashboard Configuration
 
+**Phone / voice behavior (configure in Vapi Dashboard):**
+- **Ring delay (answer delay):** To allow 2–3 rings before the assistant answers, set the **answer delay** or **rings before answer** in the Vapi phone number / provider settings (e.g. under the number that receives inbound calls). This is not in the system prompt; it is a Vapi dashboard or provider (e.g. 8x8) setting.
+- **Phone number repeat / speech:** If the bot’s repeat of numbers (e.g. phone, confirmation) is unclear, check Vapi’s voice/speech settings (TTS, speed, or “say numbers as digits” if available) so numbers are spoken clearly.
+
 1. **Update Assistant "Riley"**:
    - Go to Vapi Dashboard > Assistants > Riley
    - Set **Server URL**: `https://haes-hvac.fly.dev/vapi/server`
@@ -151,7 +155,7 @@ This endpoint handles:
 
 ### Transfer Policy
 
-- **During business hours (8 AM - 5 PM CST, Mon-Fri)**: Transfer to `972-372-4458`
+- **During business hours (8 AM - 5 PM CST, Mon-Fri)**: Transfer to `972-927-1800`
 - **After hours**: Collect callback info, no transfer
 
 ### Signature Verification
