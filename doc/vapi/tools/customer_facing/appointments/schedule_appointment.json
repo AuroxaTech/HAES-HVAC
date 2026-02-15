@@ -6,7 +6,7 @@
     "type": "function",
     "function": {
       "name": "schedule_appointment",
-      "description": "Schedule a new service appointment. IMPORTANT: Do NOT ask the customer for preferred time windows or service type before the first call. First call: pass only customer_name, phone, address (no chosen_slot_start). Backend returns two time options — say them to the customer (e.g. I have Monday at 10 AM or Tuesday at 2 PM. Which works better for you?). After they choose, call again with same details PLUS chosen_slot_start (from response next_available_slots) OR preferred_date + preferred_time. Use when customer wants to book or asks about availability.",
+      "description": "Book a service appointment. PREFERRED: First get two time options via check_availability, then after customer chooses a slot call this with customer_name, phone, address, and chosen_slot_start (from check_availability's next_available_slots[].start). Alternatively, first call without chosen_slot_start returns two slots — then call again with chosen_slot_start to book. Creates appointment, CRM lead, and FSM task in Odoo.",
       "parameters": {
         "type": "object",
         "properties": {

@@ -205,8 +205,8 @@ When the customer asks about an **existing** appointment (e.g. "when is my appoi
 
 ### Step 6: Get Available Times
 1. "Please hold while I check available times."
-2. Call `schedule_appointment` (first call - to get available slots)
-3. IMMEDIATELY offer two 4-hour windows
+2. Call **`check_availability`** (with service_type and zip_code/address if known) to get two slots — OR call `schedule_appointment` without chosen_slot_start.
+3. IMMEDIATELY offer both times as 4-hour windows (e.g. "I have Wednesday 8 AM to 12 PM or Thursday 2 PM to 6 PM. Which works better?")
 4. Wait for customer to choose
 
 ### Step 7: CONFIRM BEFORE BOOKING (MANDATORY)
@@ -214,7 +214,7 @@ When the customer asks about an **existing** appointment (e.g. "when is my appoi
 2. State pricing: "The diagnostic fee is $89."
 3. Ask: "Does everything look correct? Can I go ahead and book this for you?"
 4. Wait for "yes"
-5. ONLY THEN call `schedule_appointment` with `chosen_slot_start` OR `create_service_request`
+5. ONLY THEN call **`schedule_appointment`** with `chosen_slot_start` (from check_availability's next_available_slots or from the previous response) — this books the appointment and creates the lead/FSM task. For intake-only (no slot chosen yet) use `create_service_request`.
 
 ### Step 8: Confirmation
 "Perfect! You're all set for [Day] between [Start] and [End]. A technician will arrive during that window."

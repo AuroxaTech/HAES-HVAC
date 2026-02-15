@@ -492,7 +492,24 @@ async def _handle_schedule_appointment(command: HaelCommand) -> OpsResult:
         service_name = service_type.name
         appointment_name = f"{service_name} - {customer_name}"
         
-        # Create calendar event in Odoo
+        # Create or update CRM lead so we have a lead to link and FSM task is auto-created (Phase 2)
+        call_id = (command.metadata or {}).get("call_id") or f"schedule_{command.request_id}"
+        lead_result = await lead_service.upsert_service_lead(
+            call_id=call_id,
+            entities=entities,
+            urgency=UrgencyLevel.UNKNOWN,
+            is_emergency=False,
+            emergency_reason=None,
+            raw_text=command.raw_text or "",
+            structured_params={"service_type": service_type.name},
+            request_id=command.request_id,
+            channel="voice",
+        )
+        if lead_result.get("lead_id"):
+            lead_id = lead_result["lead_id"]
+            logger.info(f"Schedule appointment: linked to lead {lead_id}")
+        
+        # Create calendar event in Odoo (linked to lead when present)
         event_id = await appointment_service.create_appointment(
             name=appointment_name,
             start=slot.start,

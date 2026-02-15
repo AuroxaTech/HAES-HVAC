@@ -989,6 +989,21 @@ class LeadService:
                 action = "created"
             
             # ---------------------------------------------------------------------
+            # Create FSM task so job appears in Field Service (same as "Create FSM Task" button)
+            # ---------------------------------------------------------------------
+            if lead_id and action == "created":
+                try:
+                    await self.client.call_kw(
+                        "crm.lead",
+                        "action_open_fsm_task",
+                        [[lead_id]],
+                        {},
+                    )
+                    logger.info(f"Triggered FSM task for lead {lead_id}")
+                except OdooRPCError as e:
+                    logger.warning(f"Could not trigger FSM task for lead {lead_id}: {e}")
+            
+            # ---------------------------------------------------------------------
             # Emergency handling: tag + chatter + activities
             # ---------------------------------------------------------------------
             if is_emergency and lead_id:

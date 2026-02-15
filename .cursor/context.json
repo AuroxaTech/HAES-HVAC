@@ -644,10 +644,12 @@
         "Partner/contact management with name matching",
         "Emergency priority tagging",
         "HTML-formatted internal notes",
-        "Chatter messages and activity creation"
+        "Chatter messages and activity creation",
+        "Auto FSM task: on new lead creation calls crm.lead action_open_fsm_task so job appears in Field Service"
       ],
       "integrated_with": "src/api/vapi_server.py - Vapi Server URL endpoint",
-      "audit_logging": "Full audit trail for all Odoo operations"
+      "audit_logging": "Full audit trail for all Odoo operations",
+      "fsm_automation": "When a new lead is created, action_open_fsm_task is called via call_kw so the job appears in Odoo Field Service without manual Create FSM Task button"
     },
     "odoo_appointments": {
       "module": "src/integrations/odoo_appointments.py",
@@ -667,7 +669,7 @@
         "src/brains/ops/scheduling_rules.py - Business hours and slot calculation",
         "src/brains/ops/tech_roster.py - Technician assignment and availability"
       ],
-      "notes": "Full appointment scheduling lifecycle with Odoo calendar events. Handlers are async."
+      "notes": "Full appointment scheduling lifecycle with Odoo calendar events. Handlers are async. Schedule flow creates/updates CRM lead and links event to lead (lead_id); FSM task is created automatically via odoo_lead_integration when lead is created."
     },
     "chat_integration": {
       "module": "src/api/chat.py",

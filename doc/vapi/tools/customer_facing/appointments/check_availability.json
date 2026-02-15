@@ -6,7 +6,7 @@
     "type": "function",
     "function": {
       "name": "check_availability",
-      "description": "Check next available appointment slots without creating an appointment. Use this when customer asks 'when are you available?' or 'what's your next slot?'",
+      "description": "Get the next two available appointment slots (no booking). Use when customer asks 'when are you available?' or before booking. Returns next_available_slots. After the customer chooses a slot, call schedule_appointment with chosen_slot_start set to the chosen slot's start from next_available_slots.",
       "parameters": {
         "type": "object",
         "properties": {
