@@ -12,6 +12,7 @@ from typing import Any
 
 from src.integrations.odoo import OdooClient, create_odoo_client_from_settings
 from src.hael.schema import Entity, UrgencyLevel
+from src.utils.no_pricing_accounts import classify_no_pricing_account, normalize_caller_type
 from src.utils.errors import OdooRPCError, OdooTransportError
 
 logger = logging.getLogger(__name__)
@@ -70,6 +71,7 @@ class LeadService:
         self.client = client
         self._crm_lead_fields: set[str] | None = None
         self._partner_fields: set[str] | None = None
+        self._project_task_fields: set[str] | None = None
     
     async def _ensure_authenticated(self) -> None:
         """Ensure the client is authenticated."""
@@ -108,10 +110,98 @@ class LeadService:
                 logger.warning(f"Failed to get res.partner fields: {e}")
                 self._partner_fields = {"name", "phone", "email", "street", "city", "zip"}
         return self._partner_fields
+
+    async def _get_project_task_fields(self) -> set[str]:
+        """
+        Get available fields for project.task model.
+        Caches result for performance.
+        """
+        if self._project_task_fields is None:
+            try:
+                await self._ensure_authenticated()
+                fields_info = await self.client.fields_get("project.task")
+                self._project_task_fields = set(fields_info.keys())
+                logger.debug(f"Cached {len(self._project_task_fields)} project.task fields")
+            except Exception as e:
+                logger.warning(f"Failed to get project.task fields: {e}")
+                self._project_task_fields = {"name", "partner_id", "project_id", "description"}
+        return self._project_task_fields
     
     def _filter_valid_fields(self, values: dict[str, Any], valid_fields: set[str]) -> dict[str, Any]:
         """Filter out fields that don't exist in the model."""
         return {k: v for k, v in values.items() if k in valid_fields and v is not None}
+
+    async def _get_field_service_project_id(self) -> int | None:
+        """
+        Resolve the Field Service project ID used for FSM tasks.
+        """
+        try:
+            await self._ensure_authenticated()
+            projects = await self.client.search_read(
+                "project.project",
+                [("name", "ilike", "Field Service")],
+                fields=["id", "name"],
+                limit=1,
+            )
+            if projects:
+                return int(projects[0]["id"])
+        except Exception as e:
+            logger.warning(f"Could not resolve Field Service project: {e}")
+        return None
+
+    async def _create_fsm_task_for_lead(
+        self,
+        lead_id: int,
+        lead_name: str | None,
+        partner_id: int | None,
+        lead_description: str | None,
+    ) -> int | None:
+        """
+        Create and link a project.task when custom lead action does not create it.
+
+        Some Odoo customizations expose `crm.lead.action_open_fsm_task` as an
+        open-only method that raises when no task exists. This fallback ensures
+        the FSM task is still created and linked to the lead.
+        """
+        try:
+            await self._ensure_authenticated()
+            task_fields = await self._get_project_task_fields()
+            lead_fields = await self._get_crm_lead_fields()
+
+            task_values: dict[str, Any] = {
+                "name": lead_name or f"Service Request - Lead {lead_id}",
+            }
+            if partner_id and "partner_id" in task_fields:
+                task_values["partner_id"] = partner_id
+            if lead_description and "description" in task_fields:
+                task_values["description"] = lead_description
+
+            # Prefer explicit Field Service project when present in this Odoo.
+            if "project_id" in task_fields:
+                project_id = await self._get_field_service_project_id()
+                if project_id:
+                    task_values["project_id"] = project_id
+
+            task_values = self._filter_valid_fields(task_values, task_fields)
+            if "name" not in task_values:
+                logger.warning(f"FSM fallback: cannot create task for lead {lead_id} (missing task name)")
+                return None
+
+            task_id = await self.client.create("project.task", task_values)
+            logger.info(f"FSM fallback: created project.task {task_id} for lead {lead_id}")
+
+            # Link task back to lead when custom relation field exists.
+            if "project_task_id" in lead_fields:
+                try:
+                    await self.client.write("crm.lead", [lead_id], {"project_task_id": task_id})
+                    logger.info(f"FSM fallback: linked lead {lead_id} -> project.task {task_id}")
+                except Exception as link_e:
+                    logger.warning(f"FSM fallback: could not link lead {lead_id} to task {task_id}: {link_e}")
+
+            return int(task_id)
+        except Exception as e:
+            logger.warning(f"FSM fallback failed for lead {lead_id}: {e}")
+            return None
     
     async def find_partner_by_phone(self, phone: str | None) -> dict[str, Any] | None:
         """
@@ -787,6 +877,9 @@ class LeadService:
             
             if entities.problem_description:
                 desc_html.append(f'<tr><td style="padding:5px;font-weight:bold;vertical-align:top;">Issue:</td><td style="padding:5px;">{entities.problem_description}</td></tr>')
+            technician_notes = (structured_params or {}).get("technician_notes")
+            if technician_notes:
+                desc_html.append(f'<tr><td style="padding:5px;font-weight:bold;vertical-align:top;">Technician Notes:</td><td style="padding:5px;">{technician_notes}</td></tr>')
             
             desc_html.append('</table>')
             
@@ -871,47 +964,73 @@ class LeadService:
                 customer_type = "Property Management"
                 pricing_tier = "Default-PM Pricing"
                 tags_to_add.append("Property Management")
-            # Caller type: tenant vs property_management (for tagging and notification)
-            caller_type = (structured_params or {}).get("caller_type")
-            if caller_type == "tenant":
-                tags_to_add.append("Tenant")
-                desc_html.insert(-1, f'<tr><td style="padding:3px;">Caller:</td><td style="padding:3px;">Tenant</td></tr>')
+            # Caller type and PM/company classification (pricing-disclosure policy)
+            caller_type = normalize_caller_type((structured_params or {}).get("caller_type"))
+            pm_company_name = None
+            if structured_params and "pm_company_name" in structured_params:
+                pm_company_name = structured_params["pm_company_name"]
+            elif structured_params and "property_management_company" in structured_params:
+                pm_company_name = structured_params["property_management_company"]
+
+            # Explicit flag from upstream tool (if provided) OR infer from PM company name
+            no_pricing_account = bool((structured_params or {}).get("no_pricing_account", False))
+            no_pricing_company_match = (structured_params or {}).get("no_pricing_company_match")
+            if pm_company_name:
+                inferred_no_pricing, inferred_match = classify_no_pricing_account(pm_company_name)
+                no_pricing_account = no_pricing_account or inferred_no_pricing
+                no_pricing_company_match = no_pricing_company_match or inferred_match
+
+            caller_label_map = {
+                "tenant": "Tenant",
+                "homeowner": "Homeowner",
+                "property_management": "Property Management",
+                "business": "Business",
+            }
+            if caller_type in caller_label_map:
+                desc_html.insert(-1, f'<tr><td style="padding:3px;">Caller:</td><td style="padding:3px;">{caller_label_map[caller_type]}</td></tr>')
+                if caller_type == "tenant":
+                    tags_to_add.append("Tenant")
+                elif caller_type == "property_management":
+                    tags_to_add.append("Property Management Caller")
+                elif caller_type == "business":
+                    tags_to_add.append("Business Caller")
                 description = "".join(desc_html)
                 lead_values["description"] = description
-            elif caller_type == "property_management":
-                tags_to_add.append("Property Management Caller")
-                desc_html.insert(-1, f'<tr><td style="padding:3px;">Caller:</td><td style="padding:3px;">Property Management</td></tr>')
+
+            # Add PM company name to description if available
+            if pm_company_name:
+                desc_html.insert(-1, f'<tr><td style="padding:3px;">PM Company:</td><td style="padding:3px;">{pm_company_name}</td></tr>')
                 description = "".join(desc_html)
                 lead_values["description"] = description
-                
-                # Extract PM company name from metadata or description
-                pm_company_name = None
-                if structured_params and "pm_company_name" in structured_params:
-                    pm_company_name = structured_params["pm_company_name"]
-                elif structured_params and "property_management_company" in structured_params:
-                    pm_company_name = structured_params["property_management_company"]
-                
-                # Add PM company name to description if available
-                if pm_company_name:
-                    desc_html.insert(-1, f'<tr><td style="padding:3px;">PM Company:</td><td style="padding:3px;">{pm_company_name}</td></tr>')
-                    description = "".join(desc_html)
-                    lead_values["description"] = description
-                    
-                    # Check if Lessen and set tax-exempt flag
-                    if "lessen" in pm_company_name.lower():
-                        # Try to set tax-exempt flag (may be on partner or lead)
-                        if "is_tax_exempt" in valid_fields:
-                            lead_values["is_tax_exempt"] = True
-                        elif "tax_exempt" in valid_fields:
-                            lead_values["tax_exempt"] = True
-                        tags_to_add.append("Tax Exempt")
-                
-                # Set payment terms to Net 30 for PM customers
-                # Try common field names for payment terms
+
+                # Lessen-specific tax exempt handling
+                if "lessen" in pm_company_name.lower():
+                    if "is_tax_exempt" in valid_fields:
+                        lead_values["is_tax_exempt"] = True
+                    elif "tax_exempt" in valid_fields:
+                        lead_values["tax_exempt"] = True
+                    tags_to_add.append("Tax Exempt")
+
+            # Managed accounts: suppress pricing disclosure and annotate lead
+            if no_pricing_account:
+                tags_to_add.append("No Pricing Account")
+                desc_html.insert(
+                    -1,
+                    f'<tr><td style="padding:3px;">Pricing Disclosure:</td><td style="padding:3px;">Managed Account (No Pricing)</td></tr>',
+                )
+                if no_pricing_company_match:
+                    desc_html.insert(
+                        -1,
+                        f'<tr><td style="padding:3px;">No-Pricing Match:</td><td style="padding:3px;">{no_pricing_company_match}</td></tr>',
+                    )
+                description = "".join(desc_html)
+                lead_values["description"] = description
+
+            # PM/business workflows default to Net 30 payment terms
+            if caller_type in {"property_management", "business"} or property_type in {"property_management", "property management", "pm"}:
                 for field_name in ["payment_term_id", "payment_terms_id", "payment_terms"]:
                     if field_name in valid_fields:
                         try:
-                            # Search for Net 30 payment term
                             payment_terms = await self.client.search_read(
                                 "account.payment.term",
                                 [("name", "ilike", "Net 30")],
@@ -923,8 +1042,6 @@ class LeadService:
                                 break
                         except Exception:
                             pass
-                
-                # Add payment terms note to description
                 desc_html.insert(-1, f'<tr><td style="padding:3px;">Payment Terms:</td><td style="padding:3px;">Net 30</td></tr>')
                 description = "".join(desc_html)
                 lead_values["description"] = description
@@ -991,6 +1108,7 @@ class LeadService:
             # ---------------------------------------------------------------------
             # Create FSM task so job appears in Field Service (same as "Create FSM Task" button)
             # ---------------------------------------------------------------------
+            fsm_task_id: int | None = None
             if lead_id and action == "created":
                 try:
                     await self.client.call_kw(
@@ -1002,6 +1120,25 @@ class LeadService:
                     logger.info(f"Triggered FSM task for lead {lead_id}")
                 except OdooRPCError as e:
                     logger.warning(f"Could not trigger FSM task for lead {lead_id}: {e}")
+
+                    # Custom Odoo behavior in this instance: action_open_fsm_task can be
+                    # open-only and error when no task exists. Always try direct fallback
+                    # creation so we still guarantee a Field Service task.
+                    fsm_task_id = await self._create_fsm_task_for_lead(
+                        lead_id=lead_id,
+                        lead_name=lead_values.get("name"),
+                        partner_id=partner_id,
+                        lead_description=lead_values.get("description"),
+                    )
+                else:
+                    # If open action succeeded, relation may already exist; read it.
+                    try:
+                        lead_rows = await self.client.read("crm.lead", [lead_id], fields=["project_task_id"])
+                        if lead_rows and lead_rows[0].get("project_task_id"):
+                            linked = lead_rows[0]["project_task_id"]
+                            fsm_task_id = linked[0] if isinstance(linked, list) else linked
+                    except Exception:
+                        pass
             
             # ---------------------------------------------------------------------
             # Emergency handling: tag + chatter + activities
@@ -1038,6 +1175,10 @@ class LeadService:
                 "partner_id": partner_id,
                 "customer_type": customer_type,
                 "pricing_tier": pricing_tier,
+                "no_pricing_account": no_pricing_account,
+                "no_pricing_company_match": no_pricing_company_match,
+                "property_management_company": pm_company_name,
+                "fsm_task_id": fsm_task_id if action == "created" else None,
             }
                 
         except OdooRPCError as e:

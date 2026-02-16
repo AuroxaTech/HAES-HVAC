@@ -24,6 +24,7 @@ from src.utils.request_id import generate_request_id
 from src.vapi.tools.utils.service_area import is_within_service_area
 from src.vapi.tools.utils.check_business_hours import is_business_hours
 from src.integrations.odoo_leads import create_lead_service
+from src.utils.no_pricing_accounts import classify_no_pricing_account, normalize_caller_type
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,9 @@ async def handle_create_service_request(
         - system_type (optional): HVAC system type
         - indoor_temperature_f (optional): Indoor temperature for emergency qualification
         - property_type (optional): "residential", "commercial", "property_management"
+        - caller_type (optional): "homeowner", "tenant", "property_management", "business"
+        - property_management_company (optional): PM/company name for managed accounts
+        - technician_notes (optional): Extra notes customer wants technician to know before arrival
         - is_warranty (optional): Boolean, true if warranty claim
         - previous_service_id (optional): Previous service ID for warranty claims
         - previous_technician_id (optional): Previous technician ID for warranty claims
@@ -75,6 +79,13 @@ async def handle_create_service_request(
             missing_fields=["phone"],
             intent_acknowledged=False,
         )
+
+    caller_type = normalize_caller_type(parameters.get("caller_type"))
+    pm_company_name = (
+        parameters.get("property_management_company")
+        or parameters.get("pm_company_name")
+    )
+    no_pricing_account, no_pricing_company_match = classify_no_pricing_account(pm_company_name)
     
     # Check for duplicate call (recent call or existing appointment)
     duplicate_info = await handler.check_duplicate_call(phone, call_id)
@@ -176,6 +187,10 @@ async def handle_create_service_request(
             "is_warranty": parameters.get("is_warranty", False),
             "previous_service_id": parameters.get("previous_service_id"),
             "previous_technician_id": parameters.get("previous_technician_id"),
+            "caller_type": caller_type,
+            "property_management_company": pm_company_name,
+            "no_pricing_account": no_pricing_account,
+            "no_pricing_company_match": no_pricing_company_match,
         },
     )
     
@@ -257,7 +272,15 @@ async def handle_create_service_request(
                     elif parameters.get("_returning_customer"):
                         structured_params["_returning_customer"] = parameters.get("_returning_customer")
                     if parameters.get("caller_type"):
-                        structured_params["caller_type"] = parameters.get("caller_type")
+                        structured_params["caller_type"] = caller_type or parameters.get("caller_type")
+                    if pm_company_name:
+                        structured_params["property_management_company"] = pm_company_name
+                    if parameters.get("technician_notes"):
+                        structured_params["technician_notes"] = parameters.get("technician_notes")
+                    if no_pricing_account:
+                        structured_params["no_pricing_account"] = True
+                    if no_pricing_company_match:
+                        structured_params["no_pricing_company_match"] = no_pricing_company_match
                     try:
                         lead_id = await asyncio.wait_for(
                             lead_service.upsert_service_lead(
@@ -388,6 +411,14 @@ async def handle_create_service_request(
                 "repairs": "30-day labor warranty",
                 "equipment": "1-year labor warranty",
             }
+
+        # Add managed-account no-pricing metadata for assistant policy handling
+        response_data["caller_type"] = caller_type
+        if pm_company_name:
+            response_data["property_management_company"] = pm_company_name
+        response_data["no_pricing_account"] = no_pricing_account
+        if no_pricing_company_match:
+            response_data["no_pricing_company_match"] = no_pricing_company_match
         
         # Enhance message with business hours/weekend info and warranty terms
         enhanced_message = result.message
@@ -397,8 +428,13 @@ async def handle_create_service_request(
             enhanced_message += " " + " ".join(premium_messages)
         
         # Add warranty terms to message if warranty claim
-        if parameters.get("is_warranty"):
+        if parameters.get("is_warranty") and not no_pricing_account:
             enhanced_message += " As a warranty claim, this service includes: Repairs - 30-day labor warranty, Equipment - 1-year labor warranty. The diagnostic fee will be waived."
+        elif no_pricing_account:
+            company_ref = no_pricing_company_match or pm_company_name or "your management account"
+            enhanced_message += (
+                f" Since this request is managed by {company_ref}, pricing is handled through your property management account."
+            )
         
         # Add business hours/weekend flags to response data
         response_data["is_weekend"] = is_weekend

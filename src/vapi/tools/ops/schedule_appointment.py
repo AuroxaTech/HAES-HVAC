@@ -22,6 +22,7 @@ from src.brains.ops.schema import OpsStatus
 from src.utils.request_id import generate_request_id
 from src.vapi.tools.utils.service_area import is_within_service_area
 from src.vapi.tools.utils.check_business_hours import is_business_hours
+from src.utils.no_pricing_accounts import classify_no_pricing_account, normalize_caller_type
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,9 @@ async def handle_schedule_appointment(
         - preferred_time_windows (optional): List of preferred time windows
         - problem_description (optional): Problem description
         - property_type (optional): "residential", "commercial", "property_management"
+        - caller_type (optional): "homeowner", "tenant", "property_management", "business"
+        - property_management_company (optional): PM/company name for managed accounts
+        - technician_notes (optional): Extra notes customer wants technician to know before arrival
     """
     handler = BaseToolHandler("schedule_appointment")
     
@@ -67,6 +71,13 @@ async def handle_schedule_appointment(
             missing_fields=["phone"],
             intent_acknowledged=False,
         )
+
+    caller_type = normalize_caller_type(parameters.get("caller_type"))
+    pm_company_name = (
+        parameters.get("property_management_company")
+        or parameters.get("pm_company_name")
+    )
+    no_pricing_account, no_pricing_company_match = classify_no_pricing_account(pm_company_name)
     
     # Check for duplicate call (recent call or existing appointment)
     duplicate_info = await handler.check_duplicate_call(phone, call_id)
@@ -152,6 +163,11 @@ async def handle_schedule_appointment(
             "tool_call_id": tool_call_id,
             "call_id": call_id,
             "chosen_slot_start": chosen_slot_start,
+            "technician_notes": parameters.get("technician_notes"),
+            "caller_type": caller_type,
+            "property_management_company": pm_company_name,
+            "no_pricing_account": no_pricing_account,
+            "no_pricing_company_match": no_pricing_company_match,
             "_returning_customer": (
                 {"partner_id": parameters["confirmed_partner_id"]}
                 if parameters.get("confirmed_partner_id") is not None
@@ -165,10 +181,17 @@ async def handle_schedule_appointment(
         result = await handle_ops_command(command)
         
         if result.requires_human or result.status == OpsStatus.NEEDS_HUMAN:
+            needs_human_data = result.data or {}
+            needs_human_data["caller_type"] = caller_type
+            needs_human_data["no_pricing_account"] = no_pricing_account
+            if pm_company_name:
+                needs_human_data["property_management_company"] = pm_company_name
+            if no_pricing_company_match:
+                needs_human_data["no_pricing_company_match"] = no_pricing_company_match
             return handler.format_needs_human_response(
                 result.message,
                 missing_fields=getattr(result, "missing_fields", None),
-                data=result.data or {},
+                data=needs_human_data,
             )
         
         if result.status == OpsStatus.ERROR:
@@ -180,6 +203,12 @@ async def handle_schedule_appointment(
         # Format success response
         response_data = result.data or {}
         response_data["request_id"] = request_id
+        response_data["caller_type"] = caller_type
+        response_data["no_pricing_account"] = no_pricing_account
+        if pm_company_name:
+            response_data["property_management_company"] = pm_company_name
+        if no_pricing_company_match:
+            response_data["no_pricing_company_match"] = no_pricing_company_match
         
         # Schedule reminder SMS 2 hours before appointment
         if result.data and result.data.get("appointment_id") and result.data.get("scheduled_time"):

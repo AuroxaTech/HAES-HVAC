@@ -645,11 +645,15 @@
         "Emergency priority tagging",
         "HTML-formatted internal notes",
         "Chatter messages and activity creation",
-        "Auto FSM task: on new lead creation calls crm.lead action_open_fsm_task so job appears in Field Service"
+        "Auto FSM task: on new lead creation calls crm.lead action_open_fsm_task so job appears in Field Service",
+        "FSM fallback task creation: if custom action_open_fsm_task only opens existing task and raises 'No FSM Task linked to this lead.', backend creates project.task directly and links crm.lead.project_task_id",
+        "Managed no-pricing policy for tenant/business/property-management callers using PM/company list matching",
+        "Technician notes capture: optional technician_notes persisted in lead description for pre-arrival instructions"
       ],
       "integrated_with": "src/api/vapi_server.py - Vapi Server URL endpoint",
       "audit_logging": "Full audit trail for all Odoo operations",
-      "fsm_automation": "When a new lead is created, action_open_fsm_task is called via call_kw so the job appears in Odoo Field Service without manual Create FSM Task button"
+      "fsm_automation": "When a new lead is created, action_open_fsm_task is called via call_kw so the job appears in Odoo Field Service without manual Create FSM Task button",
+      "managed_account_pricing_policy": "Caller type + property management company are captured for scheduling/service request flows. If company matches configured no-pricing accounts (e.g. Invitation Homes, Lessen, BridgeHomes, Pathlight, Tricon, MCR Hotels, Hilton, Marriott, etc.), response data is flagged no_pricing_account=true and lead is tagged 'No Pricing Account'."
     },
     "odoo_appointments": {
       "module": "src/integrations/odoo_appointments.py",
@@ -669,7 +673,7 @@
         "src/brains/ops/scheduling_rules.py - Business hours and slot calculation",
         "src/brains/ops/tech_roster.py - Technician assignment and availability"
       ],
-      "notes": "Full appointment scheduling lifecycle with Odoo calendar events. Handlers are async. Schedule flow creates/updates CRM lead and links event to lead (lead_id); FSM task is created automatically via odoo_lead_integration when lead is created."
+      "notes": "Full appointment scheduling lifecycle with Odoo calendar events. Handlers are async. Schedule flow creates/updates CRM lead and links event to lead (lead_id); FSM task is created automatically via odoo_lead_integration when lead is created. Appointment lookup fallback now matches calendar.event by res_id when custom Odoo stores res_id but leaves res_model empty. Optional technician_notes are included in appointment description and lead context."
     },
     "chat_integration": {
       "module": "src/api/chat.py",

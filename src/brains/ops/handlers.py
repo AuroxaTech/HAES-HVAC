@@ -7,6 +7,7 @@ Main entry point for OPS brain command handling.
 import logging
 import re
 from datetime import datetime, timedelta
+from typing import Any
 
 from src.hael.schema import HaelCommand, Intent, UrgencyLevel
 from src.brains.ops.schema import (
@@ -494,6 +495,23 @@ async def _handle_schedule_appointment(command: HaelCommand) -> OpsResult:
         
         # Create or update CRM lead so we have a lead to link and FSM task is auto-created (Phase 2)
         call_id = (command.metadata or {}).get("call_id") or f"schedule_{command.request_id}"
+        schedule_structured_params: dict[str, Any] = {"service_type": service_type.name}
+        caller_type = (command.metadata or {}).get("caller_type")
+        pm_company_name = (command.metadata or {}).get("property_management_company")
+        no_pricing_account = (command.metadata or {}).get("no_pricing_account")
+        no_pricing_company_match = (command.metadata or {}).get("no_pricing_company_match")
+        technician_notes = (command.metadata or {}).get("technician_notes")
+        if caller_type:
+            schedule_structured_params["caller_type"] = caller_type
+        if pm_company_name:
+            schedule_structured_params["property_management_company"] = pm_company_name
+        if technician_notes:
+            schedule_structured_params["technician_notes"] = technician_notes
+        if no_pricing_account is not None:
+            schedule_structured_params["no_pricing_account"] = bool(no_pricing_account)
+        if no_pricing_company_match:
+            schedule_structured_params["no_pricing_company_match"] = no_pricing_company_match
+
         lead_result = await lead_service.upsert_service_lead(
             call_id=call_id,
             entities=entities,
@@ -501,7 +519,7 @@ async def _handle_schedule_appointment(command: HaelCommand) -> OpsResult:
             is_emergency=False,
             emergency_reason=None,
             raw_text=command.raw_text or "",
-            structured_params={"service_type": service_type.name},
+            structured_params=schedule_structured_params,
             request_id=command.request_id,
             channel="voice",
         )
@@ -510,13 +528,17 @@ async def _handle_schedule_appointment(command: HaelCommand) -> OpsResult:
             logger.info(f"Schedule appointment: linked to lead {lead_id}")
         
         # Create calendar event in Odoo (linked to lead when present)
+        appointment_description = problem_desc
+        if technician_notes:
+            appointment_description = f"{problem_desc}\n\nTechnician Notes: {technician_notes}"
+
         event_id = await appointment_service.create_appointment(
             name=appointment_name,
             start=slot.start,
             stop=slot.end,
             partner_id=partner_id,
             tech_id=tech_id,
-            description=problem_desc,
+            description=appointment_description,
             location=entities.address,
             lead_id=lead_id,
         )
@@ -567,6 +589,10 @@ async def _handle_schedule_appointment(command: HaelCommand) -> OpsResult:
                 } if tech else None,
                 "partner_id": partner_id,
                 "lead_id": lead_id,
+                "no_pricing_account": bool(no_pricing_account),
+                "property_management_company": pm_company_name,
+                "no_pricing_company_match": no_pricing_company_match,
+                "technician_notes": technician_notes,
             },
         )
         

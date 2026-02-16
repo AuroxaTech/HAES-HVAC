@@ -6,7 +6,7 @@
     "type": "function",
     "function": {
       "name": "create_service_request",
-      "description": "Create a service request for HVAC repair or maintenance. Use when customer reports a problem (no heat, no AC, etc.). Before calling, ask 'How did you hear about us?' and pass the answer as lead_source (Google, Referral, Social media, Previous customer, or Other). Handles emergency qualification, technician assignment, and lead creation.",
+      "description": "Create a service request for HVAC repair or maintenance. Use when customer reports a problem (no heat, no AC, etc.). Before calling, ask 'How did you hear about us?' and pass the answer as lead_source (Google, Referral, Social media, Previous customer, or Other). Ask caller type (homeowner/tenant/property management/business). If tenant/business/property-management, capture property_management_company so managed no-pricing policy can be applied. Handles emergency qualification, technician assignment, and lead creation.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -71,8 +71,16 @@
           },
           "caller_type": {
             "type": "string",
-            "enum": ["tenant", "property_management"],
-            "description": "Whether the caller is a tenant or part of the property management team"
+            "enum": ["homeowner", "tenant", "property_management", "business"],
+            "description": "Caller classification. Ask at intake: homeowner, tenant/renter, property management, or business."
+          },
+          "property_management_company": {
+            "type": "string",
+            "description": "If tenant/renter or business account, capture property management/company name (e.g., Invitation Homes). Used to apply managed-account no-pricing policy."
+          },
+          "technician_notes": {
+            "type": "string",
+            "description": "Optional notes the customer wants to leave for the technician before arrival (e.g., gate code, pet info, access instructions)."
           }
         },
         "required": ["phone", "address", "issue_description"]

@@ -197,9 +197,10 @@ class AppointmentService:
                     ]
                     lead_ids = await self.client.search("crm.lead", lead_domain, limit=20)
                     if lead_ids:
+                        # Some Odoo customizations persist res_id but leave res_model empty.
+                        # Match by res_id to avoid missing legitimately linked appointments.
                         event_domain = [
                             ("active", "=", True),
-                            ("res_model", "=", "crm.lead"),
                             ("res_id", "in", lead_ids),
                         ]
                         if date_from:

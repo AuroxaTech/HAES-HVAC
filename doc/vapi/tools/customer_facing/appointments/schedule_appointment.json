@@ -6,7 +6,7 @@
     "type": "function",
     "function": {
       "name": "schedule_appointment",
-      "description": "Book a service appointment. PREFERRED: First get two time options via check_availability, then after customer chooses a slot call this with customer_name, phone, address, and chosen_slot_start (from check_availability's next_available_slots[].start). Alternatively, first call without chosen_slot_start returns two slots — then call again with chosen_slot_start to book. Creates appointment, CRM lead, and FSM task in Odoo.",
+      "description": "Book a service appointment. PREFERRED: First get two time options via check_availability, then after customer chooses a slot call this with customer_name, phone, address, and chosen_slot_start (from check_availability's next_available_slots[].start). Alternatively, first call without chosen_slot_start returns two slots — then call again with chosen_slot_start to book. Capture caller_type and property_management_company for tenant/business/PM callers so managed no-pricing policy can be applied. Creates appointment, CRM lead, and FSM task in Odoo.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -54,8 +54,16 @@
           },
           "caller_type": {
             "type": "string",
-            "enum": ["tenant", "property_management"],
-            "description": "Whether the caller is a tenant or part of the property management team"
+            "enum": ["homeowner", "tenant", "property_management", "business"],
+            "description": "Caller classification. Ask at intake: homeowner, tenant/renter, property management, or business."
+          },
+          "property_management_company": {
+            "type": "string",
+            "description": "If tenant/renter or business account, capture property management/company name (e.g., Invitation Homes). Used to apply managed-account no-pricing policy."
+          },
+          "technician_notes": {
+            "type": "string",
+            "description": "Optional notes the customer wants to leave for the technician before arrival (e.g., gate code, pet info, access instructions)."
           },
           "preferred_date": {
             "type": "string",
