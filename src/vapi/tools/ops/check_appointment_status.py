@@ -9,7 +9,7 @@ How we confirm the appointment in Odoo (per .cursor/context.json integrations.od
   1. Primary: Find res.partner by phone (last 10 digits, ilike) or email → search calendar.event
      where partner_ids in those partners, active=True, start in [now, now+90d].
   2. Fallback: If no events and phone given → find crm.lead by phone (ilike last 10 digits, or mobile)
-     → search calendar.event where res_model='crm.lead' and res_id in lead_ids, same date range.
+     → search calendar.event by res_id in lead_ids (works even when custom Odoo leaves res_model empty).
 - OPS handler: src.brains.ops.handlers._handle_status_update() calls find_appointment_by_contact()
   then filters to future/today events, picks the next one, and returns date + 4-hour window.
 - No Odoo write is performed; "confirm" here means "verify/find" the appointment.

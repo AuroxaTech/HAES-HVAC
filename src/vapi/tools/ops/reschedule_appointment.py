@@ -37,6 +37,8 @@ async def handle_reschedule_appointment(
         - address (optional): Service address (for lookup)
         - preferred_time_windows (optional): List of preferred new time windows
         - appointment_id (optional): Specific appointment ID if known
+        - chosen_slot_start (optional): ISO datetime selected by customer from prior availability response
+        - preferred_date + preferred_time (optional): fallback way to express chosen slot
     """
     handler = BaseToolHandler("reschedule_appointment")
     
@@ -64,6 +66,15 @@ async def handle_reschedule_appointment(
     preferred_windows = parameters.get("preferred_time_windows", [])
     if isinstance(preferred_windows, str):
         preferred_windows = [preferred_windows]
+
+    # Build chosen_slot_start: use explicit param or preferred_date + preferred_time
+    chosen_slot_start = parameters.get("chosen_slot_start")
+    if not chosen_slot_start and parameters.get("preferred_date") and parameters.get("preferred_time"):
+        pd = str(parameters["preferred_date"]).strip()
+        pt = str(parameters["preferred_time"]).strip()
+        if len(pt) <= 5 and ":" in pt:
+            pt = pt + ":00"
+        chosen_slot_start = f"{pd}T{pt}" if pt else None
     
     entities = Entity(
         full_name=parameters.get("customer_name"),
@@ -89,6 +100,7 @@ async def handle_reschedule_appointment(
             "tool_call_id": tool_call_id,
             "call_id": call_id,
             "appointment_id": parameters.get("appointment_id"),
+            "chosen_slot_start": chosen_slot_start,
         },
     )
     

@@ -131,6 +131,66 @@ class LeadService:
         """Filter out fields that don't exist in the model."""
         return {k: v for k, v in values.items() if k in valid_fields and v is not None}
 
+    def _address_area(self, service_address: str | None) -> str | None:
+        """Return a concise address area label from a full address string."""
+        if not service_address:
+            return None
+        # Prefer street/first segment for board readability.
+        first = service_address.split(",")[0].strip()
+        return first or service_address.strip() or None
+
+    def _compose_fsm_task_name(
+        self,
+        task_code: str | None,
+        customer_name: str | None,
+        service_address: str | None,
+        fallback_name: str | None = None,
+    ) -> str:
+        """
+        Format FSM board title as:
+        [task code] [Customer Name] - [Address area]
+        """
+        code = (task_code or "").strip()
+        name = (customer_name or "").strip()
+        area = (self._address_area(service_address) or "").strip()
+
+        if code and name and area:
+            return f"{code} {name} - {area}"
+        if code and name:
+            return f"{code} {name}"
+        if name and area:
+            return f"{name} - {area}"
+        if name:
+            return name
+        if area:
+            return f"Service Request - {area}"
+        if fallback_name:
+            return fallback_name
+        return "Service Request"
+
+    async def _rename_fsm_task_for_display(
+        self,
+        task_id: int,
+        customer_name: str | None,
+        service_address: str | None,
+        fallback_name: str | None,
+    ) -> None:
+        """Rename FSM task to board-friendly title format."""
+        try:
+            task_fields = await self._get_project_task_fields()
+            if "name" not in task_fields:
+                return
+            task_code = f"J{int(task_id):06d}"
+            display_name = self._compose_fsm_task_name(
+                task_code=task_code,
+                customer_name=customer_name,
+                service_address=service_address,
+                fallback_name=fallback_name,
+            )
+            await self.client.write("project.task", [task_id], {"name": display_name})
+        except Exception as e:
+            logger.warning(f"Could not rename FSM task {task_id} to display format: {e}")
+
     async def _get_field_service_project_id(self) -> int | None:
         """
         Resolve the Field Service project ID used for FSM tasks.
@@ -149,12 +209,48 @@ class LeadService:
             logger.warning(f"Could not resolve Field Service project: {e}")
         return None
 
+    async def _get_job_scheduled_stage_id(self, project_id: int | None = None) -> int | None:
+        """
+        Resolve the FSM task stage ID for "Job Scheduled".
+        """
+        try:
+            await self._ensure_authenticated()
+
+            stage_domains: list[list[Any]] = []
+            if project_id:
+                # Prefer the stage scoped to the Field Service project if available.
+                stage_domains.append(
+                    [("name", "ilike", "Job Scheduled"), ("project_ids", "in", [project_id])]
+                )
+            # Fallback: any stage with this name.
+            stage_domains.append([("name", "ilike", "Job Scheduled")])
+
+            for domain in stage_domains:
+                try:
+                    stages = await self.client.search_read(
+                        "project.task.type",
+                        domain,
+                        fields=["id", "name"],
+                        order="sequence asc",
+                        limit=1,
+                    )
+                    if stages:
+                        return int(stages[0]["id"])
+                except Exception:
+                    # Try next domain/fallback.
+                    continue
+        except Exception as e:
+            logger.warning(f"Could not resolve 'Job Scheduled' stage: {e}")
+        return None
+
     async def _create_fsm_task_for_lead(
         self,
         lead_id: int,
         lead_name: str | None,
         partner_id: int | None,
         lead_description: str | None,
+        customer_name: str | None = None,
+        service_address: str | None = None,
     ) -> int | None:
         """
         Create and link a project.task when custom lead action does not create it.
@@ -169,7 +265,12 @@ class LeadService:
             lead_fields = await self._get_crm_lead_fields()
 
             task_values: dict[str, Any] = {
-                "name": lead_name or f"Service Request - Lead {lead_id}",
+                "name": self._compose_fsm_task_name(
+                    task_code=None,
+                    customer_name=customer_name,
+                    service_address=service_address,
+                    fallback_name=lead_name or f"Service Request - Lead {lead_id}",
+                ),
             }
             if partner_id and "partner_id" in task_fields:
                 task_values["partner_id"] = partner_id
@@ -177,10 +278,18 @@ class LeadService:
                 task_values["description"] = lead_description
 
             # Prefer explicit Field Service project when present in this Odoo.
+            project_id: int | None = None
             if "project_id" in task_fields:
                 project_id = await self._get_field_service_project_id()
                 if project_id:
                     task_values["project_id"] = project_id
+
+            # Force new tasks into "Job Scheduled" stage (instead of Pending Schedule)
+            # when that stage exists in this Odoo instance.
+            if "stage_id" in task_fields:
+                stage_id = await self._get_job_scheduled_stage_id(project_id=project_id)
+                if stage_id:
+                    task_values["stage_id"] = stage_id
 
             task_values = self._filter_valid_fields(task_values, task_fields)
             if "name" not in task_values:
@@ -189,6 +298,14 @@ class LeadService:
 
             task_id = await self.client.create("project.task", task_values)
             logger.info(f"FSM fallback: created project.task {task_id} for lead {lead_id}")
+
+            # Normalize title to board format with generated task code.
+            await self._rename_fsm_task_for_display(
+                task_id=int(task_id),
+                customer_name=customer_name,
+                service_address=service_address,
+                fallback_name=lead_name or f"Service Request - Lead {lead_id}",
+            )
 
             # Link task back to lead when custom relation field exists.
             if "project_task_id" in lead_fields:
@@ -1129,6 +1246,8 @@ class LeadService:
                         lead_name=lead_values.get("name"),
                         partner_id=partner_id,
                         lead_description=lead_values.get("description"),
+                        customer_name=entities.full_name,
+                        service_address=entities.address,
                     )
                 else:
                     # If open action succeeded, relation may already exist; read it.
@@ -1137,6 +1256,12 @@ class LeadService:
                         if lead_rows and lead_rows[0].get("project_task_id"):
                             linked = lead_rows[0]["project_task_id"]
                             fsm_task_id = linked[0] if isinstance(linked, list) else linked
+                            await self._rename_fsm_task_for_display(
+                                task_id=int(fsm_task_id),
+                                customer_name=entities.full_name,
+                                service_address=entities.address,
+                                fallback_name=lead_values.get("name"),
+                            )
                     except Exception:
                         pass
             

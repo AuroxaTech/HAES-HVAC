@@ -646,7 +646,9 @@
         "HTML-formatted internal notes",
         "Chatter messages and activity creation",
         "Auto FSM task: on new lead creation calls crm.lead action_open_fsm_task so job appears in Field Service",
-        "FSM fallback task creation: if custom action_open_fsm_task only opens existing task and raises 'No FSM Task linked to this lead.', backend creates project.task directly and links crm.lead.project_task_id",
+        "FSM fallback task creation: if custom action_open_fsm_task only opens existing task and raises 'No FSM Task linked to this lead.', backend creates project.task directly, links crm.lead.project_task_id, and sets stage to Job Scheduled when available",
+        "FSM task title normalization: task names are rewritten to board-friendly format '[task code] [Customer Name] - [Address area]' after task creation/linking",
+        "FSM rename fallback consistency: post-create task rename now uses the same fallback base as initial task creation when lead_name is missing",
         "Managed no-pricing policy for tenant/business/property-management callers using PM/company list matching",
         "Technician notes capture: optional technician_notes persisted in lead description for pre-arrival instructions"
       ],
@@ -673,7 +675,7 @@
         "src/brains/ops/scheduling_rules.py - Business hours and slot calculation",
         "src/brains/ops/tech_roster.py - Technician assignment and availability"
       ],
-      "notes": "Full appointment scheduling lifecycle with Odoo calendar events. Handlers are async. Schedule flow creates/updates CRM lead and links event to lead (lead_id); FSM task is created automatically via odoo_lead_integration when lead is created. Appointment lookup fallback now matches calendar.event by res_id when custom Odoo stores res_id but leaves res_model empty. Optional technician_notes are included in appointment description and lead context."
+      "notes": "Full appointment scheduling lifecycle with Odoo calendar events. Handlers are async. Schedule flow creates/updates CRM lead and links event to lead (lead_id); FSM task is created automatically via odoo_lead_integration when lead is created. Appointment lookup fallback now matches calendar.event by res_id when custom Odoo stores res_id but leaves res_model empty. Optional technician_notes are included in appointment description and lead context. Availability selection evaluates candidate technicians and chooses the earliest real slot; chosen_slot_start booking validates against technician availability before creating the event. If no technician matches service-area/capability filters, backend does not force-assign a default technician. Customer inbound prompt enforces single detailed confirmation before final booking/intake tool call and forbids repeating full detail recap after technician notes, including a strict guard to never recap again in the same turn unless the customer requests detail review. Prompt now explicitly treats tool action as source of truth and forbids success language when schedule/create tools return needs_human or duplicate-call indicators. Prompt also forbids the phrase 'I'm sorry to hear that' and replaces it with neutral helpful empathy phrasing. Reschedule flow now supports explicit chosen_slot_start handoff (from next_available_slot.start) to avoid repeated availability-confirmation loops. Reschedule backend now ensures CRM lead exists/linked for the appointment, authenticates Odoo client before direct read/call_kw usage, and applies FSM task title normalization when reading linked tasks after action_open_fsm_task so board names remain consistent. check_appointment_status tool docs are aligned with current res_id-based fallback behavior."
     },
     "chat_integration": {
       "module": "src/api/chat.py",

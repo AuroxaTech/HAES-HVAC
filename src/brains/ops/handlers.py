@@ -36,6 +36,88 @@ OPS_INTENTS = {
 }
 
 
+def _candidate_technicians(zip_code: str | None, is_commercial: bool) -> list[Any]:
+    """Return roster candidates sorted by current roster rules."""
+    from src.brains.ops.tech_roster import get_available_technicians
+
+    return get_available_technicians(
+        zip_code=zip_code,
+        is_emergency=False,
+        is_commercial=is_commercial,
+    )
+
+
+async def _find_best_technician_slots(
+    appointment_service: Any,
+    zip_code: str | None,
+    is_commercial: bool,
+    after: datetime,
+    duration_minutes: int,
+) -> tuple[str | None, Any | None, list[TimeSlot]]:
+    """
+    Find the technician whose first available slot is earliest.
+    Returns (tech_id, tech_obj, two_slots_for_that_tech).
+    """
+    candidates = _candidate_technicians(zip_code=zip_code, is_commercial=is_commercial)
+    if not candidates:
+        # No technicians match service-area/capability filters; do not force a default tech.
+        return None, None, []
+
+    best_tech = None
+    best_slots: list[TimeSlot] = []
+    best_start: datetime | None = None
+
+    for candidate in candidates:
+        slots = await appointment_service.find_next_two_available_slots(
+            tech_id=candidate.id,
+            after=after,
+            duration_minutes=duration_minutes,
+        )
+        if not slots:
+            continue
+        first_start = slots[0].start
+        if best_start is None or first_start < best_start:
+            best_start = first_start
+            best_tech = candidate
+            best_slots = slots
+
+    if best_tech and best_slots:
+        return best_tech.id, best_tech, best_slots
+
+    # Candidates exist but none returned slots in the current horizon.
+    # Use top-ranked candidate for one more direct slot search.
+    fallback_tech_id = candidates[0].id
+    fallback_tech = candidates[0]
+    fallback_slots = await appointment_service.find_next_two_available_slots(
+        tech_id=fallback_tech_id,
+        after=after,
+        duration_minutes=duration_minutes,
+    )
+    return fallback_tech_id, fallback_tech, fallback_slots
+
+
+async def _find_available_technician_for_requested_start(
+    appointment_service: Any,
+    zip_code: str | None,
+    is_commercial: bool,
+    requested_start: datetime,
+    duration_minutes: int,
+) -> tuple[str | None, Any | None]:
+    """Find first technician who can take the requested start time."""
+    candidates = _candidate_technicians(zip_code=zip_code, is_commercial=is_commercial)
+
+    for candidate in candidates:
+        is_valid, _, _ = await appointment_service.validate_slot_availability(
+            requested_start=requested_start,
+            duration_minutes=duration_minutes,
+            tech_id=candidate.id,
+        )
+        if is_valid:
+            return candidate.id, candidate
+
+    return None, None
+
+
 async def handle_ops_command(command: HaelCommand) -> OpsResult:
     """
     Handle an OPS brain command.
@@ -302,24 +384,13 @@ async def _handle_schedule_appointment(command: HaelCommand) -> OpsResult:
         try:
             appointment_service = await create_appointment_service()
             
-            # Determine technician (default to junior if no zip_code)
-            tech_id = "junior"
-            if entities.zip_code:
-                from src.brains.ops.tech_roster import assign_technician
-                tech = assign_technician(
-                    zip_code=entities.zip_code,
-                    is_emergency=False,
-                    is_commercial=entities.property_type == "commercial",
-                )
-                if tech:
-                    tech_id = tech.id
-            
-            # Find next two available slots (offer customer a choice)
+            # Find next two available slots for the best technician (offer customer a choice)
             now = datetime.now()
             preferred_start = now + timedelta(hours=2)  # Default: 2 hours from now
-
-            slots = await appointment_service.find_next_two_available_slots(
-                tech_id=tech_id,
+            tech_id, _, slots = await _find_best_technician_slots(
+                appointment_service=appointment_service,
+                zip_code=entities.zip_code,
+                is_commercial=entities.property_type == "commercial",
                 after=preferred_start,
                 duration_minutes=duration_minutes,
             )
@@ -402,20 +473,9 @@ async def _handle_schedule_appointment(command: HaelCommand) -> OpsResult:
         # Try to find existing lead for linking (simplified - will be linked after appointment creation if needed)
         lead_id = None
         
-        # Determine technician assignment
+        # Determine technician assignment from real availability across candidates.
         tech = None
         tech_id = None
-        if entities.zip_code:
-            from src.brains.ops.tech_roster import assign_technician
-            tech = assign_technician(
-                zip_code=entities.zip_code,
-                is_emergency=False,
-                is_commercial=entities.property_type == "commercial",
-            )
-            if tech:
-                tech_id = tech.id
-        
-        tech_id = tech_id or "junior"
         now = datetime.now()
         # Use timezone-aware now for comparisons (avoid naive vs aware)
         now_aware = now.astimezone() if now.tzinfo else now.replace(tzinfo=datetime.now().astimezone().tzinfo)
@@ -435,10 +495,31 @@ async def _handle_schedule_appointment(command: HaelCommand) -> OpsResult:
                 chosen_start = datetime.fromisoformat(s)
                 if chosen_start.tzinfo is None:
                     chosen_start = chosen_start.replace(tzinfo=now_aware.tzinfo)
-                chosen_end = chosen_start + timedelta(minutes=duration_minutes)
                 if chosen_start >= now_aware:
-                    slot = TimeSlot(start=chosen_start, end=chosen_end)
-                    logger.info("Schedule appointment: using chosen_slot_start=%s", chosen_slot_start)
+                    selected_tech_id, selected_tech = await _find_available_technician_for_requested_start(
+                        appointment_service=appointment_service,
+                        zip_code=entities.zip_code,
+                        is_commercial=entities.property_type == "commercial",
+                        requested_start=chosen_start,
+                        duration_minutes=duration_minutes,
+                    )
+                    if selected_tech_id:
+                        tech_id = selected_tech_id
+                        tech = selected_tech
+                        chosen_end = chosen_start + timedelta(minutes=duration_minutes)
+                        slot = TimeSlot(start=chosen_start, end=chosen_end, technician_id=tech_id)
+                        logger.info(
+                            "Schedule appointment: using chosen_slot_start=%s with tech=%s",
+                            chosen_slot_start,
+                            tech_id,
+                        )
+                    else:
+                        return OpsResult(
+                            status=OpsStatus.NEEDS_HUMAN,
+                            message="That exact time is no longer available. I can offer the next available options.",
+                            requires_human=True,
+                            suggested_action="Re-run availability and offer next open windows",
+                        )
                 else:
                     logger.warning(
                         "Schedule appointment: chosen_slot_start %s is in the past (now=%s)",
@@ -454,8 +535,10 @@ async def _handle_schedule_appointment(command: HaelCommand) -> OpsResult:
         
         if not slot:
             # Offer two slots and ask which works better (do not create yet)
-            slots = await appointment_service.find_next_two_available_slots(
-                tech_id=tech_id,
+            tech_id, tech, slots = await _find_best_technician_slots(
+                appointment_service=appointment_service,
+                zip_code=entities.zip_code,
+                is_commercial=entities.property_type == "commercial",
                 after=preferred_start,
                 duration_minutes=duration_minutes,
             )
@@ -478,7 +561,7 @@ async def _handle_schedule_appointment(command: HaelCommand) -> OpsResult:
                         },
                     )
                 slot = slots[0] if slots else None
-        
+
         if not slot:
             # No slot found - return needs human with suggestion
             return OpsResult(
@@ -786,6 +869,8 @@ async def _handle_reschedule_appointment(command: HaelCommand) -> OpsResult:
     """Handle appointment reschedule request."""
     from datetime import timedelta
     from src.integrations.odoo_appointments import create_appointment_service
+    from src.integrations.odoo_leads import create_lead_service
+    from src.utils.errors import OdooRPCError
     
     entities = command.entities
     
@@ -829,6 +914,50 @@ async def _handle_reschedule_appointment(command: HaelCommand) -> OpsResult:
         
         appointment = upcoming_appointments[0]
         event_id = appointment["id"]
+        lead_service = await create_lead_service()
+        lead_id: int | None = None
+        if not lead_service.client.is_authenticated:
+            await lead_service.client.authenticate()
+
+        # Try to reuse lead linked to appointment.
+        appointment_res_id = appointment.get("res_id")
+        appointment_res_model = appointment.get("res_model")
+        if appointment_res_id:
+            try:
+                candidate_lead_id = int(appointment_res_id)
+                if appointment_res_model == "crm.lead":
+                    lead_id = candidate_lead_id
+                else:
+                    # Some Odoo customizations keep res_id but leave res_model empty.
+                    lead_rows = await lead_service.client.read("crm.lead", [candidate_lead_id], fields=["id"])
+                    if lead_rows:
+                        lead_id = candidate_lead_id
+            except Exception:
+                pass
+
+        # Backfill missing address from existing appointment location.
+        if not entities.address and appointment.get("location"):
+            entities.address = appointment.get("location")
+
+        # Ensure CRM lead exists for this reschedule flow.
+        if not lead_id:
+            try:
+                reschedule_call_id = (command.metadata or {}).get("call_id") or f"reschedule_{command.request_id}"
+                lead_result = await lead_service.upsert_service_lead(
+                    call_id=reschedule_call_id,
+                    entities=entities,
+                    urgency=UrgencyLevel.UNKNOWN,
+                    is_emergency=False,
+                    emergency_reason=None,
+                    raw_text=command.raw_text or "reschedule appointment",
+                    request_id=command.request_id,
+                    channel="voice",
+                    structured_params={"service_type": "Reschedule Appointment"},
+                )
+                if lead_result and lead_result.get("lead_id"):
+                    lead_id = int(lead_result["lead_id"])
+            except Exception as lead_err:
+                logger.warning(f"Reschedule: could not create/update CRM lead: {lead_err}")
         
         # Parse existing appointment time
         existing_start = datetime.fromisoformat(appointment["start"].replace("Z", "+00:00"))
@@ -899,12 +1028,39 @@ async def _handle_reschedule_appointment(command: HaelCommand) -> OpsResult:
             except (json.JSONDecodeError, ValueError, TypeError, KeyError):
                 pass
         
-        # Find available slot for reschedule
-        slot = await appointment_service.find_next_available_slot(
-            tech_id=tech_id or "junior",
-            after=preferred_start,
-            duration_minutes=duration_minutes,
-        )
+        # Preferred deterministic booking path: if caller selected a specific offered slot,
+        # use that explicit datetime rather than re-inferring from conversational text.
+        chosen_slot_start = (command.metadata or {}).get("chosen_slot_start")
+        slot = None
+        if chosen_slot_start:
+            try:
+                s = str(chosen_slot_start).strip().replace("Z", "+00:00")
+                requested_start = datetime.fromisoformat(s)
+                if requested_start.tzinfo:
+                    requested_start = requested_start.replace(tzinfo=None)
+                requested_stop = requested_start + timedelta(minutes=duration_minutes)
+
+                is_valid, _, _ = await appointment_service.validate_slot_availability(
+                    requested_start=requested_start,
+                    duration_minutes=duration_minutes,
+                    tech_id=tech_id or "junior",
+                )
+                if is_valid:
+                    slot = TimeSlot(
+                        start=requested_start,
+                        end=requested_stop,
+                        technician_id=tech_id or "junior",
+                    )
+            except (TypeError, ValueError):
+                slot = None
+
+        # Find available slot for reschedule (fallback path)
+        if not slot:
+            slot = await appointment_service.find_next_available_slot(
+                tech_id=tech_id or "junior",
+                after=preferred_start,
+                duration_minutes=duration_minutes,
+            )
         
         if not slot:
             return OpsResult(
@@ -934,7 +1090,7 @@ async def _handle_reschedule_appointment(command: HaelCommand) -> OpsResult:
         ]
         
         # Check if user provided explicit preferred time (not just asking for availability)
-        has_explicit_preferred_time = bool(entities.preferred_time_windows)
+        has_explicit_preferred_time = bool(entities.preferred_time_windows or chosen_slot_start)
         
         # Check if text contains explicit date/time confirmation phrases
         confirmation_keywords = [
@@ -1007,6 +1163,75 @@ async def _handle_reschedule_appointment(command: HaelCommand) -> OpsResult:
         # Format times for display
         old_time_str = existing_start.strftime("%A, %B %d at %I:%M %p")
         new_time_str = slot.start.strftime("%A, %B %d at %I:%M %p")
+
+        # Keep event linked to lead and ensure FSM task exists for that lead.
+        fsm_task_id: int | None = None
+        if lead_id:
+            try:
+                await appointment_service.link_appointment_to_lead(event_id=event_id, lead_id=lead_id)
+            except Exception as link_err:
+                logger.warning(f"Reschedule: could not link appointment {event_id} to lead {lead_id}: {link_err}")
+
+            try:
+                await lead_service.client.call_kw(
+                    "crm.lead",
+                    "action_open_fsm_task",
+                    [[lead_id]],
+                    {},
+                )
+            except OdooRPCError:
+                try:
+                    lead_rows = await lead_service.client.read(
+                        "crm.lead",
+                        [lead_id],
+                        fields=["name", "partner_id", "description", "project_task_id"],
+                    )
+                    lead_name = None
+                    partner_id = None
+                    lead_description = None
+                    if lead_rows:
+                        lead_name = lead_rows[0].get("name")
+                        linked_partner = lead_rows[0].get("partner_id")
+                        if isinstance(linked_partner, list) and linked_partner:
+                            partner_id = linked_partner[0]
+                        elif isinstance(linked_partner, int):
+                            partner_id = linked_partner
+                        lead_description = lead_rows[0].get("description")
+                        existing_task = lead_rows[0].get("project_task_id")
+                        if existing_task:
+                            fsm_task_id = existing_task[0] if isinstance(existing_task, list) else existing_task
+                            await lead_service._rename_fsm_task_for_display(
+                                task_id=int(fsm_task_id),
+                                customer_name=entities.full_name,
+                                service_address=entities.address,
+                                fallback_name=lead_name,
+                            )
+
+                    if not fsm_task_id:
+                        fsm_task_id = await lead_service._create_fsm_task_for_lead(
+                            lead_id=lead_id,
+                            lead_name=lead_name,
+                            partner_id=partner_id,
+                            lead_description=lead_description,
+                            customer_name=entities.full_name,
+                            service_address=entities.address,
+                        )
+                except Exception as fsm_err:
+                    logger.warning(f"Reschedule: could not create fallback FSM task for lead {lead_id}: {fsm_err}")
+            else:
+                try:
+                    lead_rows = await lead_service.client.read("crm.lead", [lead_id], fields=["project_task_id", "name"])
+                    if lead_rows and lead_rows[0].get("project_task_id"):
+                        linked = lead_rows[0]["project_task_id"]
+                        fsm_task_id = linked[0] if isinstance(linked, list) else linked
+                        await lead_service._rename_fsm_task_for_display(
+                            task_id=int(fsm_task_id),
+                            customer_name=entities.full_name,
+                            service_address=entities.address,
+                            fallback_name=lead_rows[0].get("name"),
+                        )
+                except Exception:
+                    pass
         
         # Get technician info for notifications
         tech_name = None
@@ -1083,6 +1308,8 @@ async def _handle_reschedule_appointment(command: HaelCommand) -> OpsResult:
             requires_human=False,
             data={
                 "appointment_id": event_id,
+                "lead_id": lead_id,
+                "fsm_task_id": fsm_task_id,
                 "scheduled_time": slot.start.isoformat(),
                 "scheduled_time_end": slot.end.isoformat(),
                 "previous_time": existing_start.isoformat(),

@@ -30,6 +30,18 @@
           "appointment_id": {
             "type": "string",
             "description": "Specific appointment ID if known"
+          },
+          "chosen_slot_start": {
+            "type": "string",
+            "description": "ISO datetime of the slot customer selected from prior availability response (e.g. 2026-02-18T08:00:00). Preferred for final reschedule booking."
+          },
+          "preferred_date": {
+            "type": "string",
+            "description": "Date of chosen slot (YYYY-MM-DD). Use with preferred_time when chosen_slot_start is unavailable."
+          },
+          "preferred_time": {
+            "type": "string",
+            "description": "Time of chosen slot (e.g. 08:00). Use with preferred_date when chosen_slot_start is unavailable."
           }
         },
         "required": ["customer_name", "phone"]
