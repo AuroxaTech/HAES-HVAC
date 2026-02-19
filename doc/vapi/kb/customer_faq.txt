@@ -170,7 +170,7 @@ Yes, our technicians are trained to work on all major HVAC brands including Carr
 
 ### How do I schedule an appointment?
 You can schedule by:
-1. Calling our main number (answered 24/7 by our AI assistant Riley)
+1. Calling our main number (answered 24/7 by our AI assistant Jessica)
 2. Requesting online (coming soon)
 
 ### How long are appointment windows?
@@ -215,7 +215,7 @@ Yes, emergency and after-hours service includes a premium due to expedited dispa
 
 ### How much does a service call cost?
 Service call pricing depends on customer type and timing:
-- **Residential:** Diagnostic fee starting at $125
+- **Residential:** Diagnostic fee starting at $99
 - **Commercial:** Diagnostic fee starting at $250
 - **After-hours/Emergency:** Additional premium applies
 
