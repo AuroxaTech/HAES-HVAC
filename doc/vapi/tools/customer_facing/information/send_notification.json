@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Send Notification Tool",
+  "description": "Send both SMS and email notification in one call",
+  "tool_definition": {
+    "type": "function",
+    "function": {
+      "name": "send_notification",
+      "description": "Send a notification to the same recipient by both SMS and email in one call. Use this when you want guaranteed dual-channel delivery.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "customer_name": {
+            "type": "string",
+            "description": "Recipient name for greeting (optional)"
+          },
+          "phone": {
+            "type": "string",
+            "description": "Recipient phone number for SMS (required)"
+          },
+          "email": {
+            "type": "string",
+            "description": "Recipient email address (required)"
+          },
+          "message": {
+            "type": "string",
+            "description": "Main message text to send via both SMS and email (required)"
+          },
+          "email_subject": {
+            "type": "string",
+            "description": "Email subject line (optional, defaults to HVAC-R Finest Notification)"
+          }
+        },
+        "required": ["phone", "email", "message"]
+      }
+    },
+    "async": false,
+    "server": {
+      "url": "https://haes-hvac.fly.dev/vapi/server"
+    }
+  }
+}
