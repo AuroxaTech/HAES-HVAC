@@ -39,6 +39,7 @@ from src.vapi.tools.people.payroll_inquiry import handle_payroll_inquiry
 from src.vapi.tools.utils.check_business_hours import handle_check_business_hours
 from src.vapi.tools.utils.get_service_area_info import handle_get_service_area_info
 from src.vapi.tools.utils.get_maintenance_plans import handle_get_maintenance_plans
+from src.vapi.tools.utils.send_notification import handle_send_notification
 
 
 def register_all_tools():
@@ -76,6 +77,7 @@ def register_all_tools():
     register_tool("check_business_hours", handle_check_business_hours)
     register_tool("get_service_area_info", handle_get_service_area_info)
     register_tool("get_maintenance_plans", handle_get_maintenance_plans)
+    register_tool("send_notification", handle_send_notification)
 
 
 # Auto-register on import

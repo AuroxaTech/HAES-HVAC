@@ -91,9 +91,8 @@ def _handle_quote_request(command: HaelCommand) -> RevenueResult:
         missing.append("identity (phone, email, or name)")
     if not entities.property_type:
         missing.append("property_type")
-    if not entities.timeline:
-        missing.append("timeline")
-    
+    # timeline is optional; assistant may collect it when customer provides it
+
     # Strongly recommended fields (warn but don't block)
     recommended_missing = []
     if not entities.square_footage:

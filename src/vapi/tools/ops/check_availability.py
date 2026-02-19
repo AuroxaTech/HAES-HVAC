@@ -21,6 +21,11 @@ from src.brains.ops.schema import OpsStatus
 from src.utils.request_id import generate_request_id
 from src.integrations.odoo_appointments import create_appointment_service
 from src.brains.ops.service_catalog import infer_service_type_from_description
+from src.brains.ops.scheduling_rules import (
+    BUSINESS_START,
+    OPERATING_DAYS,
+    SAME_DAY_DISPATCH_CUTOFF,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +40,49 @@ def _format_slot_as_4hr_block(start: datetime, end: datetime) -> str:
     """Format a slot as 'Monday, January 27, 8 AM to 12 PM' (4-hour block)."""
     day_part = start.strftime("%A, %B %d")
     return f"{day_part}, {_format_time_block(start)} to {_format_time_block(end)}"
+
+
+def _as_naive_local(dt: datetime) -> datetime:
+    """Normalize datetime to naive local time for safe comparisons."""
+    if dt.tzinfo:
+        return dt.astimezone().replace(tzinfo=None)
+    return dt
+
+
+def _next_business_day_start(now: datetime) -> datetime:
+    """Return the next operating day at dispatch start hour."""
+    next_start = now.replace(
+        hour=BUSINESS_START.hour,
+        minute=BUSINESS_START.minute,
+        second=0,
+        microsecond=0,
+    ) + timedelta(days=1)
+    while next_start.weekday() not in OPERATING_DAYS:
+        next_start += timedelta(days=1)
+    return next_start
+
+
+def _dispatch_search_start(now: datetime, allow_same_day_after_cutoff: bool) -> datetime:
+    """
+    Compute earliest dispatchable search time.
+    - Same-day dispatch cutoff: 5 PM (unless override is enabled)
+    - Earliest dispatch start: 8 AM
+    """
+    if not allow_same_day_after_cutoff and now.time() >= SAME_DAY_DISPATCH_CUTOFF:
+        return _next_business_day_start(now)
+
+    baseline = now + timedelta(hours=2)
+    day_start = now.replace(
+        hour=BUSINESS_START.hour,
+        minute=BUSINESS_START.minute,
+        second=0,
+        microsecond=0,
+    )
+    if baseline < day_start:
+        baseline = day_start
+    while baseline.weekday() not in OPERATING_DAYS:
+        baseline = _next_business_day_start(baseline)
+    return baseline
 
 
 async def handle_check_availability(
@@ -62,22 +110,16 @@ async def handle_check_availability(
     try:
         appointment_service = await create_appointment_service()
         
-        # Determine technician
-        tech_id = "junior"  # Default
         zip_code = parameters.get("zip_code")
-        if zip_code:
-            from src.brains.ops.tech_roster import assign_technician
-            tech = assign_technician(
-                zip_code=zip_code,
-                is_emergency=False,
-                is_commercial=parameters.get("property_type") == "commercial",
-            )
-            if tech:
-                tech_id = tech.id
         
-        # Determine preferred start time
+        # Determine preferred start time (never offer past time windows)
         now = datetime.now()
-        preferred_start = now + timedelta(hours=2)
+        allow_same_day_after_cutoff = bool(parameters.get("allow_same_day_after_cutoff"))
+        minimum_start = _dispatch_search_start(
+            now,
+            allow_same_day_after_cutoff=allow_same_day_after_cutoff,
+        )
+        preferred_start = minimum_start
         
         # Parse preferred_date if provided
         if parameters.get("preferred_date"):
@@ -85,18 +127,40 @@ async def handle_check_availability(
                 # Try to parse date string
                 preferred_date_str = parameters["preferred_date"]
                 # Simple parsing - could be enhanced
-                preferred_start = datetime.fromisoformat(preferred_date_str.replace("Z", "+00:00"))
+                parsed_preferred = datetime.fromisoformat(preferred_date_str.replace("Z", "+00:00"))
+                parsed_preferred = _as_naive_local(parsed_preferred)
+                # Date-only inputs parse as midnight; move them to business start.
+                if len(preferred_date_str.strip()) <= 10:
+                    parsed_preferred = parsed_preferred.replace(
+                        hour=BUSINESS_START.hour,
+                        minute=BUSINESS_START.minute,
+                        second=0,
+                        microsecond=0,
+                    )
+                preferred_start = max(parsed_preferred, minimum_start)
             except:
                 pass
         
-        # Find next available slots (offer at most 2 so agent only says 2)
-        raw_slots = await appointment_service.find_next_two_available_slots(
-            tech_id=tech_id,
-            after=preferred_start,
-            duration_minutes=duration_minutes,
-        )
-        slots = (raw_slots or [])[:2]  # Cap at 2; prompt/agent then only need to say 2
-        
+        # Collect slots from all technicians; sort by start; take two earliest across everyone.
+        candidates = await appointment_service.get_live_technicians()
+        all_slot_entries: list[tuple[datetime, Any, str]] = []  # (start_naive, slot, tech_id)
+        for candidate in candidates:
+            candidate_id = str(candidate.get("id"))
+            raw_slots = await appointment_service.find_next_two_available_slots(
+                tech_id=candidate_id,
+                after=preferred_start,
+                duration_minutes=duration_minutes,
+            )
+            valid_slots = [
+                s for s in (raw_slots or []) if _as_naive_local(s.start) >= minimum_start
+            ]
+            for s in valid_slots:
+                all_slot_entries.append((_as_naive_local(s.start), s, candidate_id))
+        all_slot_entries.sort(key=lambda x: x[0])
+        first_two = all_slot_entries[:2]
+        slots = [entry[1] for entry in first_two]
+        slot_tech_ids = [entry[2] for entry in first_two]
+
         if not slots:
             return ToolResponse(
                 speak=f"I couldn't find an available slot for {service_type.name.lower()} at this time. Would you like me to check with our scheduling team?",
@@ -109,8 +173,12 @@ async def handle_check_availability(
             )
         
         next_available_slots = [
-            {"start": s.start.isoformat(), "end": s.end.isoformat(), "technician_id": tech_id}
-            for s in slots
+            {
+                "start": s.start.isoformat(),
+                "end": s.end.isoformat(),
+                "technician_id": slot_tech_ids[i],
+            }
+            for i, s in enumerate(slots)
         ]
         # Format each slot as a 4-hour block: "Monday, January 27, 8 AM to 12 PM"
         slot_time_strs = [_format_slot_as_4hr_block(s.start, s.end) for s in slots]

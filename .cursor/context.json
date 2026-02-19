@@ -36,7 +36,7 @@
       "PEOPLE-BRAIN (HR/Onboarding/Payroll)"
     ],
     "data_flow_summary": "Voice/Chat -> API -> Direct Vapi Tools OR HAEL -> Brain -> Odoo",
-    "vapi_architecture": "Direct tool-based integration - 22 granular tools that bypass HAEL for faster, more precise routing"
+    "vapi_architecture": "Direct tool-based integration - 24 granular tools that bypass HAEL for faster, more precise routing"
   },
   "modules_status": [
     { "module": "Module 1 - Foundation", "status": "done", "last_updated": "2026-01-08" },
@@ -135,7 +135,7 @@
   "brains": {
     "ops": {
       "handlers": "handle_ops_command (async)",
-      "features": ["Emergency qualification", "Service catalog", "Tech roster", "Scheduling rules", "Appointment scheduling (create/reschedule/cancel)"]
+      "features": ["Emergency qualification", "Service catalog", "Live Odoo technician assignment", "Scheduling rules", "Appointment scheduling (create/reschedule/cancel)"]
     },
     "core": {
       "handlers": "handle_core_command", 
@@ -176,14 +176,14 @@
       "integration_mode": "Server URL (direct tool-calls)",
       "production_endpoint": "/vapi/server",
       "legacy_endpoints": ["/vapi/tools/hael_route", "/webhooks/vapi"],
-      "tool_architecture": "Direct granular tools (23 tools) + legacy HAEL fallback",
+      "tool_architecture": "Direct granular tools (24 tools) + legacy HAEL fallback",
       "assistants": {
         "riley": {
           "name": "Riley Customer - Inbound",
           "assistant_id": "f639ba5f-7c38-4949-9479-ec2a40428d76",
           "phone_number": "+19725971644",
           "source": "8x8_forwarded",
-          "tools_count": 17,
+          "tools_count": 18,
           "tool_category": "customer_facing",
           "purpose": "Customer service",
           "system_prompt": "doc/vapi/system_prompt_customer_inbound.md",
@@ -212,7 +212,7 @@
           "number": "+19725971644",
           "source": "8x8_forwarded",
           "assistant": "Riley",
-          "tools": "customer_facing (17 tools)",
+          "tools": "customer_facing (18 tools)",
           "purpose": "Public customer service"
         },
         "internal_ops_line": {
@@ -223,13 +223,13 @@
           "purpose": "Internal employees (technicians, HR, billing, managers)"
         }
       },
-      "tools_implemented": 23,
+      "tools_implemented": 24,
       "tool_categories": {
         "ops": 6,
         "revenue": 4,
         "core": 7,
         "people": 3,
-        "utils": 3
+        "utils": 4
       },
       "tool_registry": "src/vapi/tools/register_tools.py",
       "base_handler": "src/vapi/tools/base.py",
@@ -238,8 +238,7 @@
         "caller_identification": "src/utils/caller_identification.py",
         "identification_flow": [
           "1. Try Odoo hr.employee lookup (phone, mobile, work_phone fields)",
-          "2. Fallback to static technician roster",
-          "3. Default to CUSTOMER if not found"
+          "2. Default to CUSTOMER if not found"
         ],
         "roles": ["customer", "technician", "hr", "billing", "manager", "dispatch", "executive", "admin"],
         "permissions_enforced": "Backend checks permissions before processing tool calls",
@@ -249,13 +248,13 @@
         "structure": "Organized by access level in doc/vapi/tools/",
         "customer_facing": {
           "folder": "doc/vapi/tools/customer_facing/",
-          "count": 17,
+          "count": 18,
           "description": "Customer-facing tools available via Customer Line",
           "subcategories": {
             "appointments": 5,
             "leads_quotes": 4,
             "billing": 3,
-            "information": 4,
+            "information": 5,
             "complaints": 1
           }
         },
@@ -303,9 +302,20 @@
         "Duplicate call detection",
         "Long call context tracking",
         "Multi-request handling",
-        "Odoo error graceful degradation"
+        "Odoo error graceful degradation",
+        "Dual-channel send_notification tool flow guidance in customer inbound prompt",
+        "Customer inbound prompt now requires send_notification after successful appointment changes and lead-creating calls",
+        "send_notification now builds email HTML internally (no email_html input parameter)",
+        "Customer inbound prompt now uses service-fee wording (not diagnostic wording) and includes frozen-unit pre-arrival disclaimer",
+        "Customer inbound prompt now enforces prior-record lookup before creating a new job while still allowing new job creation when no profile is found",
+        "check_availability now clamps preferred-date searches to future dispatchable windows and filters out any past same-day slots",
+        "check_availability now evaluates all candidate technicians and returns slots from the earliest truly available technician",
+        "Technician availability lookups now use strict live Odoo user resolution (no Office fallback during availability scanning)",
+        "Scheduling and availability selection now use live Odoo user IDs directly (no static roster mapping dependency)",
+        "Service-request technician assignment in OPS handlers now uses live Odoo users (including warranty previous-tech continuity by user_id)",
+        "Technician discovery now prioritizes hr.employee technician records and maps them to assignable res.users (including portal users), excluding Office/integration user"
       ],
-      "notes": "Signature verification enforced in production via VAPI_WEBHOOK_SECRET. Direct tool integration provides faster, more precise routing compared to HAEL-only approach."
+      "notes": "Signature verification enforced in production via VAPI_WEBHOOK_SECRET. Direct tool integration provides faster, more precise routing compared to HAEL-only approach. send_notification tool has been created in Vapi Tools library (tool_id: e6f87a5e-def4-46e1-88aa-64148c18ffa4) so it can be manually attached to assistants."
     },
     "twilio": {
       "status": "implemented_and_configured",
@@ -334,17 +344,17 @@
   },
   "assumptions_and_open_questions": [
     "Odoo 18 Enterprise is accessible via JSON-RPC",
-    "Vapi.ai tool endpoint design: 22 direct granular tools (primary) with HAEL fallback, organized by integration type (odoo/brain_handlers/static)",
+    "Vapi.ai tool endpoint design: 24 direct granular tools (primary) with HAEL fallback, organized by integration type (odoo/brain_handlers/static)",
     "Weather API not integrated - emergency rules use explicit temperature statements",
     "Time tracking integration unspecified - payroll excludes hourly calculations"
   ],
   "vapi_tools": {
-    "total_tools": 23,
+    "total_tools": 24,
     "base_handler": "src/vapi/tools/base.py",
     "organization": {
       "customer_facing": {
         "folder": "doc/vapi/tools/customer_facing/",
-        "count": 17,
+        "count": 18,
         "description": "Customer-facing tools available via Customer Line (+1-972-597-1644)",
         "subcategories": {
           "appointments": {
@@ -364,8 +374,8 @@
           },
           "information": {
             "folder": "doc/vapi/tools/customer_facing/information/",
-            "count": 4,
-            "tools": ["get_pricing", "get_maintenance_plans", "get_service_area_info", "check_business_hours"]
+            "count": 5,
+            "tools": ["get_pricing", "get_maintenance_plans", "get_service_area_info", "check_business_hours", "send_notification"]
           },
           "complaints": {
             "folder": "doc/vapi/tools/customer_facing/complaints/",
@@ -467,9 +477,10 @@
         "tools": [
           "check_business_hours",
           "get_service_area_info",
-          "get_maintenance_plans"
+          "get_maintenance_plans",
+          "send_notification"
         ],
-        "features": ["Business hours checking", "Service area validation", "Maintenance plan information"]
+        "features": ["Business hours checking", "Service area validation", "Maintenance plan information", "Dual-channel SMS + email notification sending"]
       }
     },
     "common_features": [
@@ -650,7 +661,8 @@
         "FSM task title normalization: task names are rewritten to board-friendly format '[task code] [Customer Name] - [Address area]' after task creation/linking",
         "FSM rename fallback consistency: post-create task rename now uses the same fallback base as initial task creation when lead_name is missing",
         "Managed no-pricing policy for tenant/business/property-management callers using PM/company list matching",
-        "Technician notes capture: optional technician_notes persisted in lead description for pre-arrival instructions"
+        "Technician notes capture: optional technician_notes persisted in lead description for pre-arrival instructions",
+        "Returning customer lookup now searches both res.partner phone and mobile fields for better prior-profile matching"
       ],
       "integrated_with": "src/api/vapi_server.py - Vapi Server URL endpoint",
       "audit_logging": "Full audit trail for all Odoo operations",
@@ -667,15 +679,18 @@
         "Technician availability checking",
         "Next available slot finding",
         "CRM lead linking for appointments",
-        "Integration with scheduling rules and tech roster"
+        "Integration with scheduling rules and live Odoo users",
+        "Live Odoo technician assignee resolution for calendar events with Office-user fallback when no live user match is found",
+        "Strict live user mapping for availability/validation to avoid Office fallback contaminating technician slot checks",
+        "Live technician candidate discovery from hr.employee + res.users mapping for schedule/check-availability/reschedule flows"
       ],
       "integrated_with": [
         "src/brains/ops/handlers.py - Schedule/reschedule/cancel handlers",
         "src/api/vapi_server.py - Vapi Server URL endpoint",
         "src/brains/ops/scheduling_rules.py - Business hours and slot calculation",
-        "src/brains/ops/tech_roster.py - Technician assignment and availability"
+        "Live Odoo res.users lookup for technician assignment and availability"
       ],
-      "notes": "Full appointment scheduling lifecycle with Odoo calendar events. Handlers are async. Schedule flow creates/updates CRM lead and links event to lead (lead_id); FSM task is created automatically via odoo_lead_integration when lead is created. Appointment lookup fallback now matches calendar.event by res_id when custom Odoo stores res_id but leaves res_model empty. Optional technician_notes are included in appointment description and lead context. Availability selection evaluates candidate technicians and chooses the earliest real slot; chosen_slot_start booking validates against technician availability before creating the event. If no technician matches service-area/capability filters, backend does not force-assign a default technician. Customer inbound prompt enforces single detailed confirmation before final booking/intake tool call and forbids repeating full detail recap after technician notes, including a strict guard to never recap again in the same turn unless the customer requests detail review. Prompt now explicitly treats tool action as source of truth and forbids success language when schedule/create tools return needs_human or duplicate-call indicators. Prompt also forbids the phrase 'I'm sorry to hear that' and replaces it with neutral helpful empathy phrasing. Reschedule flow now supports explicit chosen_slot_start handoff (from next_available_slot.start) to avoid repeated availability-confirmation loops. Reschedule backend now ensures CRM lead exists/linked for the appointment, authenticates Odoo client before direct read/call_kw usage, and applies FSM task title normalization when reading linked tasks after action_open_fsm_task so board names remain consistent. check_appointment_status tool docs are aligned with current res_id-based fallback behavior."
+      "notes": "Full appointment scheduling lifecycle with Odoo calendar events. Handlers are async. Schedule flow creates/updates CRM lead and links event to lead (lead_id); FSM task is created automatically via odoo_lead_integration when lead is created. Appointment lookup fallback now matches calendar.event by res_id when custom Odoo stores res_id but leaves res_model empty. Optional technician_notes are included in appointment description and lead context. Availability selection evaluates candidate technicians and chooses the earliest real slot; chosen_slot_start booking validates against technician availability before creating the event. If the customer-confirmed chosen slot is no longer available at booking time, backend now re-offers next windows and prioritizes same-day alternatives when available. Availability scanning and slot validation now require strict live Odoo user mapping per technician (no Office fallback in those paths), and scheduling paths now use live Odoo user IDs directly instead of roster-name mapping. Office fallback is reserved for final assignment write when needed. Customer inbound prompt enforces single detailed confirmation before final booking/intake tool call and forbids repeating full detail recap after technician notes, including a strict guard to never recap again in the same turn unless the customer requests detail review. Prompt now explicitly treats tool action as source of truth and forbids success language when schedule/create tools return needs_human or duplicate-call indicators. Prompt also forbids the phrase 'I'm sorry to hear that' and replaces it with neutral helpful empathy phrasing. Reschedule flow now supports explicit chosen_slot_start handoff (from next_available_slot.start) to avoid repeated availability-confirmation loops. Reschedule backend now ensures CRM lead exists/linked for the appointment, authenticates Odoo client before direct read/call_kw usage, and applies FSM task title normalization when reading linked tasks after action_open_fsm_task so board names remain consistent. check_appointment_status tool docs are aligned with current res_id-based fallback behavior. Dispatch scheduling windows now allow starts from 8 AM through 8 PM, with a same-day cutoff at 5 PM unless an explicit same-day override is provided (for dispatch-managed cancellation openings). Customer inbound system prompt now includes explicit dispatch cutoff language so callers are told same-day after 5 PM is next-day by default unless dispatch opens a cancellation slot. Call opening wording now asks residential/commercial as 'residential or commercial (property)' for clearer phrasing."
     },
     "chat_integration": {
       "module": "src/api/chat.py",

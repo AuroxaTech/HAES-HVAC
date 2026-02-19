@@ -6,11 +6,11 @@ This directory contains JSON tool schemas for all Vapi voice assistant tools, or
 
 ```
 doc/vapi/tools/
-├── customer_facing/          # Customer-facing tools (17 tools)
+├── customer_facing/          # Customer-facing tools (18 tools)
 │   ├── appointments/          # Appointment scheduling tools (5 tools)
 │   ├── leads_quotes/         # Lead and quote tools (4 tools)
 │   ├── billing/              # Billing and payment tools (3 tools)
-│   ├── information/           # Information lookup tools (4 tools)
+│   ├── information/           # Information lookup tools (5 tools)
 │   └── complaints/           # Complaint handling (1 tool)
 ├── internal_ops/             # Internal employee tools (6+ tools)
 │   ├── technician/           # Technician-specific tools (1 tool)
@@ -21,11 +21,11 @@ doc/vapi/tools/
 
 ## Tool Count
 
-- **Total Tools**: 23
-  - **Customer Facing**: 17 tools
+- **Total Tools**: 24
+  - **Customer Facing**: 18 tools
   - **Internal OPS**: 6+ tools
 
-## Customer Facing Tools (17 tools)
+## Customer Facing Tools (18 tools)
 
 These tools are available to customers calling the Customer Line (+1-972-597-1644) via the "Riley" assistant.
 
@@ -56,12 +56,13 @@ These tools are available to customers calling the Customer Line (+1-972-597-164
 
 **Python Handlers**: `src/vapi/tools/core/`
 
-### Information (4 tools)
+### Information (5 tools)
 
 - `get_pricing.json` - Get service pricing information
 - `get_maintenance_plans.json` - Get maintenance plan information
 - `get_service_area_info.json` - Get service area coverage information
 - `check_business_hours.json` - Check business hours
+- `send_notification.json` - Send both SMS and email notification in one call
 
 **Python Handlers**: `src/vapi/tools/core/` and `src/vapi/tools/utils/`
 
@@ -157,7 +158,7 @@ Some tools provide static or calculated information without Odoo integration:
 - **Number**: +1-972-597-1644
 - **Source**: 8x8 call forwarding
 - **Assistant**: "Riley"
-- **Tools**: Customer Facing (17 tools)
+- **Tools**: Customer Facing (18 tools)
 - **Purpose**: Public customer service
 
 ### Internal OPS Line

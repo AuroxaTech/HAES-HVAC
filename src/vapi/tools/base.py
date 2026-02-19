@@ -71,6 +71,7 @@ class BaseToolHandler:
         "payment_terms_inquiry": ["customer", "billing", "manager", "executive", "admin"],
         "get_pricing": ["customer", "manager", "executive", "admin"],
         "get_maintenance_plans": ["customer", "manager", "executive", "admin"],
+        "send_notification": ["customer", "technician", "dispatch", "manager", "executive", "admin"],
         "get_service_area_info": ["customer", "technician", "hr", "billing", "manager", "dispatch", "executive", "admin"],
         "check_business_hours": ["customer", "technician", "hr", "billing", "manager", "dispatch", "executive", "admin"],
         "create_complaint": ["customer", "manager", "executive", "admin"],

@@ -20,9 +20,13 @@ from src.brains.ops.schema import (
     WorkOrderStatus,
 )
 from src.brains.ops.emergency_rules import qualify_emergency
-from src.brains.ops.scheduling_rules import TimeSlot
+from src.brains.ops.scheduling_rules import (
+    BUSINESS_START,
+    OPERATING_DAYS,
+    SAME_DAY_DISPATCH_CUTOFF,
+    TimeSlot,
+)
 from src.brains.ops.service_catalog import infer_service_type_from_description
-from src.brains.ops.tech_roster import assign_technician
 
 logger = logging.getLogger(__name__)
 
@@ -36,15 +40,17 @@ OPS_INTENTS = {
 }
 
 
-def _candidate_technicians(zip_code: str | None, is_commercial: bool) -> list[Any]:
-    """Return roster candidates sorted by current roster rules."""
-    from src.brains.ops.tech_roster import get_available_technicians
+async def _candidate_technicians(
+    appointment_service: Any, zip_code: str | None, is_commercial: bool
+) -> list[dict[str, Any]]:
+    """
+    Return live Odoo technician candidates.
 
-    return get_available_technicians(
-        zip_code=zip_code,
-        is_emergency=False,
-        is_commercial=is_commercial,
-    )
+    zip_code/is_commercial are kept in signature for future server-side filtering.
+    """
+    _ = zip_code, is_commercial
+    users = await appointment_service.get_live_technicians()
+    return [u for u in users if isinstance(u.get("id"), int)]
 
 
 async def _find_best_technician_slots(
@@ -58,7 +64,11 @@ async def _find_best_technician_slots(
     Find the technician whose first available slot is earliest.
     Returns (tech_id, tech_obj, two_slots_for_that_tech).
     """
-    candidates = _candidate_technicians(zip_code=zip_code, is_commercial=is_commercial)
+    candidates = await _candidate_technicians(
+        appointment_service=appointment_service,
+        zip_code=zip_code,
+        is_commercial=is_commercial,
+    )
     if not candidates:
         # No technicians match service-area/capability filters; do not force a default tech.
         return None, None, []
@@ -68,8 +78,9 @@ async def _find_best_technician_slots(
     best_start: datetime | None = None
 
     for candidate in candidates:
+        candidate_id = str(candidate["id"])
         slots = await appointment_service.find_next_two_available_slots(
-            tech_id=candidate.id,
+            tech_id=candidate_id,
             after=after,
             duration_minutes=duration_minutes,
         )
@@ -82,11 +93,11 @@ async def _find_best_technician_slots(
             best_slots = slots
 
     if best_tech and best_slots:
-        return best_tech.id, best_tech, best_slots
+        return str(best_tech["id"]), best_tech, best_slots
 
     # Candidates exist but none returned slots in the current horizon.
     # Use top-ranked candidate for one more direct slot search.
-    fallback_tech_id = candidates[0].id
+    fallback_tech_id = str(candidates[0]["id"])
     fallback_tech = candidates[0]
     fallback_slots = await appointment_service.find_next_two_available_slots(
         tech_id=fallback_tech_id,
@@ -104,18 +115,59 @@ async def _find_available_technician_for_requested_start(
     duration_minutes: int,
 ) -> tuple[str | None, Any | None]:
     """Find first technician who can take the requested start time."""
-    candidates = _candidate_technicians(zip_code=zip_code, is_commercial=is_commercial)
+    candidates = await _candidate_technicians(
+        appointment_service=appointment_service,
+        zip_code=zip_code,
+        is_commercial=is_commercial,
+    )
 
     for candidate in candidates:
+        candidate_id = str(candidate["id"])
         is_valid, _, _ = await appointment_service.validate_slot_availability(
             requested_start=requested_start,
             duration_minutes=duration_minutes,
-            tech_id=candidate.id,
+            tech_id=candidate_id,
         )
         if is_valid:
-            return candidate.id, candidate
+            return candidate_id, candidate
 
     return None, None
+
+
+def _next_business_day_start(now: datetime) -> datetime:
+    """Return the next operating day at dispatch start hour."""
+    next_start = now.replace(
+        hour=BUSINESS_START.hour,
+        minute=BUSINESS_START.minute,
+        second=0,
+        microsecond=0,
+    ) + timedelta(days=1)
+    while next_start.weekday() not in OPERATING_DAYS:
+        next_start += timedelta(days=1)
+    return next_start
+
+
+def _dispatch_search_start(now: datetime, allow_same_day_after_cutoff: bool) -> datetime:
+    """
+    Compute earliest dispatchable search time.
+    - Same-day dispatch cutoff: 5 PM (unless override is enabled)
+    - Earliest dispatch start: 8 AM
+    """
+    if not allow_same_day_after_cutoff and now.time() >= SAME_DAY_DISPATCH_CUTOFF:
+        return _next_business_day_start(now)
+
+    baseline = now + timedelta(hours=2)
+    day_start = now.replace(
+        hour=BUSINESS_START.hour,
+        minute=BUSINESS_START.minute,
+        second=0,
+        microsecond=0,
+    )
+    if baseline < day_start:
+        baseline = day_start
+    while baseline.weekday() not in OPERATING_DAYS:
+        baseline = _next_business_day_start(baseline)
+    return baseline
 
 
 async def handle_ops_command(command: HaelCommand) -> OpsResult:
@@ -152,7 +204,7 @@ async def handle_ops_command(command: HaelCommand) -> OpsResult:
     # Route to specific handler
     try:
         if command.intent == Intent.SERVICE_REQUEST:
-            return _handle_service_request(command)
+            return await _handle_service_request(command)
         elif command.intent == Intent.SCHEDULE_APPOINTMENT:
             return await _handle_schedule_appointment(command)
         elif command.intent == Intent.RESCHEDULE_APPOINTMENT:
@@ -176,7 +228,7 @@ async def handle_ops_command(command: HaelCommand) -> OpsResult:
         )
 
 
-def _handle_service_request(command: HaelCommand) -> OpsResult:
+async def _handle_service_request(command: HaelCommand) -> OpsResult:
     """Handle a new service request."""
     entities = command.entities
     
@@ -247,33 +299,53 @@ def _handle_service_request(command: HaelCommand) -> OpsResult:
     
     # Determine if commercial
     is_commercial = entities.property_type == "commercial"
-    
-    # Assign technician
-    # For warranty claims, try to assign to same technician if previous_technician_id provided
-    technician = None
+
+    # Assign technician from live Odoo users only (no static roster mapping).
+    from src.integrations.odoo_appointments import create_appointment_service
+
+    appointment_service = await create_appointment_service()
+    technician: dict[str, Any] | None = None
+
+    # Warranty preference: if prior technician is a live Odoo user id, keep continuity.
     if is_warranty and previous_technician_id:
-        from src.brains.ops.tech_roster import get_technician
-        technician = get_technician(previous_technician_id)
-        if technician:
-            logger.info(f"Warranty claim: Assigning to previous technician {technician.name} ({technician.id})")
-        else:
-            logger.warning(f"Warranty claim: Previous technician {previous_technician_id} not found, falling back to normal assignment")
-    
-    # If no technician assigned yet (not warranty or previous tech not found), use normal assignment
+        try:
+            prior_id = int(str(previous_technician_id).strip())
+            technician = await appointment_service.get_live_user_by_id(prior_id)
+            if technician:
+                logger.info(
+                    "Warranty claim: assigning to previous live technician %s (%s)",
+                    technician.get("name"),
+                    technician.get("id"),
+                )
+        except (TypeError, ValueError):
+            technician = None
+
+    # If no prior-tech assignment, pick best currently available live technician.
     if not technician:
-        technician = assign_technician(
-            zip_code=entities.zip_code,
-            is_emergency=emergency.is_emergency,
-            is_commercial=is_commercial,
+        allow_same_day_after_cutoff = bool(
+            (command.metadata or {}).get("allow_same_day_after_cutoff")
         )
-    
+        search_start = _dispatch_search_start(
+            datetime.now(),
+            allow_same_day_after_cutoff=allow_same_day_after_cutoff,
+        )
+        selected_tech_id, selected_tech, _ = await _find_best_technician_slots(
+            appointment_service=appointment_service,
+            zip_code=entities.zip_code,
+            is_commercial=is_commercial,
+            after=search_start,
+            duration_minutes=service_type.duration_minutes_max,
+        )
+        if selected_tech_id and selected_tech:
+            technician = selected_tech
+
     tech_assignment = None
     if technician:
         tech_assignment = TechnicianAssignment(
-            technician_id=technician.id,
-            technician_name=technician.name,
-            skill_level=technician.skill_level.value,
-            phone=technician.phone,
+            technician_id=str(technician.get("id")),
+            technician_name=str(technician.get("name") or ""),
+            skill_level=None,
+            phone=None,
         )
     
     # Build work order data
@@ -305,10 +377,11 @@ def _handle_service_request(command: HaelCommand) -> OpsResult:
     tech_data = None
     if technician:
         tech_data = {
-            "id": technician.id,
-            "name": technician.name,
-            "phone": technician.phone,
-            "skill_level": technician.skill_level.value,
+            "id": str(technician.get("id")),
+            "name": technician.get("name"),
+            "phone": None,
+            "skill_level": None,
+            "email": technician.get("login"),
         }
     
     # Emergency ETA window (default: 1.5 - 3 hours for emergency, 4-8 hours for urgent)
@@ -344,7 +417,9 @@ def _handle_service_request(command: HaelCommand) -> OpsResult:
         response_data["previous_service_id"] = previous_service_id
         response_data["previous_technician_id"] = previous_technician_id
         if previous_technician_id and technician:
-            response_data["same_technician_assigned"] = True
+            response_data["same_technician_assigned"] = (
+                str(previous_technician_id).strip() == str(technician.get("id"))
+            )
         message += " [Warranty Claim - Diagnostic fee waived]"
     
     return OpsResult(
@@ -386,7 +461,13 @@ async def _handle_schedule_appointment(command: HaelCommand) -> OpsResult:
             
             # Find next two available slots for the best technician (offer customer a choice)
             now = datetime.now()
-            preferred_start = now + timedelta(hours=2)  # Default: 2 hours from now
+            allow_same_day_after_cutoff = bool(
+                (command.metadata or {}).get("allow_same_day_after_cutoff")
+            )
+            preferred_start = _dispatch_search_start(
+                now,
+                allow_same_day_after_cutoff=allow_same_day_after_cutoff,
+            )
             tech_id, _, slots = await _find_best_technician_slots(
                 appointment_service=appointment_service,
                 zip_code=entities.zip_code,
@@ -479,11 +560,22 @@ async def _handle_schedule_appointment(command: HaelCommand) -> OpsResult:
         now = datetime.now()
         # Use timezone-aware now for comparisons (avoid naive vs aware)
         now_aware = now.astimezone() if now.tzinfo else now.replace(tzinfo=datetime.now().astimezone().tzinfo)
-        preferred_start = now_aware + timedelta(hours=2)  # Default: 2 hours from now
+        allow_same_day_after_cutoff = bool(
+            (command.metadata or {}).get("allow_same_day_after_cutoff")
+        )
+        preferred_start = _dispatch_search_start(
+            now_aware,
+            allow_same_day_after_cutoff=allow_same_day_after_cutoff,
+        )
         
         # Try to parse preferred time if provided
         if entities.preferred_time_windows:
-            preferred_start = now_aware + timedelta(hours=4)  # Default fallback
+            preferred_start = max(
+                now_aware + timedelta(hours=4),
+                _dispatch_search_start(
+                    now_aware, allow_same_day_after_cutoff=allow_same_day_after_cutoff
+                ),
+            )
         
         chosen_slot_start = command.metadata.get("chosen_slot_start") if command.metadata else None
         slot = None
@@ -495,6 +587,20 @@ async def _handle_schedule_appointment(command: HaelCommand) -> OpsResult:
                 chosen_start = datetime.fromisoformat(s)
                 if chosen_start.tzinfo is None:
                     chosen_start = chosen_start.replace(tzinfo=now_aware.tzinfo)
+                if (
+                    not allow_same_day_after_cutoff
+                    and now_aware.time() >= SAME_DAY_DISPATCH_CUTOFF
+                    and chosen_start.date() == now_aware.date()
+                ):
+                    return OpsResult(
+                        status=OpsStatus.NEEDS_HUMAN,
+                        message=(
+                            "Same-day dispatch cutoff is 5 PM. "
+                            "I can offer next-day availability unless dispatch opens a cancellation slot."
+                        ),
+                        requires_human=True,
+                        suggested_action="Offer next-day available windows or enable same-day override",
+                    )
                 if chosen_start >= now_aware:
                     selected_tech_id, selected_tech = await _find_available_technician_for_requested_start(
                         appointment_service=appointment_service,
@@ -514,6 +620,53 @@ async def _handle_schedule_appointment(command: HaelCommand) -> OpsResult:
                             tech_id,
                         )
                     else:
+                        alt_tech_id, _, alt_slots = await _find_best_technician_slots(
+                            appointment_service=appointment_service,
+                            zip_code=entities.zip_code,
+                            is_commercial=entities.property_type == "commercial",
+                            after=chosen_start,
+                            duration_minutes=duration_minutes,
+                        )
+                        if alt_slots:
+                            preferred_day = chosen_start.date()
+                            same_day_slots = [
+                                s for s in alt_slots if s.start.date() == preferred_day
+                            ]
+                            offered_slots = (same_day_slots or alt_slots)[:2]
+                            next_available_slots = [
+                                {
+                                    "start": s.start.isoformat(),
+                                    "end": s.end.isoformat(),
+                                    "technician_id": alt_tech_id,
+                                }
+                                for s in offered_slots
+                            ]
+                            slot_time_strs = [
+                                s.start.strftime("%A, %B %d at %I:%M %p")
+                                for s in offered_slots
+                            ]
+                            if len(slot_time_strs) == 2:
+                                message = (
+                                    "That exact time is no longer available. "
+                                    f"I can offer {slot_time_strs[0]} or {slot_time_strs[1]}."
+                                )
+                            else:
+                                message = (
+                                    "That exact time is no longer available. "
+                                    f"The next opening is {slot_time_strs[0]}."
+                                )
+                            return OpsResult(
+                                status=OpsStatus.NEEDS_HUMAN,
+                                message=message,
+                                requires_human=True,
+                                data={
+                                    "next_available_slots": next_available_slots,
+                                    "service_type": service_type.name,
+                                    "duration_minutes": duration_minutes,
+                                    "choose_then_book": True,
+                                },
+                                suggested_action="Offer next open windows and confirm customer choice",
+                            )
                         return OpsResult(
                             status=OpsStatus.NEEDS_HUMAN,
                             message="That exact time is no longer available. I can offer the next available options.",
@@ -640,14 +793,26 @@ async def _handle_schedule_appointment(command: HaelCommand) -> OpsResult:
                 },
             )
         
+        # Set FSM task assignee to the scheduled technician (not Office)
+        if lead_id and tech_id:
+            try:
+                od_user_id = await appointment_service._get_tech_user_id(
+                    tech_id, allow_office_fallback=False
+                )
+                if od_user_id:
+                    await lead_service.set_fsm_task_assignee(lead_id, od_user_id)
+            except Exception as assign_err:
+                logger.warning(f"Schedule: could not set FSM task assignee for lead {lead_id}: {assign_err}")
+        
         # Build response
         tech_assignment = None
         if tech:
+            tech_name = str(tech.get("name") or "")
             tech_assignment = TechnicianAssignment(
-                technician_id=tech.id,
-                technician_name=tech.name,
-                skill_level=tech.skill_level.value,
-                phone=tech.phone,
+                technician_id=str(tech.get("id")),
+                technician_name=tech_name or None,
+                skill_level=None,
+                phone=None,
             )
         
         # Format appointment time for message
@@ -666,9 +831,9 @@ async def _handle_schedule_appointment(command: HaelCommand) -> OpsResult:
                 "service_type": service_type.name,
                 "duration_minutes": duration_minutes,
                 "assigned_technician": {
-                    "id": tech.id,
-                    "name": tech.name,
-                    "phone": tech.phone,
+                    "id": str(tech.get("id")),
+                    "name": tech.get("name"),
+                    "phone": None,
                 } if tech else None,
                 "partner_id": partner_id,
                 "lead_id": lead_id,
@@ -970,7 +1135,13 @@ async def _handle_reschedule_appointment(command: HaelCommand) -> OpsResult:
         duration_minutes = int((existing_stop - existing_start).total_seconds() / 60)
         
         # Get new preferred time (default: same time next day or 4 hours from now)
-        preferred_start = max(existing_start + timedelta(days=1), now + timedelta(hours=4))
+        allow_same_day_after_cutoff = bool(
+            (command.metadata or {}).get("allow_same_day_after_cutoff")
+        )
+        preferred_start = max(
+            existing_start + timedelta(days=1),
+            _dispatch_search_start(now, allow_same_day_after_cutoff=allow_same_day_after_cutoff),
+        )
         
         # Parse preferred time from user's natural language
         if entities.preferred_time_windows:
@@ -988,8 +1159,12 @@ async def _handle_reschedule_appointment(command: HaelCommand) -> OpsResult:
                 if preferred_start < now:
                     preferred_start += timedelta(days=7)  # Move to next week
                 # Ensure at least 2 hours in the future
-                if preferred_start < now + timedelta(hours=2):
-                    preferred_start = now + timedelta(hours=2)
+                if preferred_start < _dispatch_search_start(
+                    now, allow_same_day_after_cutoff=allow_same_day_after_cutoff
+                ):
+                    preferred_start = _dispatch_search_start(
+                        now, allow_same_day_after_cutoff=allow_same_day_after_cutoff
+                    )
         
         # Also check if raw_text contains date hints (fallback)
         if not entities.preferred_time_windows and command.raw_text:
@@ -1006,27 +1181,23 @@ async def _handle_reschedule_appointment(command: HaelCommand) -> OpsResult:
                             preferred_start = preferred_start + timedelta(days=365)
                     else:
                         preferred_start += timedelta(days=7)
-                if preferred_start < now + timedelta(hours=2):
-                    preferred_start = now + timedelta(hours=2)
+                if preferred_start < _dispatch_search_start(
+                    now, allow_same_day_after_cutoff=allow_same_day_after_cutoff
+                ):
+                    preferred_start = _dispatch_search_start(
+                        now, allow_same_day_after_cutoff=allow_same_day_after_cutoff
+                    )
         
-        # Get technician user_id from existing appointment if available
+        # Keep existing assignee when present (live Odoo user_id), unless it's Office.
         tech_id = None
+        tech_name = None
         existing_user_id = appointment.get("user_id")
-        if existing_user_id and isinstance(existing_user_id, list) and len(existing_user_id) > 1:
-            # Odoo returns user_id as [id, name]
-            user_id = existing_user_id[0]
-            # Try to map back to tech_id
-            from src.config.settings import get_settings
-            import json
-            settings = get_settings()
-            try:
-                tech_user_map = json.loads(settings.ODOO_TECH_USER_IDS_JSON)
-                for tid, uid in tech_user_map.items():
-                    if int(uid) == user_id:
-                        tech_id = tid
-                        break
-            except (json.JSONDecodeError, ValueError, TypeError, KeyError):
-                pass
+        if isinstance(existing_user_id, list) and existing_user_id:
+            uid = existing_user_id[0]
+            if isinstance(uid, int) and not appointment_service.is_office_user_id(uid):
+                tech_id = str(uid)
+                if len(existing_user_id) > 1:
+                    tech_name = str(existing_user_id[1] or "").strip() or None
         
         # Preferred deterministic booking path: if caller selected a specific offered slot,
         # use that explicit datetime rather than re-inferring from conversational text.
@@ -1043,24 +1214,61 @@ async def _handle_reschedule_appointment(command: HaelCommand) -> OpsResult:
                 is_valid, _, _ = await appointment_service.validate_slot_availability(
                     requested_start=requested_start,
                     duration_minutes=duration_minutes,
-                    tech_id=tech_id or "junior",
+                    tech_id=tech_id,
                 )
+                if (
+                    not allow_same_day_after_cutoff
+                    and now.time() >= SAME_DAY_DISPATCH_CUTOFF
+                    and requested_start.date() == now.date()
+                ):
+                    is_valid = False
                 if is_valid:
                     slot = TimeSlot(
                         start=requested_start,
                         end=requested_stop,
-                        technician_id=tech_id or "junior",
+                        technician_id=tech_id,
                     )
+                else:
+                    selected_tech_id, selected_tech = await _find_available_technician_for_requested_start(
+                        appointment_service=appointment_service,
+                        zip_code=entities.zip_code,
+                        is_commercial=entities.property_type == "commercial",
+                        requested_start=requested_start,
+                        duration_minutes=duration_minutes,
+                    )
+                    if selected_tech_id:
+                        tech_id = selected_tech_id
+                        tech_name = str(selected_tech.get("name") or "") or None
+                        slot = TimeSlot(
+                            start=requested_start,
+                            end=requested_stop,
+                            technician_id=tech_id,
+                        )
             except (TypeError, ValueError):
                 slot = None
 
         # Find available slot for reschedule (fallback path)
         if not slot:
-            slot = await appointment_service.find_next_available_slot(
-                tech_id=tech_id or "junior",
-                after=preferred_start,
-                duration_minutes=duration_minutes,
-            )
+            if tech_id:
+                slot = await appointment_service.find_next_available_slot(
+                    tech_id=tech_id,
+                    after=preferred_start,
+                    duration_minutes=duration_minutes,
+                )
+            if not slot:
+                fallback_tech_id, fallback_tech, fallback_slots = await _find_best_technician_slots(
+                    appointment_service=appointment_service,
+                    zip_code=entities.zip_code,
+                    is_commercial=entities.property_type == "commercial",
+                    after=preferred_start,
+                    duration_minutes=duration_minutes,
+                )
+                if fallback_slots:
+                    tech_id = fallback_tech_id
+                    tech_name = (
+                        str((fallback_tech or {}).get("name") or "") or None
+                    )
+                    slot = fallback_slots[0]
         
         if not slot:
             return OpsResult(
@@ -1106,14 +1314,6 @@ async def _handle_reschedule_appointment(command: HaelCommand) -> OpsResult:
         if not has_explicit_preferred_time and not has_confirmation:
             old_time_str = existing_start.strftime("%A, %B %d at %I:%M %p")
             new_time_str = slot.start.strftime("%A, %B %d at %I:%M %p")
-            
-            # Get technician info
-            tech_name = None
-            if tech_id:
-                from src.brains.ops.tech_roster import get_technician
-                tech = get_technician(tech_id)
-                if tech:
-                    tech_name = tech.name
             
             response_message = (
                 f"Your current appointment is on {old_time_str}. "
@@ -1232,16 +1432,28 @@ async def _handle_reschedule_appointment(command: HaelCommand) -> OpsResult:
                         )
                 except Exception:
                     pass
+            
+            # Set FSM task assignee to the rescheduled technician (not Office)
+            if tech_id:
+                try:
+                    od_user_id = await appointment_service._get_tech_user_id(
+                        tech_id, allow_office_fallback=False
+                    )
+                    if od_user_id:
+                        await lead_service.set_fsm_task_assignee(lead_id, od_user_id)
+                except Exception as assign_err:
+                    logger.warning(f"Reschedule: could not set FSM task assignee for lead {lead_id}: {assign_err}")
         
-        # Get technician info for notifications
-        tech_name = None
+        # Get technician info for notifications from live Odoo users
         tech_email = None
         if tech_id:
-            from src.brains.ops.tech_roster import get_technician
-            tech = get_technician(tech_id)
-            if tech:
-                tech_name = tech.name
-                tech_email = tech.email
+            try:
+                user = await appointment_service.get_live_user_by_id(int(tech_id))
+                if user:
+                    tech_name = str(user.get("name") or "") or tech_name
+                    tech_email = str(user.get("login") or "") or None
+            except Exception:
+                pass
         
         # Send SMS confirmation to customer
         if entities.phone:

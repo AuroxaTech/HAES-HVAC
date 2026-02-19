@@ -1,7 +1,7 @@
 """
 HAES HVAC - Caller Identification System
 
-Hybrid employee identification using Odoo hr.employee lookup with static roster fallback.
+Employee identification using live Odoo hr.employee lookup.
 Provides role-based access control foundation.
 """
 
@@ -10,12 +10,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
-from src.brains.ops.tech_roster import (
-    TECHNICIAN_ROSTER,
-    Technician,
-    get_technician_by_phone_static,
-    normalize_phone as normalize_phone_roster,
-)
 from src.integrations.odoo import create_odoo_client_from_settings
 
 logger = logging.getLogger(__name__)
@@ -49,8 +43,25 @@ class CallerIdentity:
             self.permissions = []
 
 
-# Re-export normalize_phone from tech_roster for convenience
-normalize_phone = normalize_phone_roster
+def normalize_phone(phone: str | None) -> str | None:
+    """
+    Normalize phone number to +1XXXXXXXXXX when possible.
+    """
+    if not phone:
+        return None
+    digits = "".join(ch for ch in phone if ch.isdigit())
+    if phone.startswith("+"):
+        with_plus = "".join(ch for ch in phone[1:] if ch.isdigit())
+        if len(with_plus) == 10:
+            return f"+1{with_plus}"
+        if len(with_plus) == 11 and with_plus.startswith("1"):
+            return f"+{with_plus}"
+        return None
+    if len(digits) == 10:
+        return f"+1{digits}"
+    if len(digits) == 11 and digits.startswith("1"):
+        return f"+{digits}"
+    return None
 
 
 def determine_role_from_job(job_title: str | None) -> CallerRole:
@@ -280,18 +291,13 @@ async def identify_from_odoo(phone: str) -> Optional[CallerIdentity]:
         return None
 
 
-# Re-export get_technician_by_phone_static from tech_roster
-# (function is already imported above)
-
-
 async def identify_caller(phone: str | None) -> CallerIdentity:
     """
-    Identify caller by phone number using hybrid approach.
+    Identify caller by phone number using live Odoo lookup.
     
     Flow:
     1. Try Odoo hr.employee lookup (supports multiple phones, dynamic)
-    2. Fallback to static technician roster (fast, always available)
-    3. Default to CUSTOMER if not found
+    2. Default to CUSTOMER if not found
     
     Args:
         phone: Phone number (any format)
@@ -315,21 +321,9 @@ async def identify_caller(phone: str | None) -> CallerIdentity:
             )
             return odoo_identity
     except Exception as e:
-        logger.warning(f"Odoo lookup failed, using static roster: {e}")
-    
-    # Step 2: Fallback to static technician roster
-    tech = get_technician_by_phone_static(normalized)
-    if tech:
-        return CallerIdentity(
-            phone=normalized,
-            role=CallerRole.TECHNICIAN,
-            employee_id=tech.id,
-            name=tech.name,
-            is_active=True,
-            permissions=get_permissions_for_role(CallerRole.TECHNICIAN),
-        )
-    
-    # Step 3: Default to customer (public access)
+        logger.warning(f"Odoo lookup failed; defaulting to customer: {e}")
+
+    # Step 2: Default to customer (public access)
     return CallerIdentity(
         phone=normalized,
         role=CallerRole.CUSTOMER,

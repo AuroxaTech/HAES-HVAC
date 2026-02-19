@@ -1,4 +1,5 @@
 {
+  "vapi_tool_id": "549b4bbc-9d05-40f4-9c21-c722cc8a0150",
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Request Quote Tool",
   "description": "Request installation/equipment quote",
@@ -45,14 +46,14 @@
           },
           "timeline": {
             "type": "string",
-            "description": "Preferred timeline for installation (required)"
+            "description": "Preferred timeline for installation (optional; e.g. ASAP, few weeks, exploring)"
           },
           "system_type": {
             "type": "string",
             "description": "HVAC system type"
           }
         },
-        "required": ["customer_name", "phone", "address", "property_type", "timeline"]
+        "required": ["customer_name", "phone", "address", "property_type"]
       }
     },
     "async": false,

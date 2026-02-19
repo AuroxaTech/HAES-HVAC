@@ -319,7 +319,88 @@ class LeadService:
         except Exception as e:
             logger.warning(f"FSM fallback failed for lead {lead_id}: {e}")
             return None
-    
+
+    async def ensure_fsm_task_for_lead(
+        self,
+        lead_id: int,
+        customer_name: str | None = None,
+        service_address: str | None = None,
+    ) -> int | None:
+        """
+        Ensure the lead has an FSM task (project.task) linked. If one exists, return it;
+        otherwise create and link one, same as for service requests.
+        Used by both service and quote flows so quote leads appear in Field Service.
+        """
+        try:
+            await self._ensure_authenticated()
+            lead_fields = await self._get_crm_lead_fields()
+            read_fields = ["name", "description", "partner_id"]
+            if "project_task_id" in lead_fields:
+                read_fields.append("project_task_id")
+            rows = await self.client.read("crm.lead", [lead_id], fields=read_fields)
+            if not rows:
+                return None
+            lead_row = rows[0]
+            existing = lead_row.get("project_task_id")
+            if existing:
+                task_id = existing[0] if isinstance(existing, (list, tuple)) else existing
+                if task_id:
+                    await self._rename_fsm_task_for_display(
+                        task_id=int(task_id),
+                        customer_name=customer_name,
+                        service_address=service_address,
+                        fallback_name=lead_row.get("name"),
+                    )
+                    return int(task_id)
+            partner_id = lead_row.get("partner_id")
+            if isinstance(partner_id, (list, tuple)):
+                partner_id = partner_id[0] if partner_id else None
+            task_id = await self._create_fsm_task_for_lead(
+                lead_id=lead_id,
+                lead_name=lead_row.get("name"),
+                partner_id=partner_id,
+                lead_description=lead_row.get("description"),
+                customer_name=customer_name,
+                service_address=service_address,
+            )
+            return task_id
+        except Exception as e:
+            logger.warning(f"ensure_fsm_task_for_lead failed for lead {lead_id}: {e}")
+            return None
+
+    async def set_fsm_task_assignee(self, lead_id: int, user_id: int) -> bool:
+        """
+        Set the assignee on the FSM task (project.task) linked to this lead.
+        So the task shows the real technician instead of Office.
+        """
+        try:
+            await self._ensure_authenticated()
+            lead_fields = await self._get_crm_lead_fields()
+            if "project_task_id" not in lead_fields:
+                return False
+            rows = await self.client.read("crm.lead", [lead_id], fields=["project_task_id"])
+            if not rows or not rows[0].get("project_task_id"):
+                return False
+            task_ref = rows[0]["project_task_id"]
+            task_id = task_ref[0] if isinstance(task_ref, (list, tuple)) else task_ref
+            if not task_id:
+                return False
+            task_fields = await self._get_project_task_fields()
+            update_vals: dict[str, Any] = {}
+            if "user_ids" in task_fields:
+                update_vals["user_ids"] = [(6, 0, [user_id])]
+            elif "user_id" in task_fields:
+                update_vals["user_id"] = user_id
+            if not update_vals:
+                return False
+            update_vals = self._filter_valid_fields(update_vals, task_fields)
+            await self.client.write("project.task", [task_id], update_vals)
+            logger.info(f"Set FSM task {task_id} assignee to user_id={user_id} for lead {lead_id}")
+            return True
+        except Exception as e:
+            logger.warning(f"set_fsm_task_assignee failed for lead {lead_id}: {e}")
+            return False
+
     async def find_partner_by_phone(self, phone: str | None) -> dict[str, Any] | None:
         """
         Find at most one res.partner by phone (for returning-customer context).
@@ -336,8 +417,12 @@ class LeadService:
                 return None
             partners = await self.client.search_read(
                 "res.partner",
-                [("phone", "ilike", clean_phone[-10:])],
-                fields=["id", "name", "street", "city", "zip", "phone"],
+                [
+                    "|",
+                    ("phone", "ilike", clean_phone[-10:]),
+                    ("mobile", "ilike", clean_phone[-10:]),
+                ],
+                fields=["id", "name", "street", "city", "zip", "phone", "mobile"],
                 limit=2,
             )
             if len(partners) != 1:
@@ -370,8 +455,12 @@ class LeadService:
                 return None
             partners = await self.client.search_read(
                 "res.partner",
-                [("phone", "ilike", clean_phone[-10:])],
-                fields=["id", "name", "street", "city", "zip", "phone"],
+                [
+                    "|",
+                    ("phone", "ilike", clean_phone[-10:]),
+                    ("mobile", "ilike", clean_phone[-10:]),
+                ],
+                fields=["id", "name", "street", "city", "zip", "phone", "mobile"],
                 limit=10,
             )
             if not partners:
@@ -450,8 +539,12 @@ class LeadService:
             if clean_phone:
                 partners = await self.client.search_read(
                     "res.partner",
-                    [("phone", "ilike", clean_phone[-10:])],  # Last 10 digits
-                    fields=["id", "name", "phone", "email"],
+                    [
+                        "|",
+                        ("phone", "ilike", clean_phone[-10:]),  # Last 10 digits
+                        ("mobile", "ilike", clean_phone[-10:]),
+                    ],
+                    fields=["id", "name", "phone", "mobile", "email"],
                     limit=1,
                 )
                 if partners:

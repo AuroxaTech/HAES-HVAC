@@ -21,6 +21,43 @@ from src.utils.request_id import generate_request_id
 
 logger = logging.getLogger(__name__)
 
+# Phrases that indicate timeline; we pass the customer's wording as-is (no normalization)
+# Order: longer phrases first so "as soon as possible" matches before "asap"
+TIMELINE_PHRASES = [
+    "as soon as possible",
+    "right away",
+    "within a few weeks",
+    "next few weeks",
+    "just exploring",
+    "exploring options",
+    "getting quotes",
+    "sometime soon",
+    "within a month",
+    "next month",
+    "asap",
+    "urgent",
+    "immediately",
+    "soon",
+    "few weeks",
+    "exploring",
+    "not sure",
+    "just looking",
+]
+
+
+def _infer_timeline_from_context(context: str | None) -> str | None:
+    """Infer timeline from conversation context; return customer's wording as-is."""
+    if not context or not context.strip():
+        return None
+    lower = context.lower().strip()
+    for phrase in TIMELINE_PHRASES:
+        if phrase in lower:
+            # Return the exact slice from original context to preserve customer wording (e.g. "Asap")
+            start = lower.index(phrase)
+            end = start + len(phrase)
+            return context[start:end].strip()
+    return None
+
 
 async def handle_request_quote(
     tool_call_id: str,
@@ -40,13 +77,19 @@ async def handle_request_quote(
         - square_footage (optional): Square footage
         - system_age_years (optional): System age in years
         - budget_range (optional): Budget range
-        - timeline (required): Timeline for installation
+        - timeline (optional): Timeline for installation (pass customer wording as-is)
         - system_type (optional): HVAC system type
     """
     handler = BaseToolHandler("request_quote")
     
-    # Validate required parameters
-    required = ["customer_name", "phone", "address", "property_type", "timeline"]
+    # If timeline missing but customer said it in conversation, infer from context (e.g. "Asap")
+    if not parameters.get("timeline") or (isinstance(parameters.get("timeline"), str) and not parameters.get("timeline", "").strip()):
+        inferred = _infer_timeline_from_context(conversation_context)
+        if inferred:
+            parameters = {**parameters, "timeline": inferred}
+    
+    # Validate required parameters (timeline is optional)
+    required = ["customer_name", "phone", "address", "property_type"]
     is_valid, missing = handler.validate_required_params(parameters, required)
     
     if not is_valid:
@@ -134,6 +177,18 @@ async def handle_request_quote(
             )
             
             lead_id = lead_result.get("lead_id") if lead_result else None
+            # Ensure FSM task exists for quote lead (same as create_service_request) so job appears in Field Service
+            if lead_id:
+                try:
+                    fsm_task_id = await lead_service.ensure_fsm_task_for_lead(
+                        lead_id=lead_id,
+                        customer_name=entities.full_name,
+                        service_address=entities.address,
+                    )
+                    if fsm_task_id:
+                        logger.info(f"FSM task {fsm_task_id} ensured for quote lead {lead_id}")
+                except Exception as fsm_err:
+                    logger.warning(f"Failed to ensure FSM task for quote lead {lead_id}: {fsm_err}")
         except Exception as lead_err:
             logger.warning(f"Failed to create lead for quote: {lead_err}")
             # Continue anyway - quote can be created without lead

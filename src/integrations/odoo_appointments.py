@@ -5,14 +5,12 @@ Creates and manages calendar events in Odoo for appointment scheduling.
 Follows the same pattern as odoo_leads.py for consistency.
 """
 
-import json
 import logging
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from src.brains.ops.scheduling_rules import TimeSlot, SlotStatus
-from src.config.settings import get_settings
 from src.integrations.odoo import OdooClient, create_odoo_client_from_settings
 from src.utils.errors import OdooRPCError, OdooTransportError
 
@@ -97,26 +95,171 @@ class AppointmentService:
     def _filter_valid_fields(self, values: dict[str, Any], valid_fields: set[str]) -> dict[str, Any]:
         """Filter out fields that don't exist in the model."""
         return {k: v for k, v in values.items() if k in valid_fields and v is not None}
+
+    async def get_live_technicians(self) -> list[dict[str, Any]]:
+        """
+        Return live technician candidates from Odoo employees/users.
+
+        Primary source is hr.employee (active technicians), then we resolve each
+        employee to an assignable res.users record. We allow both internal and
+        portal users for assignment because some tenants keep field techs as
+        portal users. Integration/Office user is explicitly excluded.
+        """
+        await self._ensure_authenticated()
+        integration_uid = self.client.uid
+
+        employees = await self.client.search_read(
+            "hr.employee",
+            [("active", "=", True)],
+            fields=["id", "name", "job_title", "user_id"],
+            limit=300,
+            order="id asc",
+        )
+
+        def _is_technician_employee(emp: dict[str, Any]) -> bool:
+            name = str(emp.get("name") or "").strip().lower()
+            title = str(emp.get("job_title") or "").strip().lower()
+            # Exclude admin / office accounts (e.g. Admin(I))
+            if name.startswith("admin"):
+                return False
+            if name in {"aubry", "bounthon"}:
+                return True
+            return any(
+                kw in title
+                for kw in ("technician", "tech", "installer", "field", "service")
+            )
+
+        tech_employees = [e for e in (employees or []) if _is_technician_employee(e)]
+        if not tech_employees:
+            logger.warning("No technician employees found in hr.employee")
+            return []
+
+        users = await self.client.search_read(
+            "res.users",
+            [("active", "=", True)],
+            fields=["id", "name", "login", "share"],
+            limit=500,
+            order="id asc",
+        )
+        users_by_id: dict[int, dict[str, Any]] = {
+            int(u["id"]): u for u in (users or []) if isinstance(u.get("id"), int)
+        }
+
+        technician_users: list[dict[str, Any]] = []
+        seen_ids: set[int] = set()
+
+        for emp in tech_employees:
+            emp_name = str(emp.get("name") or "").strip()
+            uid: int | None = None
+            user_ref = emp.get("user_id")
+
+            if isinstance(user_ref, list) and user_ref and isinstance(user_ref[0], int):
+                uid = user_ref[0]
+            elif isinstance(user_ref, int):
+                uid = user_ref
+            else:
+                # Fallback by name when employee has no linked user_id.
+                target = emp_name.lower()
+                for u in users_by_id.values():
+                    uname = str(u.get("name") or "").strip().lower()
+                    if uname and uname == target:
+                        uid = int(u["id"])
+                        break
+
+            if not uid:
+                logger.warning(
+                    "Technician employee '%s' has no assignable user mapping; skipping",
+                    emp_name,
+                )
+                continue
+            if uid == integration_uid:
+                continue
+            if uid in seen_ids:
+                continue
+
+            user = users_by_id.get(uid)
+            if not user:
+                continue
+            user_name = str(user.get("name") or "").strip().lower()
+            if user_name.startswith("office"):
+                continue
+            # Exclude admin / integration accounts (e.g. Admin(I), junior@hvacrfinest.com)
+            if user_name.startswith("admin"):
+                continue
+
+            seen_ids.add(uid)
+            technician_users.append(
+                {
+                    "id": uid,
+                    "name": emp_name or user.get("name"),
+                    "login": user.get("login"),
+                    "share": user.get("share"),
+                    "employee_id": emp.get("id"),
+                }
+            )
+
+        return technician_users
+
+    async def get_live_user_by_id(self, user_id: int) -> dict[str, Any] | None:
+        """Fetch one live Odoo user by ID."""
+        await self._ensure_authenticated()
+        users = await self.client.search_read(
+            "res.users",
+            [("id", "=", user_id), ("active", "=", True)],
+            fields=["id", "name", "login", "share"],
+            limit=1,
+        )
+        return users[0] if users else None
     
-    def _get_tech_user_id(self, tech_id: str) -> int | None:
+    async def _get_tech_user_id(
+        self, tech_id: str, allow_office_fallback: bool = True
+    ) -> int | None:
         """
-        Get Odoo user ID for a technician.
-        
-        Args:
-            tech_id: Technician ID (e.g., "junior", "bounthon")
-            
-        Returns:
-            Odoo user ID if found, None otherwise
+        Resolve Odoo user ID from live Odoo technician identifiers.
+
+        Expected tech_id formats:
+        - "12" (string user id)
+        - 12 (int user id, when passed as str upstream)
         """
-        settings = get_settings()
+        await self._ensure_authenticated()
+
         try:
-            tech_user_map = json.loads(settings.ODOO_TECH_USER_IDS_JSON)
-            user_id = tech_user_map.get(tech_id.lower())
-            return int(user_id) if user_id else None
-        except (json.JSONDecodeError, ValueError, TypeError) as e:
-            logger.warning(f"Failed to parse ODOO_TECH_USER_IDS_JSON: {e}")
+            tech_id_str = str(tech_id).strip()
+            if tech_id_str.isdigit():
+                return int(tech_id_str)
+
+            if allow_office_fallback:
+                logger.warning(
+                    "Non-numeric technician id '%s'; using Office fallback user_id=%s",
+                    tech_id,
+                    self.client.uid,
+                )
+                return self.client.uid
+            logger.warning(
+                "Non-numeric technician id '%s' in strict mode; no fallback",
+                tech_id,
+            )
             return None
-    
+        except Exception as e:
+            if allow_office_fallback:
+                logger.warning(
+                    "Failed live Odoo tech-user lookup for tech '%s': %s. Using Office fallback user_id=%s",
+                    tech_id,
+                    e,
+                    self.client.uid,
+                )
+                return self.client.uid
+            logger.warning(
+                "Failed strict live Odoo tech-user lookup for tech '%s': %s",
+                tech_id,
+                e,
+            )
+            return None
+
+    def is_office_user_id(self, user_id: int) -> bool:
+        """Return True if user_id is the API/Office user (not a field technician)."""
+        return self.client.uid == user_id
+
     async def find_appointment_by_contact(
         self,
         phone: str | None = None,
@@ -245,7 +388,9 @@ class AppointmentService:
         try:
             await self._ensure_authenticated()
             
-            user_id = self._get_tech_user_id(tech_id)
+            user_id = await self._get_tech_user_id(
+                tech_id, allow_office_fallback=False
+            )
             if not user_id:
                 logger.warning(f"No Odoo user ID found for technician {tech_id}")
                 return []
@@ -388,10 +533,13 @@ class AppointmentService:
             elif partner_id:
                 final_partner_ids = [partner_id]
             
-            # Get technician user_id
+            # Get technician user_id (no Office fallback when we have a valid tech_id)
             user_id = None
             if tech_id:
-                user_id = self._get_tech_user_id(tech_id)
+                allow_office = not (str(tech_id).strip().isdigit())
+                user_id = await self._get_tech_user_id(
+                    tech_id, allow_office_fallback=allow_office
+                )
                 if not user_id:
                     logger.warning(f"No Odoo user ID found for technician {tech_id}")
             
@@ -496,7 +644,10 @@ class AppointmentService:
                     stop_utc = stop
                 update_values["stop"] = stop_utc.strftime("%Y-%m-%d %H:%M:%S")
             if tech_id is not None:
-                user_id = self._get_tech_user_id(tech_id)
+                allow_office = not (str(tech_id).strip().isdigit())
+                user_id = await self._get_tech_user_id(
+                    tech_id, allow_office_fallback=allow_office
+                )
                 if user_id:
                     update_values["user_id"] = user_id
             if description is not None:
@@ -611,7 +762,16 @@ class AppointmentService:
             TimeSlot if found, None otherwise
         """
         from src.brains.ops.scheduling_rules import get_next_available_slot
-        
+
+        # Strict live mapping: unresolved techs should not receive offered slots.
+        user_id = await self._get_tech_user_id(tech_id, allow_office_fallback=False)
+        if not user_id:
+            logger.warning(
+                "Cannot find next slot for tech '%s': no live Odoo user mapping",
+                tech_id,
+            )
+            return None
+
         # Get existing bookings from Odoo
         existing_bookings = await self.get_technician_availability(tech_id, after, after + timedelta(days=30))
         
@@ -632,6 +792,15 @@ class AppointmentService:
             List of 0, 1, or 2 TimeSlots.
         """
         from src.brains.ops.scheduling_rules import get_next_two_available_slots
+
+        # Strict live mapping: unresolved techs should not receive offered slots.
+        user_id = await self._get_tech_user_id(tech_id, allow_office_fallback=False)
+        if not user_id:
+            logger.warning(
+                "Cannot find slots for tech '%s': no live Odoo user mapping",
+                tech_id,
+            )
+            return []
 
         existing_bookings = await self.get_technician_availability(
             tech_id, after, after + timedelta(days=30)
@@ -662,6 +831,9 @@ class AppointmentService:
         # Get existing bookings if tech specified
         existing_bookings = []
         if tech_id:
+            user_id = await self._get_tech_user_id(tech_id, allow_office_fallback=False)
+            if not user_id:
+                return False, f"No live Odoo user mapping found for technician '{tech_id}'", []
             existing_bookings = await self.get_technician_availability(
                 tech_id,
                 requested_start - timedelta(days=1),

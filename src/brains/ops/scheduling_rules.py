@@ -15,9 +15,14 @@ MIN_TIME_BETWEEN_APPOINTMENTS_MINUTES = 30
 TRAVEL_TIME_BUFFER_PERCENT = 15
 DEFAULT_TRAVEL_TIME_MINUTES = 30
 
-# Business hours from RDD
-BUSINESS_START = time(8, 0)   # 8:00 AM
-BUSINESS_END = time(18, 0)    # 6:00 PM
+# Dispatch scheduling windows
+# Appointments can start from 8:00 AM through 8:00 PM.
+BUSINESS_START = time(8, 0)    # 8:00 AM
+BUSINESS_END = time(20, 0)     # 8:00 PM (supports 8 PM-12 AM dispatch window)
+
+# Same-day dispatch policy
+# By default, new same-day scheduling is allowed only until 5:00 PM.
+SAME_DAY_DISPATCH_CUTOFF = time(17, 0)  # 5:00 PM
 
 # Days of operation (Monday=0, Sunday=6)
 OPERATING_DAYS = [0, 1, 2, 3, 4, 5]  # Mon-Sat
@@ -48,6 +53,13 @@ class SchedulingResult:
     slot: TimeSlot | None
     reason: str
     alternatives: list[TimeSlot]
+
+
+def _naive_local(dt: datetime) -> datetime:
+    """Normalize to naive local time for consistent comparison with existing_bookings (naive)."""
+    if dt.tzinfo is not None:
+        return dt.astimezone().replace(tzinfo=None)
+    return dt
 
 
 def is_business_hours(dt: datetime) -> bool:
@@ -230,20 +242,23 @@ def validate_scheduling_request(
         SchedulingResult with success status and alternatives
     """
     existing_bookings = existing_bookings or []
-    
+    # Normalize to naive local so we can compare with datetime.now() and naive booking times
+    requested_naive = _naive_local(requested_start)
+    now_naive = datetime.now()
+
     # Check if in past (most critical check - do first)
-    if requested_start < datetime.now():
+    if requested_naive < now_naive:
         return SchedulingResult(
             success=False,
             slot=None,
             reason="Cannot schedule in the past",
             alternatives=[],
         )
-    
+
     # Check if in business hours
-    if not is_business_hours(requested_start):
+    if not is_business_hours(requested_naive):
         next_slot = get_next_available_slot(
-            requested_start,
+            requested_naive,
             duration_minutes,
             technician_id,
             existing_bookings,
@@ -254,15 +269,15 @@ def validate_scheduling_request(
             reason="Requested time is outside business hours",
             alternatives=[next_slot] if next_slot else [],
         )
-    
-    slot_end = calculate_slot_end(requested_start, duration_minutes)
-    
+
+    slot_end = calculate_slot_end(requested_naive, duration_minutes)
+
     # Check for conflicts
     for booking in existing_bookings:
         if technician_id and booking.technician_id != technician_id:
             continue
-        
-        if requested_start < booking.end and slot_end > booking.start:
+
+        if requested_naive < booking.end and slot_end > booking.start:
             next_slot = get_next_available_slot(
                 booking.end,
                 duration_minutes,
@@ -276,12 +291,14 @@ def validate_scheduling_request(
                 alternatives=[next_slot] if next_slot else [],
             )
     
-    # Success
+    # Success: return slot keeping original requested_start (caller may pass aware)
+    duration_delta = slot_end - requested_naive
+    end_for_caller = requested_start + duration_delta
     return SchedulingResult(
         success=True,
         slot=TimeSlot(
             start=requested_start,
-            end=slot_end,
+            end=end_for_caller,
             status=SlotStatus.BOOKED,
             technician_id=technician_id,
         ),

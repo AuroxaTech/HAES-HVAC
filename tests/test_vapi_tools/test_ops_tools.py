@@ -381,7 +381,8 @@ class TestScheduleAppointment:
     async def test_schedule_appointment_success(self, mock_ops_handler):
         """Should successfully schedule appointment."""
         from src.brains.ops.schema import OpsResult, OpsStatus
-        future_time = datetime.now() + timedelta(hours=4)
+        # Keep slot safely beyond same-day cutoff/baseline logic used by check_availability.
+        future_time = datetime.now() + timedelta(days=1, hours=4)
         
         mock_ops_handler.return_value = OpsResult(
             status=OpsStatus.SUCCESS,
@@ -422,8 +423,17 @@ class TestCheckAvailability:
     """
 
     @pytest.mark.asyncio
-    async def test_check_availability_works_without_phone(self):
+    @patch("src.vapi.tools.ops.check_availability.create_appointment_service", new_callable=AsyncMock)
+    async def test_check_availability_works_without_phone(self, mock_create_appointment_service):
         """Should work without phone number (just checking general availability)."""
+        from src.brains.ops.scheduling_rules import TimeSlot, SlotStatus
+        future = datetime.now() + timedelta(days=1, hours=8)
+        slot = TimeSlot(start=future, end=future + timedelta(hours=2), status=SlotStatus.AVAILABLE)
+        mock_service_instance = AsyncMock()
+        mock_service_instance.get_live_technicians = AsyncMock(return_value=[{"id": 100}])
+        mock_service_instance.find_next_two_available_slots = AsyncMock(return_value=[slot])
+        mock_create_appointment_service.return_value = mock_service_instance
+
         parameters = {
             "service_type": "diagnostic",
         }
@@ -457,6 +467,7 @@ class TestCheckAvailability:
         )
 
         mock_service_instance = AsyncMock()
+        mock_service_instance.get_live_technicians = AsyncMock(return_value=[{"id": 101}])
         mock_service_instance.find_next_two_available_slots = AsyncMock(return_value=[slot1, slot2])
         mock_create_appointment_service.return_value = mock_service_instance
 
@@ -484,13 +495,15 @@ class TestCheckAvailability:
         """When service returns 1 slot, should return that slot (no IndexError)."""
         from src.brains.ops.scheduling_rules import TimeSlot, SlotStatus
 
-        future_time = datetime.now() + timedelta(hours=4)
+        # Use a slot well in the future so it passes minimum_start (e.g. after same-day cutoff)
+        future_time = datetime.now() + timedelta(days=1, hours=10)
         mock_slot = TimeSlot(
             start=future_time,
             end=future_time + timedelta(hours=2),
             status=SlotStatus.AVAILABLE,
         )
         mock_service_instance = AsyncMock()
+        mock_service_instance.get_live_technicians = AsyncMock(return_value=[{"id": 102}])
         mock_service_instance.find_next_two_available_slots = AsyncMock(return_value=[mock_slot])
         mock_create_appointment_service.return_value = mock_service_instance
 
@@ -511,6 +524,7 @@ class TestCheckAvailability:
     async def test_check_availability_no_slots_available(self, mock_create_appointment_service):
         """When service returns 0 slots, should return friendly message and no_slots_available."""
         mock_service_instance = AsyncMock()
+        mock_service_instance.get_live_technicians = AsyncMock(return_value=[{"id": 103}])
         mock_service_instance.find_next_two_available_slots = AsyncMock(return_value=[])
         mock_create_appointment_service.return_value = mock_service_instance
 
@@ -540,6 +554,7 @@ class TestCheckAvailability:
             status=SlotStatus.AVAILABLE,
         )
         mock_service_instance = AsyncMock()
+        mock_service_instance.get_live_technicians = AsyncMock(return_value=[{"id": 104}])
         mock_service_instance.find_next_two_available_slots = AsyncMock(return_value=[slot1, slot2])
         mock_create_appointment_service.return_value = mock_service_instance
 
@@ -555,6 +570,62 @@ class TestCheckAvailability:
         assert "next_available_slots" in response.data
         assert len(response.data["next_available_slots"]) >= 1
         assert "which works better" in response.speak.lower() or "slot" in response.speak.lower() or "have" in response.speak.lower()
+
+    @pytest.mark.asyncio
+    @patch("src.vapi.tools.ops.check_availability.create_appointment_service", new_callable=AsyncMock)
+    async def test_check_availability_two_earliest_across_technicians(self, mock_create_appointment_service):
+        """Two earliest slots across all technicians: slot1 from tech 201, slot2 from tech 202."""
+        from src.brains.ops.scheduling_rules import TimeSlot, SlotStatus
+
+        # Use fixed future times so they pass minimum_start regardless of current time
+        base = datetime.now() + timedelta(days=2)
+        slot1_start = base.replace(hour=8, minute=0, second=0, microsecond=0)
+        slot2_start = base.replace(hour=14, minute=0, second=0, microsecond=0)
+        if slot2_start <= slot1_start:
+            slot2_start += timedelta(days=1)
+        slot_tech_201 = TimeSlot(
+            start=slot1_start,
+            end=slot1_start + timedelta(hours=2),
+            status=SlotStatus.AVAILABLE,
+        )
+        slot_tech_202 = TimeSlot(
+            start=slot2_start,
+            end=slot2_start + timedelta(hours=2),
+            status=SlotStatus.AVAILABLE,
+        )
+        mock_service_instance = AsyncMock()
+
+        async def side_effect_find_slots(tech_id, **kwargs):
+            if str(tech_id) == "201":
+                return [slot_tech_201]
+            if str(tech_id) == "202":
+                return [slot_tech_202]
+            return []
+
+        mock_service_instance.get_live_technicians = AsyncMock(
+            return_value=[{"id": 201}, {"id": 202}]
+        )
+        mock_service_instance.find_next_two_available_slots = AsyncMock(
+            side_effect=side_effect_find_slots
+        )
+        mock_create_appointment_service.return_value = mock_service_instance
+
+        parameters = {"service_type": "diagnostic"}
+
+        response = await handle_check_availability(
+            tool_call_id="tc_avail_cross_tech",
+            parameters=parameters,
+            call_id="call_avail_cross",
+        )
+
+        assert response.action == "needs_human"
+        assert "next_available_slots" in response.data
+        slots = response.data["next_available_slots"]
+        assert len(slots) == 2
+        assert slots[0]["technician_id"] == "201"
+        assert slots[1]["technician_id"] == "202"
+        assert slots[0]["start"] == slot1_start.isoformat()
+        assert slots[1]["start"] == slot2_start.isoformat()
 
 
 class TestRescheduleAppointment:
