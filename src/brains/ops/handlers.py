@@ -25,6 +25,7 @@ from src.brains.ops.scheduling_rules import (
     OPERATING_DAYS,
     SAME_DAY_DISPATCH_CUTOFF,
     TimeSlot,
+    get_earliest_slot_by_urgency,
 )
 from src.brains.ops.service_catalog import infer_service_type_from_description
 
@@ -567,6 +568,12 @@ async def _handle_schedule_appointment(command: HaelCommand) -> OpsResult:
             now_aware,
             allow_same_day_after_cutoff=allow_same_day_after_cutoff,
         )
+
+        # Apply urgency-based slot targeting (emergency=same day, urgent=2-3 days out, routine=~7 days out)
+        urgency_raw = (command.metadata or {}).get("urgency")
+        if urgency_raw:
+            urgency_earliest = get_earliest_slot_by_urgency(preferred_start, str(urgency_raw).strip())
+            preferred_start = max(preferred_start, urgency_earliest)
         
         # Try to parse preferred time if provided
         if entities.preferred_time_windows:

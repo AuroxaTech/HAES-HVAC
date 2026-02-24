@@ -25,6 +25,7 @@ from src.brains.ops.scheduling_rules import (
     BUSINESS_START,
     OPERATING_DAYS,
     SAME_DAY_DISPATCH_CUTOFF,
+    get_earliest_slot_by_urgency,
 )
 
 logger = logging.getLogger(__name__)
@@ -97,6 +98,10 @@ async def handle_check_availability(
     Parameters:
         - service_type (optional): Service type description
         - preferred_date (optional): Preferred date for availability
+        - preferred_time (optional): Earliest time for slots (e.g. "15:00" or "15" for after 3pm).
+          Use when customer needs later-in-day slots (e.g. "I work until 3pm", "something after work").
+        - urgency (optional): "emergency", "urgent", or "routine" — pass the value the customer stated.
+          emergency=same-day slots, urgent=2-3 days out, routine=~7 days out.
         - property_type (optional): "residential", "commercial", "property_management"
         - zip_code (optional): ZIP code for technician assignment
     """
@@ -120,6 +125,12 @@ async def handle_check_availability(
             allow_same_day_after_cutoff=allow_same_day_after_cutoff,
         )
         preferred_start = minimum_start
+
+        # Apply urgency-based slot targeting (emergency=same day, urgent=2-3 days out, routine=~7 days out)
+        urgency_raw = parameters.get("urgency")
+        if urgency_raw:
+            urgency_earliest = get_earliest_slot_by_urgency(minimum_start, str(urgency_raw).strip())
+            preferred_start = max(preferred_start, urgency_earliest)
         
         # Parse preferred_date if provided
         if parameters.get("preferred_date"):
@@ -138,7 +149,27 @@ async def handle_check_availability(
                         microsecond=0,
                     )
                 preferred_start = max(parsed_preferred, minimum_start)
-            except:
+            except Exception:
+                pass
+
+        # Parse preferred_time if provided (e.g. "15:00" or "15" for after 3pm - use when customer needs later-in-day slots)
+        preferred_time_raw = parameters.get("preferred_time")
+        if preferred_time_raw:
+            try:
+                pt = str(preferred_time_raw).strip()
+                hour, minute = BUSINESS_START.hour, 0
+                if ":" in pt:
+                    parts = pt.split(":")
+                    hour = int(parts[0]) if parts[0].isdigit() else hour
+                    minute = int(parts[1][:2]) if len(parts) > 1 and parts[1][:2].isdigit() else 0
+                elif pt.isdigit():
+                    h = int(pt)
+                    hour = h + 12 if 1 <= h <= 7 else h  # 3->15 (3pm), 5->17 (5pm)
+                hour = max(8, min(20, hour))
+                candidate = preferred_start.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                if candidate >= minimum_start:
+                    preferred_start = candidate
+            except Exception:
                 pass
         
         # Collect slots from all technicians; sort by start; take two earliest across everyone.

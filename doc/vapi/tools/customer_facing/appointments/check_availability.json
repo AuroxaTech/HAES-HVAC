@@ -18,6 +18,15 @@
             "type": "string",
             "description": "Preferred date for availability check"
           },
+          "preferred_time": {
+            "type": "string",
+            "description": "Earliest time for slots (e.g. 15:00 for after 3pm, 17 for 5pm). Use when customer says they need later-in-day (e.g. I work until 3pm, something after work)."
+          },
+          "urgency": {
+            "type": "string",
+            "enum": ["emergency", "urgent", "routine"],
+            "description": "Pass the urgency the customer stated. emergency=same-day slots, urgent=2-3 days out, routine=~7 days out."
+          },
           "property_type": {
             "type": "string",
             "enum": ["residential", "commercial", "property_management"],
@@ -29,10 +38,10 @@
           }
         }
       }
-    },
-    "async": false,
-    "server": {
-      "url": "https://haes-hvac.fly.dev/vapi/server"
     }
+  },
+  "async": false,
+  "server": {
+    "url": "https://haes-hvac.fly.dev/vapi/server"
   }
 }

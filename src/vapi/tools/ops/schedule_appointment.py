@@ -163,6 +163,7 @@ async def handle_schedule_appointment(
             "tool_call_id": tool_call_id,
             "call_id": call_id,
             "chosen_slot_start": chosen_slot_start,
+            "urgency": parameters.get("urgency"),
             "technician_notes": parameters.get("technician_notes"),
             "caller_type": caller_type,
             "property_management_company": pm_company_name,

@@ -2,6 +2,14 @@
 HAES HVAC - OPS Brain Scheduling Rules
 
 Scheduling constraints and slot management from RDD.
+
+QUICK ADJUSTMENTS (edit these constants):
+- Block weekends: OPERATING_DAYS = [0, 1, 2, 3, 4]  (Mon-Fri only)
+- Include Saturday: OPERATING_DAYS = [0, 1, 2, 3, 4, 5]  (Mon-Sat)
+- Same-day cutoff: SAME_DAY_DISPATCH_CUTOFF (default 5 PM)
+- Business hours: BUSINESS_START (8 AM), BUSINESS_END (8 PM)
+- Urgent first slot: URGENT_DAYS_OUT (2 business days)
+- Routine first slot: ROUTINE_DAYS_OUT (7 business days)
 """
 
 from dataclasses import dataclass
@@ -26,6 +34,10 @@ SAME_DAY_DISPATCH_CUTOFF = time(17, 0)  # 5:00 PM
 
 # Days of operation (Monday=0, Sunday=6)
 OPERATING_DAYS = [0, 1, 2, 3, 4, 5]  # Mon-Sat
+
+# Urgency-based slot targeting
+URGENT_DAYS_OUT = 2   # First slot for "urgent" starts 2 business days from search start
+ROUTINE_DAYS_OUT = 7  # First slot for "routine" starts ~7 business days from search start
 
 
 class SlotStatus(str, Enum):
@@ -68,6 +80,45 @@ def is_business_hours(dt: datetime) -> bool:
         return False
     
     return BUSINESS_START <= dt.time() <= BUSINESS_END
+
+
+def get_earliest_slot_by_urgency(after: datetime, urgency: str | None) -> datetime:
+    """
+    Return earliest preferred_start based on urgency.
+
+    - emergency: earliest possible (return after unchanged)
+    - urgent: start of 2nd business day from after's date (2 days out)
+    - routine: start of 7th business day from after's date (~7 days out)
+    - None or unknown: return after unchanged
+    """
+    if not urgency or urgency.lower() not in ("emergency", "urgent", "routine"):
+        return after
+
+    u = urgency.lower()
+    if u == "emergency":
+        return after
+
+    days_out = URGENT_DAYS_OUT if u == "urgent" else ROUTINE_DAYS_OUT
+    # Reference: start of the operating day containing 'after'
+    current = after.replace(
+        hour=BUSINESS_START.hour,
+        minute=BUSINESS_START.minute,
+        second=0,
+        microsecond=0,
+    )
+    # If 'after' is past business start, treat next operating day as "day 1 out"
+    count = 0
+    if current < after:
+        current += timedelta(days=1)
+        while current.weekday() not in OPERATING_DAYS:
+            current += timedelta(days=1)
+        count = 1  # Already at 1st business day out
+    # Advance to days_out-th business day (e.g. 2 -> Wednesday from Monday)
+    while count < days_out:
+        current += timedelta(days=1)
+        if current.weekday() in OPERATING_DAYS:
+            count += 1
+    return current
 
 
 def calculate_travel_time(
