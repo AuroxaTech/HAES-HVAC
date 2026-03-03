@@ -28,6 +28,10 @@ from src.brains.ops.scheduling_rules import (
     get_earliest_slot_by_urgency,
 )
 from src.brains.ops.service_catalog import infer_service_type_from_description
+from src.brains.ops.skill_mapping import (
+    get_required_skills_for_service,
+    filter_technicians_by_skills,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -42,16 +46,32 @@ OPS_INTENTS = {
 
 
 async def _candidate_technicians(
-    appointment_service: Any, zip_code: str | None, is_commercial: bool
+    appointment_service: Any,
+    zip_code: str | None,
+    is_commercial: bool,
+    required_skills: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """
-    Return live Odoo technician candidates.
-
-    zip_code/is_commercial are kept in signature for future server-side filtering.
+    Return live Odoo technician candidates, optionally filtered by required_skills.
     """
     _ = zip_code, is_commercial
     users = await appointment_service.get_live_technicians()
-    return [u for u in users if isinstance(u.get("id"), int)]
+    users = [u for u in users if isinstance(u.get("id"), int)]
+    if not required_skills:
+        return users
+    employee_ids = []
+    for u in users:
+        eid = u.get("employee_id")
+        if eid is None:
+            continue
+        if isinstance(eid, list) and eid:
+            eid = eid[0]
+        try:
+            employee_ids.append(int(eid))
+        except (TypeError, ValueError):
+            pass
+    skills_by_emp = await appointment_service.get_technician_skills(employee_ids)
+    return filter_technicians_by_skills(users, skills_by_emp, required_skills)
 
 
 async def _find_best_technician_slots(
@@ -60,6 +80,7 @@ async def _find_best_technician_slots(
     is_commercial: bool,
     after: datetime,
     duration_minutes: int,
+    required_skills: list[str] | None = None,
 ) -> tuple[str | None, Any | None, list[TimeSlot]]:
     """
     Find the technician whose first available slot is earliest.
@@ -69,6 +90,7 @@ async def _find_best_technician_slots(
         appointment_service=appointment_service,
         zip_code=zip_code,
         is_commercial=is_commercial,
+        required_skills=required_skills,
     )
     if not candidates:
         # No technicians match service-area/capability filters; do not force a default tech.
@@ -114,12 +136,14 @@ async def _find_available_technician_for_requested_start(
     is_commercial: bool,
     requested_start: datetime,
     duration_minutes: int,
+    required_skills: list[str] | None = None,
 ) -> tuple[str | None, Any | None]:
     """Find first technician who can take the requested start time."""
     candidates = await _candidate_technicians(
         appointment_service=appointment_service,
         zip_code=zip_code,
         is_commercial=is_commercial,
+        required_skills=required_skills,
     )
 
     for candidate in candidates:
@@ -267,6 +291,9 @@ async def _handle_service_request(command: HaelCommand) -> OpsResult:
     service_type = infer_service_type_from_description(
         entities.problem_description or ""
     )
+    required_skills_sr = get_required_skills_for_service(
+        service_type, entities.problem_description or ""
+    )
     
     # Determine priority
     if emergency.is_emergency:
@@ -336,6 +363,7 @@ async def _handle_service_request(command: HaelCommand) -> OpsResult:
             is_commercial=is_commercial,
             after=search_start,
             duration_minutes=service_type.duration_minutes_max,
+            required_skills=required_skills_sr,
         )
         if selected_tech_id and selected_tech:
             technician = selected_tech
@@ -450,6 +478,7 @@ async def _handle_schedule_appointment(command: HaelCommand) -> OpsResult:
     problem_desc = entities.problem_description or "General service"
     service_type = infer_service_type_from_description(problem_desc)
     duration_minutes = service_type.duration_minutes_max  # Use max duration for safety
+    required_skills = get_required_skills_for_service(service_type, problem_desc)
     
     # Check if we have minimal info (just problem_description) - availability check mode
     has_identity = bool(entities.phone or entities.email or entities.full_name)
@@ -475,6 +504,7 @@ async def _handle_schedule_appointment(command: HaelCommand) -> OpsResult:
                 is_commercial=entities.property_type == "commercial",
                 after=preferred_start,
                 duration_minutes=duration_minutes,
+                required_skills=required_skills,
             )
 
             if not slots:
@@ -615,6 +645,7 @@ async def _handle_schedule_appointment(command: HaelCommand) -> OpsResult:
                         is_commercial=entities.property_type == "commercial",
                         requested_start=chosen_start,
                         duration_minutes=duration_minutes,
+                        required_skills=required_skills,
                     )
                     if selected_tech_id:
                         tech_id = selected_tech_id
@@ -633,6 +664,7 @@ async def _handle_schedule_appointment(command: HaelCommand) -> OpsResult:
                             is_commercial=entities.property_type == "commercial",
                             after=chosen_start,
                             duration_minutes=duration_minutes,
+                            required_skills=required_skills,
                         )
                         if alt_slots:
                             preferred_day = chosen_start.date()
@@ -701,6 +733,7 @@ async def _handle_schedule_appointment(command: HaelCommand) -> OpsResult:
                 is_commercial=entities.property_type == "commercial",
                 after=preferred_start,
                 duration_minutes=duration_minutes,
+                required_skills=required_skills,
             )
             if slots:
                 next_available_slots = [
@@ -1140,6 +1173,12 @@ async def _handle_reschedule_appointment(command: HaelCommand) -> OpsResult:
             existing_stop = existing_stop.replace(tzinfo=None)
         
         duration_minutes = int((existing_stop - existing_start).total_seconds() / 60)
+        reschedule_service_type = infer_service_type_from_description(
+            command.raw_text or entities.problem_description or "General service"
+        )
+        required_skills_reschedule = get_required_skills_for_service(
+            reschedule_service_type, command.raw_text or entities.problem_description
+        )
         
         # Get new preferred time (default: same time next day or 4 hours from now)
         allow_same_day_after_cutoff = bool(
@@ -1242,6 +1281,7 @@ async def _handle_reschedule_appointment(command: HaelCommand) -> OpsResult:
                         is_commercial=entities.property_type == "commercial",
                         requested_start=requested_start,
                         duration_minutes=duration_minutes,
+                        required_skills=required_skills_reschedule,
                     )
                     if selected_tech_id:
                         tech_id = selected_tech_id
@@ -1269,6 +1309,7 @@ async def _handle_reschedule_appointment(command: HaelCommand) -> OpsResult:
                     is_commercial=entities.property_type == "commercial",
                     after=preferred_start,
                     duration_minutes=duration_minutes,
+                    required_skills=required_skills_reschedule,
                 )
                 if fallback_slots:
                     tech_id = fallback_tech_id

@@ -21,6 +21,10 @@ from src.brains.ops.schema import OpsStatus
 from src.utils.request_id import generate_request_id
 from src.integrations.odoo_appointments import create_appointment_service
 from src.brains.ops.service_catalog import infer_service_type_from_description
+from src.brains.ops.skill_mapping import (
+    get_required_skills_for_service,
+    filter_technicians_by_skills,
+)
 from src.brains.ops.scheduling_rules import (
     BUSINESS_START,
     OPERATING_DAYS,
@@ -172,8 +176,37 @@ async def handle_check_availability(
             except Exception:
                 pass
         
-        # Collect slots from all technicians; sort by start; take two earliest across everyone.
+        # Get technicians and optionally filter by job-required skills
         candidates = await appointment_service.get_live_technicians()
+        required_skills = get_required_skills_for_service(
+            service_type,
+            parameters.get("service_type") or conversation_context,
+        )
+        if required_skills and candidates:
+            employee_ids = []
+            for t in candidates:
+                eid = t.get("employee_id")
+                if eid is None:
+                    continue
+                if isinstance(eid, list) and eid:
+                    eid = eid[0]
+                try:
+                    employee_ids.append(int(eid))
+                except (TypeError, ValueError):
+                    pass
+            skills_by_emp = await appointment_service.get_technician_skills(employee_ids)
+            filtered = filter_technicians_by_skills(
+                candidates, skills_by_emp, required_skills
+            )
+            if filtered:
+                candidates = filtered
+            else:
+                logger.info(
+                    "No technician has required skills %s; using all technicians",
+                    required_skills,
+                )
+
+        # Collect slots from (skill-filtered) technicians; sort by start; take two earliest.
         all_slot_entries: list[tuple[datetime, Any, str]] = []  # (start_naive, slot, tech_id)
         for candidate in candidates:
             candidate_id = str(candidate.get("id"))

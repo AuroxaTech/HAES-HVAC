@@ -200,6 +200,60 @@ class AppointmentService:
 
         return technician_users
 
+    async def get_technician_skills(
+        self, employee_ids: list[int]
+    ) -> dict[int, list[dict[str, Any]]]:
+        """
+        Fetch skills for given hr.employee IDs from Odoo.
+
+        Uses hr.employee.skill (Odoo HR Skills / hr_skills). Returns
+        {employee_id: [{"skill_name": str, "skill_type": str, "level": str}]}.
+        If the skills model is not installed or the call fails, returns {} so
+        callers can treat as "no skill filter".
+        """
+        if not employee_ids:
+            return {}
+        await self._ensure_authenticated()
+        try:
+            # hr.employee.skill: employee_id, skill_id (many2one -> hr.skill), level_id (many2one -> hr.skill.level)
+            # Odoo returns many2one as [id, "display_name"]
+            rows = await self.client.search_read(
+                "hr.employee.skill",
+                [("employee_id", "in", employee_ids)],
+                fields=["employee_id", "skill_id", "level_id"],
+                limit=2000,
+            )
+        except Exception as e:
+            logger.warning(
+                "Could not fetch technician skills (hr.employee.skill may be missing): %s",
+                e,
+            )
+            return {}
+
+        result: dict[int, list[dict[str, Any]]] = {eid: [] for eid in employee_ids}
+        for row in rows or []:
+            emp_ref = row.get("employee_id")
+            employee_id = emp_ref[0] if isinstance(emp_ref, (list, tuple)) and emp_ref else emp_ref
+            if not isinstance(employee_id, int):
+                continue
+            skill_ref = row.get("skill_id")
+            skill_name = ""
+            if isinstance(skill_ref, (list, tuple)) and len(skill_ref) >= 2:
+                skill_name = str(skill_ref[1] or "").strip()
+            elif skill_ref:
+                skill_name = str(skill_ref).strip()
+            level_ref = row.get("level_id")
+            level_name = ""
+            if isinstance(level_ref, (list, tuple)) and len(level_ref) >= 2:
+                level_name = str(level_ref[1] or "").strip()
+            elif level_ref:
+                level_name = str(level_ref).strip()
+            if employee_id in result:
+                result[employee_id].append(
+                    {"skill_name": skill_name, "skill_type": "", "level": level_name}
+                )
+        return result
+
     async def get_live_user_by_id(self, user_id: int) -> dict[str, Any] | None:
         """Fetch one live Odoo user by ID."""
         await self._ensure_authenticated()
