@@ -66,12 +66,12 @@ If you prefer manual setup:
    fly secrets set TWILIO_AUTH_TOKEN="<your-twilio-auth-token>" --app haes-hvac
    fly secrets set TWILIO_PHONE_NUMBER="<your-twilio-phone-number>" --app haes-hvac
    
-   # Email (SMTP) - Optional
+   # Email (SMTP) - Optional (sender: info@hvacrfinest.com)
    fly secrets set SMTP_HOST="smtp.gmail.com" --app haes-hvac
    fly secrets set SMTP_PORT="587" --app haes-hvac
-   fly secrets set SMTP_USERNAME="junior@hvacrfinest.com" --app haes-hvac
-   fly secrets set SMTP_PASSWORD="<app-password>" --app haes-hvac
-   fly secrets set SMTP_FROM_EMAIL="junior@hvacrfinest.com" --app haes-hvac
+   fly secrets set SMTP_USERNAME="info@hvacrfinest.com" --app haes-hvac
+   fly secrets set SMTP_PASSWORD="<app-password-for-info@>" --app haes-hvac
+   fly secrets set SMTP_FROM_EMAIL="info@hvacrfinest.com" --app haes-hvac
    fly secrets set SMTP_USE_TLS="true" --app haes-hvac
    fly secrets set SMTP_DRY_RUN="false" --app haes-hvac
    fly secrets set SMTP_TEST_TO_EMAIL="hamsimirza1@gmail.com" --app haes-hvac

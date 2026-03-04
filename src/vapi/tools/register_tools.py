@@ -5,9 +5,9 @@ Registers all Vapi tools with the tool registry.
 
 Architecture (post-optimization):
   - Riley Customer Inbound: 5 in-call tools only (read-only lookups + availability)
-  - Riley OPS Internal: 6 tools (ivr_close_sale + HR + operations)
-  - Post-call processing: 13 tools handled by PostCallProcessor via structured outputs
-  - All handlers remain registered here for Riley OPS and PostCallProcessor reuse
+  - Riley OPS Internal: 0 in-call tools, FSM subtask creation via post-call structured output
+  - Post-call processing: 13 customer inbound tools via PostCallProcessor, OPS via OpsPostCallProcessor
+  - All handlers remain registered here for PostCallProcessor reuse and potential future OPS reuse
 """
 
 from src.vapi.tools import register_tool
@@ -35,7 +35,9 @@ from src.vapi.tools.utils.get_service_area_info import handle_get_service_area_i
 from src.vapi.tools.utils.get_maintenance_plans import handle_get_maintenance_plans
 from src.vapi.tools.utils.send_notification import handle_send_notification
 
-# ── RILEY OPS INTERNAL TOOLS (6 active on OPS line) ─────────────────
+# ── RILEY OPS INTERNAL TOOLS (0 in-call, subtask creation via post-call structured output) ──
+# All 6 former in-call tools unlinked from VAPI Dashboard.
+# Handlers kept registered for potential future reuse.
 from src.vapi.tools.revenue.ivr_close_sale import handle_ivr_close_sale
 from src.vapi.tools.core.inventory_inquiry import handle_inventory_inquiry
 from src.vapi.tools.core.purchase_request import handle_purchase_request

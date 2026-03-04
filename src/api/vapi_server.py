@@ -1226,23 +1226,46 @@ async def vapi_server_url(request: Request) -> dict[str, Any]:
             logger.warning(f"Failed to audit end-of-call: {audit_err}")
         
         # ── Post-call structured output processing ──
-        # Process structured outputs from completed calls (booking, reschedule,
-        # cancel, service requests, quotes, complaints, invoices, memberships).
+        # Route to the correct processor based on output names:
+        #   - OPS outputs (e.g., "FSM Subtask Request") → OpsPostCallProcessor
+        #   - Customer inbound outputs → PostCallProcessor
         # Runs as a background task so we return 200 to VAPI immediately.
         try:
             artifact = message.get("artifact", {})
             structured_outputs = artifact.get("structuredOutputs", [])
             if structured_outputs:
-                from src.api.post_call_processor import PostCallProcessor
+                # Extract output names for routing
+                _raw_outputs = list(structured_outputs.values()) if isinstance(structured_outputs, dict) else structured_outputs
+                _output_names = {
+                    o.get("name", "") for o in _raw_outputs
+                    if isinstance(o, dict) and o.get("name")
+                }
 
-                processor = PostCallProcessor()
-                asyncio.create_task(
-                    processor.process(call_id, body)
-                )
-                logger.info(
-                    "Launched post-call processor for call %s (%d structured outputs)",
-                    call_id, len(structured_outputs),
-                )
+                # OPS outputs → OpsPostCallProcessor (separate infrastructure)
+                _OPS_OUTPUT_NAMES = {"FSM Subtask Request"}
+                if _output_names & _OPS_OUTPUT_NAMES:
+                    from src.api.ops_post_call_processor import OpsPostCallProcessor
+
+                    ops_processor = OpsPostCallProcessor()
+                    asyncio.create_task(
+                        ops_processor.process(call_id, body)
+                    )
+                    logger.info(
+                        "Launched OPS post-call processor for call %s (outputs: %s)",
+                        call_id, _output_names & _OPS_OUTPUT_NAMES,
+                    )
+                else:
+                    # Customer inbound outputs → PostCallProcessor
+                    from src.api.post_call_processor import PostCallProcessor
+
+                    processor = PostCallProcessor()
+                    asyncio.create_task(
+                        processor.process(call_id, body)
+                    )
+                    logger.info(
+                        "Launched post-call processor for call %s (%d structured outputs)",
+                        call_id, len(structured_outputs),
+                    )
         except Exception as proc_err:
             logger.warning("Failed to launch post-call processor for call %s: %s", call_id, proc_err)
 

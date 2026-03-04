@@ -215,17 +215,21 @@
           "assistant_id": "fd35b574-1a9c-4052-99d8-a820e0ebabf7",
           "phone_number": "+18557683265",
           "source": "twilio",
-          "tools_count": 6,
+          "tools_count": 0,
+          "in_call_tools": 0,
           "tool_category": "internal_ops",
-          "purpose": "Internal operations support",
+          "purpose": "Internal operations — FSM subtask creation (Phase 1)",
           "system_prompt": "doc/vapi/system_prompt_internal_ops.md",
           "system_prompt_optimized": true,
-          "system_prompt_optimized_date": "2026-01-26",
+          "system_prompt_optimized_date": "2026-03-04",
           "knowledge_base": "doc/vapi/kb/ops_intake_and_call_policy.txt",
-          "knowledge_base_optimized": true,
-          "knowledge_base_optimized_date": "2026-01-26",
-          "status": "configured_and_optimized",
-          "testing_status": "all_tools_tested_production_ready"
+          "post_call_structured_outputs": ["FSM Subtask Request"],
+          "post_call_processor": "src/api/ops_post_call_processor.py",
+          "structured_output_registration": "scripts/register_ops_structured_outputs.py",
+          "fsm_integration": "src/integrations/odoo_fsm_subtasks.py",
+          "status": "rebuilt_phase_1",
+          "rebuild_date": "2026-03-04",
+          "rebuild_notes": "All 6 former in-call tools unlinked. Single-purpose: FSM subtask creation via post-call structured output. Separate infrastructure from customer inbound."
         }
       },
       "phone_numbers": {
@@ -240,14 +244,14 @@
           "number": "+18557683265",
           "source": "twilio",
           "assistant": "Riley OPS",
-          "tools": "internal_ops (6+ tools)",
-          "purpose": "Internal employees (technicians, HR, billing, managers)"
+          "tools": "0 in-call tools, FSM subtask creation via post-call structured output",
+          "purpose": "Internal employees — FSM subtask creation (Phase 1)"
         }
       },
       "tools_implemented": 24,
       "customer_inbound_in_call": 5,
       "customer_inbound_post_call": 13,
-      "internal_ops": 6,
+      "internal_ops": 0,
       "tool_categories": {
         "ops": 6,
         "revenue": 4,
@@ -373,9 +377,9 @@
       "status": "implemented_and_configured",
       "client": "src/integrations/email_notifications.py",
       "smtp_host": "smtp.gmail.com",
-      "from_email": "junior@hvacrfinest.com",
+      "from_email": "info@hvacrfinest.com",
       "features": ["Emergency email notifications", "Service confirmation emails", "Staff emergency notifications (Dispatch, Linda, technicians)", "HTML email templates", "Dry-run mode"],
-      "notes": "SMTP email service implemented using smtplib. Google Workspace (junior@hvacrfinest.com) configured and verified working in production. Staff notifications sent to Dispatch, Linda, and assigned technician for emergency requests."
+      "notes": "SMTP email service implemented using smtplib. Google Workspace (info@hvacrfinest.com) configured and verified working in production. Staff notifications sent to Dispatch, Linda, and assigned technician for emergency requests."
     },
     "flyio": {
       "status": "configured",
@@ -812,7 +816,7 @@
       "email": {
         "status": "VERIFIED_WORKING",
         "smtp_host": "smtp.gmail.com",
-        "from_email": "junior@hvacrfinest.com",
+        "from_email": "info@hvacrfinest.com",
         "verified_in_production": true,
         "test_recipient": "hamsimirza1@gmail.com"
       },
