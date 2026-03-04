@@ -20,6 +20,10 @@
       { "file": "doc/vapi/ASSISTANTS_AND_TOOLS_REFERENCE.md", "purpose": "Complete reference table of all Vapi assistants, their IDs, phone numbers, and attached tools" },
       { "file": "doc/vapi/kb/customer_faq.txt", "purpose": "Vapi Knowledge Base - Customer FAQ (for Riley Customer - Inbound)" },
       { "file": "doc/vapi/kb/policies.txt", "purpose": "Vapi Knowledge Base - Policies & Disclosures (for Riley Customer - Inbound)" },
+      { "file": "doc/vapi/hooks_config.json", "purpose": "VAPI assistant hooks reference (silence detection, low confidence)" },
+      { "file": "src/api/post_call_processor.py", "purpose": "Post-call processor — handles all write operations via structured outputs from end-of-call-report" },
+      { "file": "scripts/register_structured_outputs.py", "purpose": "One-time script to register 4 structured outputs in VAPI and attach to assistant" },
+      { "file": "src/brains/ops/skill_mapping.py", "purpose": "Skill-based technician filtering for service types" },
       { "file": "doc/vapi/kb/ops_intake_and_call_policy.txt", "purpose": "Vapi Knowledge Base - Intake checklists, emergency rules, prohibited phrases, terminology (for Riley OPS)" },
       { "file": "doc/vapi/KB_ASSIGNMENT.md", "purpose": "Knowledge Base assignment guide - which KB files go to which assistant" }
     ]
@@ -35,8 +39,8 @@
       "REVENUE-BRAIN (Leads/Quoting/Sales)",
       "PEOPLE-BRAIN (HR/Onboarding/Payroll)"
     ],
-    "data_flow_summary": "Voice/Chat -> API -> Direct Vapi Tools OR HAEL -> Brain -> Odoo",
-    "vapi_architecture": "Direct tool-based integration - 24 granular tools that bypass HAEL for faster, more precise routing"
+    "data_flow_summary": "Voice/Chat -> API -> 5 In-Call Read Tools + Post-Call Structured Outputs -> PostCallProcessor -> Brain -> Odoo",
+    "vapi_architecture": "Optimized: 5 in-call read-only tools (customer inbound) + 13 post-call tools via structured outputs + PostCallProcessor. All write operations deferred to post-call processing."
   },
   "modules_status": [
     { "module": "Module 1 - Foundation", "status": "done", "last_updated": "2026-01-08" },
@@ -61,7 +65,14 @@
     { "module": "ConversionFlow™ IVR Close Sale", "status": "done", "last_updated": "2026-01-26", "notes": "ivr_close_sale tool fully implemented, tested with real Odoo data, 100% test pass rate, production-ready" },
     { "module": "Internal OPS Tools Testing", "status": "done", "last_updated": "2026-01-26", "notes": "All 6 internal_ops tools tested with real Odoo data: HR tools (3) and Operations tools (2) - 100% pass rate, production-ready" },
     { "module": "Riley OPS System Prompt Optimization", "status": "done", "last_updated": "2026-01-26", "notes": "System prompt optimized following Vapi best practices - concise, action-oriented, natural language" },
-    { "module": "Internal OPS Knowledge Base Optimization", "status": "done", "last_updated": "2026-01-26", "notes": "Knowledge base rewritten for internal operations - comprehensive policies, procedures, and guidelines" }
+    { "module": "Internal OPS Knowledge Base Optimization", "status": "done", "last_updated": "2026-01-26", "notes": "Knowledge base rewritten for internal operations - comprehensive policies, procedures, and guidelines" },
+    { "module": "Customer Inbound Tool Optimization", "status": "done", "last_updated": "2026-03-04", "notes": "Reduced in-call tools from 18 to 5 (72% reduction). All write operations moved to post-call structured outputs. Static data moved to KB. Notifications automated server-side via PostCallProcessor." },
+    { "module": "Post-Call Processor", "status": "done", "last_updated": "2026-03-04", "notes": "PostCallProcessor handles all post-call write operations: booking, reschedule, cancel, service request, quote, complaint, invoice, membership enrollment. Triggered by end-of-call-report webhook." },
+    { "module": "Structured Outputs Registration", "status": "done", "last_updated": "2026-03-04", "notes": "4 structured outputs (Customer Profile, Appointment Action, Pending Request, Call Analytics) registered via scripts/register_structured_outputs.py" },
+    { "module": "Skill-Based Technician Assignment", "status": "done", "last_updated": "2026-03-04", "notes": "Skill mapping module filters technicians by required skills for service types. Integrated into check_availability." },
+    { "module": "Assistant Hooks Configuration", "status": "done", "last_updated": "2026-03-04", "notes": "Silence detection (10s check, 20s hangup) and low-confidence speech hooks configured via VAPI built-in assistant settings." },
+    { "module": "FSM Chosen-Slot Technician Assignment", "status": "done", "last_updated": "2026-03-04", "notes": "Appointment Action includes chosenSlotTechnicianId from check_availability; post-call passes to OPS metadata; schedule handler assigns that technician to FSM job and calendar event." },
+    { "module": "Call Summary in Odoo/FSM", "status": "done", "last_updated": "2026-03-04", "notes": "Call Analytics callSummary stored in lead description (and FSM task), calendar event description; upsert_service_lead(call_summary=); append_call_summary_to_lead on reschedule/cancel." }
   ],
   "endpoints": [
     { "method": "GET", "path": "/", "purpose": "Service metadata" },
@@ -183,11 +194,21 @@
           "assistant_id": "f639ba5f-7c38-4949-9479-ec2a40428d76",
           "phone_number": "+19725971644",
           "source": "8x8_forwarded",
-          "tools_count": 18,
+          "tools_count": 5,
           "tool_category": "customer_facing",
+          "in_call_tools": ["check_availability", "lookup_customer_profile", "check_appointment_status", "check_lead_status", "billing_inquiry"],
+          "post_call_tools": ["schedule_appointment", "reschedule_appointment", "cancel_appointment", "create_service_request", "send_notification", "check_business_hours", "get_service_area_info", "get_pricing", "get_maintenance_plans", "payment_terms_inquiry", "create_complaint", "request_quote", "invoice_request", "request_membership_enrollment"],
           "purpose": "Customer service",
           "system_prompt": "doc/vapi/system_prompt_customer_inbound.md",
-          "status": "configured"
+          "post_call_processor": "src/api/post_call_processor.py",
+          "structured_outputs": ["Customer Profile", "Appointment Action", "Pending Request", "Call Analytics"],
+          "appointment_action_fields": ["action", "chosenSlotStart", "chosenSlotEnd", "chosenSlotTechnicianId", "urgency", "problemDescription", "technicianNotes"],
+          "call_analytics_fields": ["primaryIntent", "resolution", "sentiment", "followUpRequired", "followUpReason", "callCompleted", "callSummary"],
+          "structured_outputs_script": "scripts/register_structured_outputs.py",
+          "hooks_config": "doc/vapi/hooks_config.json",
+          "status": "optimized",
+          "optimization_date": "2026-03-04",
+          "optimization_summary": "Reduced from 18 to 5 in-call tools (72% reduction). All write operations moved to post-call structured outputs processed by PostCallProcessor. Static data moved to KB. Notifications automated server-side."
         },
         "riley_ops": {
           "name": "Riley OPS",
@@ -212,7 +233,7 @@
           "number": "+19725971644",
           "source": "8x8_forwarded",
           "assistant": "Riley",
-          "tools": "customer_facing (18 tools)",
+          "tools": "5 in-call tools + 13 post-call via structured outputs",
           "purpose": "Public customer service"
         },
         "internal_ops_line": {
@@ -224,6 +245,9 @@
         }
       },
       "tools_implemented": 24,
+      "customer_inbound_in_call": 5,
+      "customer_inbound_post_call": 13,
+      "internal_ops": 6,
       "tool_categories": {
         "ops": 6,
         "revenue": 4,
@@ -233,6 +257,14 @@
       },
       "tool_registry": "src/vapi/tools/register_tools.py",
       "base_handler": "src/vapi/tools/base.py",
+      "post_call_processor": "src/api/post_call_processor.py",
+      "structured_output_log_validation": {
+        "purpose": "Validate PostCallProcessor and structured output handling in production server logs",
+        "command": "fly logs --app haes-hvac --no-tail 2>&1 | grep PostCallProcessor",
+        "grep_pattern": "PostCallProcessor",
+        "log_prefix": "[PostCallProcessor]",
+        "notes": "All PostCallProcessor logs use the [PostCallProcessor] prefix. Use the command above to filter Fly.io logs for: raw structuredOutputs names from VAPI, Customer_Profile, Appointment_Action, Pending_Request, Call_Analytics, per-action processing/result (book_appointment, reschedule, cancel, create_quote, etc.), and completion summary. To validate a specific call, include call_id in the grep or search logs for that call_id after running the command."
+      },
       "role_based_access": {
         "enabled": true,
         "caller_identification": "src/utils/caller_identification.py",
@@ -249,7 +281,10 @@
         "customer_facing": {
           "folder": "doc/vapi/tools/customer_facing/",
           "count": 18,
-          "description": "Customer-facing tools available via Customer Line",
+          "in_call_count": 5,
+          "post_call_count": 13,
+          "description": "Customer-facing tools — 5 active in-call (read-only), 13 post-call via structured outputs",
+          "in_call_tools": ["check_availability", "lookup_customer_profile", "check_appointment_status", "check_lead_status", "billing_inquiry"],
           "subcategories": {
             "appointments": 5,
             "leads_quotes": 4,
@@ -313,9 +348,19 @@
         "Technician availability lookups now use strict live Odoo user resolution (no Office fallback during availability scanning)",
         "Scheduling and availability selection now use live Odoo user IDs directly (no static roster mapping dependency)",
         "Service-request technician assignment in OPS handlers now uses live Odoo users (including warranty previous-tech continuity by user_id)",
-        "Technician discovery now prioritizes hr.employee technician records and maps them to assignable res.users (including portal users), excluding Office/integration user"
+        "Technician discovery now prioritizes hr.employee technician records and maps them to assignable res.users (including portal users), excluding Office/integration user",
+        "Customer inbound optimized: 5 in-call tools (read-only) + 13 post-call via structured outputs + PostCallProcessor",
+        "PostCallProcessor processes structured outputs from end-of-call-report webhook to create Odoo records and send notifications",
+        "check_availability enhanced as single pre-booking validation tool: duplicate detection + service area validation + emergency qualification + slot availability with skill filtering",
+        "Slot race condition handling: PostCallProcessor auto-picks next closest slot if chosen slot taken, sends adjusted SMS",
+        "4 structured outputs registered: Customer Profile, Appointment Action, Pending Request, Call Analytics",
+        "Assistant hooks: silence detection (10s/20s progressive), low-confidence speech handling (0.4 threshold)",
+        "Server-side notifications: all SMS+email confirmations automated via PostCallProcessor (no in-call notification tool)",
+        "Static data (business hours, service area, pricing, maintenance plans, payment terms) moved to Knowledge Base",
+        "Call summary in Odoo: Call Analytics callSummary passed in post-call metadata; stored in lead description (and FSM task), calendar event description; append_call_summary_to_lead on reschedule/cancel",
+        "Chosen-slot technician assignment: check_availability returns technician_id per slot; Appointment Action chosenSlotTechnicianId flows to OPS metadata; FSM job and calendar event assigned to that technician"
       ],
-      "notes": "Signature verification enforced in production via VAPI_WEBHOOK_SECRET. Direct tool integration provides faster, more precise routing compared to HAEL-only approach. send_notification tool has been created in Vapi Tools library (tool_id: e6f87a5e-def4-46e1-88aa-64148c18ffa4) so it can be manually attached to assistants."
+      "notes": "Signature verification enforced in production via VAPI_WEBHOOK_SECRET. Optimized architecture: 5 in-call read-only tools + PostCallProcessor for all write operations. Server messages required: tool-calls + end-of-call-report. Server URL: /vapi/server."
     },
     "twilio": {
       "status": "implemented_and_configured",
@@ -344,7 +389,7 @@
   },
   "assumptions_and_open_questions": [
     "Odoo 18 Enterprise is accessible via JSON-RPC",
-    "Vapi.ai tool endpoint design: 24 direct granular tools (primary) with HAEL fallback, organized by integration type (odoo/brain_handlers/static)",
+    "Vapi.ai architecture: 5 in-call read-only tools + 13 post-call via structured outputs + PostCallProcessor",
     "Weather API not integrated - emergency rules use explicit temperature statements",
     "Time tracking integration unspecified - payroll excludes hourly calculations"
   ],

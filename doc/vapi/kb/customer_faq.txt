@@ -215,8 +215,9 @@ Yes, emergency and after-hours service includes a premium due to expedited dispa
 
 ### How much does a service call cost?
 Service call pricing depends on customer type and timing:
-- **Residential:** Diagnostic fee starting at $99
-- **Commercial:** Diagnostic fee starting at $250
+- **Residential (owner-occupied home):** Service fee of $99 for the technician visit
+- **Commercial (business):** Trip fee of $139 for the technician visit. If a diagnostic is needed, that would be assessed separately.
+- **Managed accounts (tenant, property management, or business with a managed company):** Pricing is handled through the property management account. Do not quote a fee — the technician will proceed per account terms.
 - **After-hours/Emergency:** Additional premium applies
 
 *Final pricing depends on the specific service needed. Our technician will provide a full estimate before any work begins.*

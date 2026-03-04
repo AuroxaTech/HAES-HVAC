@@ -639,23 +639,46 @@ async def _handle_schedule_appointment(command: HaelCommand) -> OpsResult:
                         suggested_action="Offer next-day available windows or enable same-day override",
                     )
                 if chosen_start >= now_aware:
-                    selected_tech_id, selected_tech = await _find_available_technician_for_requested_start(
-                        appointment_service=appointment_service,
-                        zip_code=entities.zip_code,
-                        is_commercial=entities.property_type == "commercial",
-                        requested_start=chosen_start,
-                        duration_minutes=duration_minutes,
-                        required_skills=required_skills,
-                    )
-                    if selected_tech_id:
-                        tech_id = selected_tech_id
-                        tech = selected_tech
+                    # Prefer technician_id from post-call structured output (chosen slot's tech from check_availability)
+                    chosen_slot_technician_id = (command.metadata or {}).get("chosen_slot_technician_id")
+                    tech_id = None
+                    tech = None
+                    if chosen_slot_technician_id and str(chosen_slot_technician_id).strip().isdigit():
+                        try:
+                            od_user_id = await appointment_service._get_tech_user_id(
+                                str(chosen_slot_technician_id).strip(),
+                                allow_office_fallback=False,
+                            )
+                            if od_user_id and not appointment_service.is_office_user_id(od_user_id):
+                                tech = await appointment_service.get_live_user_by_id(od_user_id)
+                                if tech:
+                                    tech_id = str(tech.get("id", od_user_id))
+                        except Exception as e:
+                            logger.warning(
+                                "Schedule appointment: could not use chosen_slot_technician_id=%s: %s",
+                                chosen_slot_technician_id,
+                                e,
+                            )
+                    if not tech_id or not tech:
+                        selected_tech_id, selected_tech = await _find_available_technician_for_requested_start(
+                            appointment_service=appointment_service,
+                            zip_code=entities.zip_code,
+                            is_commercial=entities.property_type == "commercial",
+                            requested_start=chosen_start,
+                            duration_minutes=duration_minutes,
+                            required_skills=required_skills,
+                        )
+                        if selected_tech_id:
+                            tech_id = selected_tech_id
+                            tech = selected_tech
+                    if tech_id and tech:
                         chosen_end = chosen_start + timedelta(minutes=duration_minutes)
                         slot = TimeSlot(start=chosen_start, end=chosen_end, technician_id=tech_id)
                         logger.info(
-                            "Schedule appointment: using chosen_slot_start=%s with tech=%s",
+                            "Schedule appointment: using chosen_slot_start=%s with tech=%s (from %s)",
                             chosen_slot_start,
                             tech_id,
+                            "structured_output" if chosen_slot_technician_id else "lookup",
                         )
                     else:
                         alt_tech_id, _, alt_slots = await _find_best_technician_slots(
@@ -788,6 +811,12 @@ async def _handle_schedule_appointment(command: HaelCommand) -> OpsResult:
         if no_pricing_company_match:
             schedule_structured_params["no_pricing_company_match"] = no_pricing_company_match
 
+        call_summary = (command.metadata or {}).get("call_summary")
+        if call_summary and not isinstance(call_summary, str):
+            call_summary = str(call_summary).strip() or None
+        elif call_summary:
+            call_summary = call_summary.strip() or None
+
         lead_result = await lead_service.upsert_service_lead(
             call_id=call_id,
             entities=entities,
@@ -798,6 +827,7 @@ async def _handle_schedule_appointment(command: HaelCommand) -> OpsResult:
             structured_params=schedule_structured_params,
             request_id=command.request_id,
             channel="voice",
+            call_summary=call_summary,
         )
         if lead_result.get("lead_id"):
             lead_id = lead_result["lead_id"]
@@ -807,6 +837,8 @@ async def _handle_schedule_appointment(command: HaelCommand) -> OpsResult:
         appointment_description = problem_desc
         if technician_notes:
             appointment_description = f"{problem_desc}\n\nTechnician Notes: {technician_notes}"
+        if call_summary:
+            appointment_description = f"{appointment_description}\n\nCall Summary:\n{call_summary}"
 
         event_id = await appointment_service.create_appointment(
             name=appointment_name,
@@ -1414,7 +1446,18 @@ async def _handle_reschedule_appointment(command: HaelCommand) -> OpsResult:
 
         # Keep event linked to lead and ensure FSM task exists for that lead.
         fsm_task_id: int | None = None
+        call_summary_reschedule = (command.metadata or {}).get("call_summary")
+        if call_summary_reschedule and isinstance(call_summary_reschedule, str) and call_summary_reschedule.strip():
+            call_summary_reschedule = call_summary_reschedule.strip()
+        else:
+            call_summary_reschedule = None
+
         if lead_id:
+            if call_summary_reschedule:
+                try:
+                    await lead_service.append_call_summary_to_lead(lead_id, call_summary_reschedule)
+                except Exception as append_err:
+                    logger.warning("Reschedule: could not append call summary to lead %s: %s", lead_id, append_err)
             try:
                 await appointment_service.link_appointment_to_lead(event_id=event_id, lead_id=lead_id)
             except Exception as link_err:
@@ -1739,11 +1782,17 @@ async def _handle_cancel_appointment(command: HaelCommand) -> OpsResult:
         except Exception as e:
             logger.warning(f"Failed to send cancellation notification email: {e}")
         
-        # Optionally update linked lead status (simplified - could be enhanced)
+        # Optionally update linked lead: append call summary when present
         if lead_id:
+            call_summary_cancel = (command.metadata or {}).get("call_summary")
+            if call_summary_cancel and isinstance(call_summary_cancel, str) and call_summary_cancel.strip():
+                try:
+                    from src.integrations.odoo_leads import create_lead_service
+                    lead_svc = await create_lead_service()
+                    await lead_svc.append_call_summary_to_lead(lead_id, call_summary_cancel.strip())
+                except Exception as append_err:
+                    logger.warning("Cancel: could not append call summary to lead %s: %s", lead_id, append_err)
             try:
-                # Could update lead stage to "cancelled" or "lost" here
-                # For now, just log it
                 logger.info(f"Appointment {event_id} cancelled, linked to lead {lead_id}")
             except Exception as e:
                 logger.warning(f"Failed to update lead {lead_id} after cancellation: {e}")

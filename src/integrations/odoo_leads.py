@@ -5,6 +5,7 @@ Creates and updates CRM leads in Odoo for service requests.
 Designed for idempotent upsert operations (one lead per call_id).
 """
 
+import html
 import logging
 import re
 from datetime import datetime, timezone
@@ -367,6 +368,30 @@ class LeadService:
         except Exception as e:
             logger.warning(f"ensure_fsm_task_for_lead failed for lead {lead_id}: {e}")
             return None
+
+    async def append_call_summary_to_lead(self, lead_id: int, call_summary: str) -> bool:
+        """Append a Call Summary section to an existing lead's description (e.g. after reschedule/cancel)."""
+        if not call_summary or not (call_summary := str(call_summary).strip()):
+            return False
+        try:
+            await self._ensure_authenticated()
+            if "description" not in await self._get_crm_lead_fields():
+                return False
+            rows = await self.client.read("crm.lead", [lead_id], fields=["description"])
+            if not rows:
+                return False
+            existing = rows[0].get("description") or ""
+            section = (
+                '<h3 style="border-bottom:1px solid #ccc;padding-bottom:5px;margin-top:15px;">📞 Call Summary</h3>'
+                f'<p style="white-space:pre-wrap;margin:10px 0;">{html.escape(call_summary)}</p>'
+            )
+            new_description = f"{existing}{section}"
+            await self.client.write("crm.lead", [lead_id], {"description": new_description})
+            logger.info(f"Appended call summary to lead {lead_id}")
+            return True
+        except Exception as e:
+            logger.warning(f"Could not append call summary to lead {lead_id}: {e}")
+            return False
 
     async def set_fsm_task_assignee(self, lead_id: int, user_id: int) -> bool:
         """
@@ -999,6 +1024,7 @@ class LeadService:
         structured_params: dict[str, Any] | None = None,
         request_id: str | None = None,
         channel: str | None = None,  # "voice" or "chat"
+        call_summary: str | None = None,
     ) -> dict[str, Any]:
         """
         Create or update a CRM lead for a service request.
@@ -1092,6 +1118,11 @@ class LeadService:
                 desc_html.append(f'<tr><td style="padding:5px;font-weight:bold;vertical-align:top;">Technician Notes:</td><td style="padding:5px;">{technician_notes}</td></tr>')
             
             desc_html.append('</table>')
+
+            # Call Summary Section (from post-call structured output)
+            if call_summary and (call_summary := str(call_summary).strip()):
+                desc_html.append('<h3 style="border-bottom:1px solid #ccc;padding-bottom:5px;margin-top:15px;">📞 Call Summary</h3>')
+                desc_html.append(f'<p style="white-space:pre-wrap;margin:10px 0;">{html.escape(call_summary)}</p>')
             
             # Metadata Section
             desc_html.append('<h3 style="border-bottom:1px solid #ccc;padding-bottom:5px;margin-top:15px;">📝 Metadata</h3>')

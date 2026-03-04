@@ -2,6 +2,11 @@
 HAES HVAC - Check Availability Tool
 
 Direct Vapi tool for checking available appointment slots.
+Enhanced to serve as the single pre-booking validation tool:
+  1. Duplicate call detection (existing appointment lookup)
+  2. Service area validation (35-mile radius)
+  3. Emergency qualification (urgency + business hours + weekend)
+  4. Slot availability (live technician schedules with skill filtering)
 """
 
 import logging
@@ -9,16 +14,6 @@ from typing import Any
 from datetime import datetime, timedelta
 
 from src.vapi.tools.base import BaseToolHandler, ToolResponse
-from src.hael.schema import (
-    Channel,
-    Entity,
-    HaelCommand,
-    Intent,
-    Brain,
-)
-from src.brains.ops import handle_ops_command
-from src.brains.ops.schema import OpsStatus
-from src.utils.request_id import generate_request_id
 from src.integrations.odoo_appointments import create_appointment_service
 from src.brains.ops.service_catalog import infer_service_type_from_description
 from src.brains.ops.skill_mapping import (
@@ -31,6 +26,8 @@ from src.brains.ops.scheduling_rules import (
     SAME_DAY_DISPATCH_CUTOFF,
     get_earliest_slot_by_urgency,
 )
+from src.vapi.tools.utils.service_area import is_within_service_area
+from src.vapi.tools.utils.check_business_hours import is_business_hours
 
 logger = logging.getLogger(__name__)
 
@@ -97,8 +94,14 @@ async def handle_check_availability(
     conversation_context: str | None = None,
 ) -> ToolResponse:
     """
-    Handle check_availability tool call.
-    
+    Handle check_availability tool call — the single pre-booking validation tool.
+
+    Performs validation BEFORE querying slots:
+      1. Duplicate detection — checks for existing appointments from same caller
+      2. Service area validation — ensures address/ZIP is within 35-mile radius
+      3. Emergency qualification — flags emergencies, weekend/after-hours premiums
+      4. Slot availability — queries live technician schedules with skill filtering
+
     Parameters:
         - service_type (optional): Service type description
         - preferred_date (optional): Preferred date for availability
@@ -108,18 +111,85 @@ async def handle_check_availability(
           emergency=same-day slots, urgent=2-3 days out, routine=~7 days out.
         - property_type (optional): "residential", "commercial", "property_management"
         - zip_code (optional): ZIP code for technician assignment
+        - phone (optional): Caller phone number — used for duplicate detection
+        - address (optional): Service address — used for service area validation
     """
     handler = BaseToolHandler("check_availability")
-    
+
+    # ── Step 1: Duplicate detection ──────────────────────────────────
+    phone = parameters.get("phone")
+    if phone:
+        phone = handler.normalize_phone(phone)
+
+    if phone:
+        try:
+            duplicate_info = await handler.check_duplicate_call(phone, call_id)
+            if duplicate_info and duplicate_info.get("is_duplicate"):
+                message = duplicate_info.get(
+                    "message",
+                    "Welcome back! I see you have an existing appointment. Would you like to modify it?",
+                )
+                return ToolResponse(
+                    speak=message,
+                    action="needs_human",
+                    data={
+                        "is_duplicate_call": True,
+                        "existing_appointment": duplicate_info.get("existing_appointment"),
+                        "recent_call_hours_ago": duplicate_info.get("recent_call_hours_ago"),
+                    },
+                )
+        except Exception as dup_err:
+            logger.warning("Duplicate check failed (non-blocking): %s", dup_err)
+
+    # ── Step 2: Service area validation ──────────────────────────────
+    address = (parameters.get("address") or "").strip()
+    zip_code = parameters.get("zip_code")
+
+    if address or zip_code:
+        try:
+            is_within, area_error = is_within_service_area(address or None, zip_code)
+            if not is_within and area_error:
+                return ToolResponse(
+                    speak=f"{area_error} We'd be happy to take your contact information for when we expand to your area.",
+                    action="needs_human",
+                    data={
+                        "out_of_service_area": True,
+                        "service_area_error": area_error,
+                    },
+                )
+        except Exception as area_err:
+            logger.warning("Service area check failed (non-blocking): %s", area_err)
+
+    # ── Step 3: Emergency qualification & premium messaging ──────────
+    urgency_str = (parameters.get("urgency") or "routine").lower().strip()
+    now = datetime.now()
+    is_weekend = now.weekday() >= 5
+    is_after_hours = not is_business_hours()
+    is_emergency = urgency_str == "emergency"
+
+    premium_messages: list[str] = []
+    if is_weekend:
+        premium_messages.append(
+            "All weekends are booked out. If an opening becomes available, we'll reach out. "
+            "To lock you in, we have availability during the week."
+        )
+    elif is_after_hours:
+        premium_messages.append(
+            "We're currently outside business hours. After-hours service may be available with additional premiums."
+        )
+    if is_emergency and (is_weekend or is_after_hours):
+        premium_messages.append(
+            "Since this is an emergency, we'll prioritize getting a technician out to you."
+        )
+
+    # ── Step 4: Slot availability ────────────────────────────────────
     # Infer service type
     service_desc = parameters.get("service_type") or conversation_context or "General service"
     service_type = infer_service_type_from_description(service_desc)
     duration_minutes = service_type.duration_minutes_max
-    
+
     try:
         appointment_service = await create_appointment_service()
-        
-        zip_code = parameters.get("zip_code")
         
         # Determine preferred start time (never offer past time windows)
         now = datetime.now()
@@ -260,18 +330,34 @@ async def handle_check_availability(
                     "no_slots_available": True,
                 },
             )
-        
+
+        # Prepend premium messages to spoken response if applicable
+        if premium_messages:
+            speak = " ".join(premium_messages) + " " + speak
+
+        # Build enriched response envelope
+        response_data = {
+            "availability_check": True,
+            "next_available_slots": next_available_slots,
+            "next_available_slot": next_available_slots[0] if next_available_slots else None,
+            "service_type": service_type.name,
+            "duration_minutes": duration_minutes,
+            # Validation flags for post-call processor & structured outputs
+            "is_duplicate_call": False,
+            "existing_appointment": None,
+            "out_of_service_area": False,
+            "service_area_error": None,
+            "is_emergency": is_emergency,
+            "emergency_reason": "customer_stated_emergency" if is_emergency else None,
+            "premium_applies": is_weekend or is_after_hours,
+            "premium_messages": premium_messages,
+        }
+
         return ToolResponse(
             speak=speak,
             action="needs_human",  # Needs confirmation before scheduling
-            data={
-                "availability_check": True,
-                "next_available_slots": next_available_slots,
-                "next_available_slot": next_available_slots[0] if next_available_slots else None,
-                "service_type": service_type.name,
-                "duration_minutes": duration_minutes,
-            },
+            data=response_data,
         )
-    
+
     except Exception as e:
         return handler.format_error_response(e)

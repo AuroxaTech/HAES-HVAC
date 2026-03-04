@@ -16,6 +16,7 @@ Key behavior:
 - Fail-closed: if Odoo fails, still respond but flag for human follow-up
 """
 
+import asyncio
 import json
 import logging
 import re
@@ -1224,6 +1225,27 @@ async def vapi_server_url(request: Request) -> dict[str, Any]:
         except Exception as audit_err:
             logger.warning(f"Failed to audit end-of-call: {audit_err}")
         
+        # ── Post-call structured output processing ──
+        # Process structured outputs from completed calls (booking, reschedule,
+        # cancel, service requests, quotes, complaints, invoices, memberships).
+        # Runs as a background task so we return 200 to VAPI immediately.
+        try:
+            artifact = message.get("artifact", {})
+            structured_outputs = artifact.get("structuredOutputs", [])
+            if structured_outputs:
+                from src.api.post_call_processor import PostCallProcessor
+
+                processor = PostCallProcessor()
+                asyncio.create_task(
+                    processor.process(call_id, body)
+                )
+                logger.info(
+                    "Launched post-call processor for call %s (%d structured outputs)",
+                    call_id, len(structured_outputs),
+                )
+        except Exception as proc_err:
+            logger.warning("Failed to launch post-call processor for call %s: %s", call_id, proc_err)
+
         # Detect incomplete calls and send SMS fallback
         incomplete_reasons = [
             "hangup",

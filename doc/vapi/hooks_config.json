@@ -1,0 +1,27 @@
+{
+  "_description": "VAPI Assistant Hooks Configuration — paste into assistant settings in VAPI Dashboard",
+  "_assistant_id": "f639ba5f-7c38-4949-9479-ec2a40428d76",
+  "hooks": [
+    {
+      "on": "customer.speech.timeout",
+      "do": [{ "type": "say", "exact": "Are you still there?" }],
+      "options": { "timeoutSeconds": 10, "triggerMaxCount": 2 },
+      "name": "silence-check"
+    },
+    {
+      "on": "customer.speech.timeout",
+      "do": [
+        { "type": "say", "exact": "It seems like we got disconnected. Feel free to call back anytime! Goodbye." },
+        { "type": "tool", "tool": "endCall" }
+      ],
+      "options": { "timeoutSeconds": 20, "triggerMaxCount": 1 },
+      "name": "silence-hangup"
+    },
+    {
+      "on": "assistant.transcriber.endpointedSpeechLowConfidence",
+      "do": [{ "type": "say", "exact": "I didn't quite catch that. Could you say that again?" }],
+      "options": { "confidenceMax": 0.4 },
+      "name": "low-confidence"
+    }
+  ]
+}
