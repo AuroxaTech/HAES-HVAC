@@ -71,3 +71,6 @@ alembic/versions/*.pyc
 # Local scripts output
 .cursor/odoo_discovery.json
 
+# Odoo repo (separate project — push from inside odoo/ to hvacrfinest/odoo)
+/odoo/
+

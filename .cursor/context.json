@@ -4,6 +4,48 @@
     "repo_root": "/Users/mac/Developer/HAES HVAC",
     "description": "AI-powered HVAC Business Automation System integrating with Odoo 18 Enterprise, Vapi.ai, 8x8 (customer inbound), and Twilio (SMS)"
   },
+  "related_repos": {
+    "odoo": {
+      "path": "odoo/",
+      "remote": "git@github.com:hvacrfinest/odoo.git",
+      "branch": "main",
+      "description": "HVAC-R Finest custom Odoo 18 modules — cloned into HAES HVAC for context only. Separate repo, separate git history. Push from inside odoo/ directory.",
+      "excluded_from_main_repo": true,
+      "gitignore_entry": "/odoo/",
+      "modules": {
+        "hvacr_finest": {
+          "purpose": "Main HVAC-R Finest Odoo module — CRM lead management, FSM task creation (fsm_task method), auto task codes (J1XXXXX), partner management",
+          "key_files": [
+            "odoo/hvacr_finest/models/crm_lead.py",
+            "odoo/hvacr_finest/models/project_task.py"
+          ]
+        },
+        "same_day_fsm": {
+          "purpose": "Instant FSM task creation on website form submission — overrides WebsiteForm.insert_record() to create FSM task in same HTTP request",
+          "status": "production",
+          "version": "18.0.1.0.0",
+          "depends": ["website", "crm", "industry_fsm"],
+          "no_dependency_on_hvacr_finest": true,
+          "key_file": "odoo/same_day_fsm/controllers/website_form.py",
+          "features": [
+            "Overrides WebsiteForm.insert_record() for CRM leads",
+            "Self-contained FSM task creation (no hvacr_finest dependency)",
+            "Multi-company support via with_company()",
+            "Partner resolution (existing or auto-create)",
+            "Same-Day FSM Created tag for cron deduplication",
+            "Full try/except — form submission never breaks",
+            "Pending Schedule stage assignment"
+          ],
+          "deployed_commit": "d6ea129"
+        },
+        "auth_impersonate_user": { "purpose": "User impersonation for admin" },
+        "bi_crm_claim": { "purpose": "CRM claims/complaints module" },
+        "ingenuity_portal_quotaion_and_rfq": { "purpose": "Portal quotation and RFQ" },
+        "sale_invoice_due_date_reminder": { "purpose": "Invoice due date reminders" },
+        "sh_survey_extra_fields": { "purpose": "Survey extra fields" }
+      }
+    }
+  },
   "documentation": {
     "folder": "doc/",
     "files": [
@@ -72,7 +114,9 @@
     { "module": "Skill-Based Technician Assignment", "status": "done", "last_updated": "2026-03-04", "notes": "Skill mapping module filters technicians by required skills for service types. Integrated into check_availability." },
     { "module": "Assistant Hooks Configuration", "status": "done", "last_updated": "2026-03-04", "notes": "Silence detection (10s check, 20s hangup) and low-confidence speech hooks configured via VAPI built-in assistant settings." },
     { "module": "FSM Chosen-Slot Technician Assignment", "status": "done", "last_updated": "2026-03-04", "notes": "Appointment Action includes chosenSlotTechnicianId from check_availability; post-call passes to OPS metadata; schedule handler assigns that technician to FSM job and calendar event." },
-    { "module": "Call Summary in Odoo/FSM", "status": "done", "last_updated": "2026-03-04", "notes": "Call Analytics callSummary stored in lead description (and FSM task), calendar event description; upsert_service_lead(call_summary=); append_call_summary_to_lead on reschedule/cancel." }
+    { "module": "Call Summary in Odoo/FSM", "status": "done", "last_updated": "2026-03-04", "notes": "Call Analytics callSummary stored in lead description (and FSM task), calendar event description; upsert_service_lead(call_summary=); append_call_summary_to_lead on reschedule/cancel." },
+    { "module": "Same-Day FSM (Odoo Module)", "status": "done", "last_updated": "2026-03-10", "notes": "same_day_fsm Odoo 18 module deployed. Instant FSM task creation on website form submit. Self-contained (no hvacr_finest dependency). Multi-company via with_company(). Dedup via Same-Day FSM Created tag. Commit d6ea129." },
+    { "module": "Riley OPS FSM Subtask Creation", "status": "done", "last_updated": "2026-03-10", "notes": "OPS post-call FSM subtask creation via structured output. task_code lookup (not record ID). Assignee inheritance from parent task. OpsPostCallProcessor + odoo_fsm_subtasks.py." }
   ],
   "endpoints": [
     { "method": "GET", "path": "/", "purpose": "Service metadata" },
