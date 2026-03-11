@@ -1,197 +1,149 @@
-# Vapi Tools Organization
+# Vapi Tools — Architecture Reference
 
-This directory contains JSON tool schemas for all Vapi voice assistant tools, organized by access level and purpose.
+## Architecture Overview
 
-## Structure
+After the March 2026 optimization, tools are organized by **execution context**:
+
+| Context | Count | Assistant | How They Run |
+|---------|-------|-----------|--------------|
+| **In-Call** | 5 | Riley Customer Inbound | Attached to VAPI. Called during live conversation via `tool-calls` server message. |
+| **Post-Call** | 14 | Riley Customer Inbound | NOT attached to VAPI. Triggered by `PostCallProcessor` after call ends via structured outputs from `end-of-call-report`. |
+| **Internal OPS** | 6 | Riley OPS | ALL UNLINKED from VAPI. Code retained in codebase. Riley OPS uses post-call structured output ("FSM Subtask Request") only. |
+
+**Total tools in codebase:** 25 (5 active in-call + 14 post-call handlers + 6 unlinked)
+
+## Directory Structure
 
 ```
 doc/vapi/tools/
-├── customer_facing/          # Customer-facing tools (18 tools)
-│   ├── appointments/          # Appointment scheduling tools (5 tools)
-│   ├── leads_quotes/         # Lead and quote tools (4 tools)
-│   ├── billing/              # Billing and payment tools (3 tools)
-│   ├── information/           # Information lookup tools (5 tools)
-│   └── complaints/           # Complaint handling (1 tool)
-├── internal_ops/             # Internal employee tools (6+ tools)
-│   ├── technician/           # Technician-specific tools (1 tool)
-│   ├── hr/                   # HR tools (3 tools)
-│   └── operations/           # Operations tools (2+ tools)
-└── README.md                 # This file
+├── README.md              # This file
+├── in_call/               # 5 tools attached to VAPI (Riley Customer Inbound)
+├── post_call/             # 14 backend handlers (PostCallProcessor)
+├── internal_ops/          # 6 tools (all UNLINKED from VAPI Dashboard)
+└── tool_schema.json       # Legacy hael_route schema
 ```
 
-## Tool Count
+---
 
-- **Total Tools**: 24
-  - **Customer Facing**: 18 tools
-  - **Internal OPS**: 6+ tools
+## In-Call Tools (5) — Attached to VAPI
 
-## Customer Facing Tools (18 tools)
+These are the ONLY tools attached to the Riley Customer Inbound assistant in the VAPI Dashboard. They execute during the live call via the Server URL (`/vapi/server`).
 
-These tools are available to customers calling the Customer Line (+1-972-597-1644) via the "Riley" assistant.
+All are **read-only** — no write operations during the call.
 
-### Appointments (5 tools)
+| Tool | Purpose | When Jessica Uses It |
+|------|---------|---------------------|
+| `check_availability` | Get next 2 available appointment slots | After collecting service details, when customer is ready to schedule |
+| `lookup_customer_profile` | Look up existing customer by phone | At call start to greet returning customers by name |
+| `check_appointment_status` | Check existing appointment details | When customer asks "when is my appointment?" |
+| `check_lead_status` | Check quote/lead progress | When customer asks "any update on my estimate?" |
+| `billing_inquiry` | Check billing and outstanding balance | When customer asks about payment or balance |
 
-- `schedule_appointment.json` - Schedule a new appointment
-- `reschedule_appointment.json` - Reschedule an existing appointment
-- `cancel_appointment.json` - Cancel an appointment
-- `check_appointment_status.json` - Check status of an appointment
-- `check_availability.json` - Check technician availability
+**Server URL:** `https://haes-hvac.fly.dev/vapi/server`
+**Server messages required:** `tool-calls` + `end-of-call-report`
 
-**Python Handlers**: `src/vapi/tools/ops/`
+---
 
-### Leads & Quotes (4 tools)
+## Post-Call Handlers (14) — Structured Outputs
 
-- `create_service_request.json` - Create a new service request/lead
-- `request_quote.json` - Request a quote for installation/equipment
-- `check_lead_status.json` - Check status of a quote/lead
-- `request_membership_enrollment.json` - Enroll in maintenance plan
+These are NOT attached to VAPI. They run server-side after the call ends, triggered by the `PostCallProcessor` which processes structured outputs from the `end-of-call-report` webhook.
 
-**Python Handlers**: `src/vapi/tools/ops/` and `src/vapi/tools/revenue/`
+### How It Works
 
-### Billing (3 tools)
+1. During the call, Jessica collects all information conversationally
+2. Call ends → VAPI sends `end-of-call-report` with 4 structured outputs
+3. `PostCallProcessor` extracts data and calls the appropriate handler(s)
 
-- `billing_inquiry.json` - Inquire about billing/balance
-- `invoice_request.json` - Request invoice copy
-- `payment_terms_inquiry.json` - Inquire about payment terms
+### 4 Structured Outputs (from VAPI)
 
-**Python Handlers**: `src/vapi/tools/core/`
+| Output | Fields | Triggers |
+|--------|--------|----------|
+| **Customer Profile** | name, phone, email, address, propertyType, callerType, companyName | Partner upsert in Odoo |
+| **Appointment Action** | action (book/reschedule/cancel), chosenSlotStart, chosenSlotEnd, chosenSlotTechnicianId, urgency, problemDescription, technicianNotes | schedule/reschedule/cancel handlers |
+| **Pending Request** | requestType (service/quote/complaint/invoice/membership), details | service request, quote, complaint, invoice, membership handlers |
+| **Call Analytics** | primaryIntent, resolution, sentiment, followUpRequired, callSummary | Lead description, call logging |
 
-### Information (5 tools)
+### Post-Call Handler Reference
 
-- `get_pricing.json` - Get service pricing information
-- `get_maintenance_plans.json` - Get maintenance plan information
-- `get_service_area_info.json` - Get service area coverage information
-- `check_business_hours.json` - Check business hours
-- `send_notification.json` - Send both SMS and email notification in one call
+| Handler | Triggered By | What It Does |
+|---------|-------------|--------------|
+| `schedule_appointment` | Appointment Action (action=book) | Creates calendar event + CRM lead + FSM task in Odoo |
+| `reschedule_appointment` | Appointment Action (action=reschedule) | Moves existing calendar event to new slot |
+| `cancel_appointment` | Appointment Action (action=cancel) | Cancels calendar event, updates lead |
+| `create_service_request` | Pending Request (type=service) | Creates CRM lead with service details |
+| `request_quote` | Pending Request (type=quote) | Creates quote lead, sends same-day install link |
+| `request_membership_enrollment` | Pending Request (type=membership) | Creates enrollment lead, sends payment link via SMS+email |
+| `create_complaint` | Pending Request (type=complaint) | Creates complaint lead, escalates to management |
+| `invoice_request` | Pending Request (type=invoice) | Sends invoice copy to customer email |
+| `payment_terms_inquiry` | Pending Request (type=payment_terms) | Returns payment term info (now in KB) |
+| `send_notification` | All successful actions | Sends SMS + email confirmation (automated, no tool call) |
+| `get_pricing` | — | Static pricing data (moved to KB) |
+| `get_maintenance_plans` | — | Plan info (moved to KB) |
+| `get_service_area_info` | — | Service area data (moved to KB) |
+| `check_business_hours` | — | Hours data (moved to KB) |
 
-**Python Handlers**: `src/vapi/tools/core/` and `src/vapi/tools/utils/`
+**Note:** The last 4 (pricing, maintenance plans, service area, business hours) have been moved to the Knowledge Base. Jessica answers these from KB without any tool call. The handler code is retained as backend reference.
 
-### Complaints (1 tool)
+**PostCallProcessor:** `src/api/post_call_processor.py`
+**Structured outputs registration:** `scripts/register_structured_outputs.py`
 
-- `create_complaint.json` - Create a complaint/escalation ticket
+---
 
-**Python Handlers**: `src/vapi/tools/core/`
+## Internal OPS Tools (6) — All UNLINKED
 
-## Internal OPS Tools (6+ tools)
+All 6 tools have been unlinked from the Riley OPS assistant in the VAPI Dashboard. Code is retained in the codebase for potential future use.
 
-These tools are available to employees calling the Internal OPS Line (+1-855-768-3265) via the "Riley Tech" assistant. Access is controlled by role-based permissions.
+Riley OPS now operates with **0 in-call tools**. It uses a single post-call structured output ("FSM Subtask Request") to create FSM subtasks in Odoo.
 
-### Technician Tools (1 tool)
+| Tool | Purpose | Status |
+|------|---------|--------|
+| `ivr_close_sale` | ConversionFlow — technician closes sale via IVR | Unlinked. Tested, production-ready. |
+| `payroll_inquiry` | Employee payroll and commission info | Unlinked. Tested. |
+| `onboarding_inquiry` | Onboarding checklist and training | Unlinked. Tested. |
+| `hiring_inquiry` | Hiring requirements and process | Unlinked. Tested. |
+| `inventory_inquiry` | Parts and equipment inventory | Unlinked. Tested. |
+| `purchase_request` | Create purchase requests | Unlinked. Tested. |
 
-- `ivr_close_sale.json` - Close a sale via IVR (ConversionFlow™)
-  - **Access**: Technicians, Managers, Executives, Admin
-  - **Purpose**: Allows technicians to close sales in the field, update Odoo pipeline, and trigger install crew dispatch
+**OPS PostCallProcessor:** `src/api/ops_post_call_processor.py`
+**FSM subtask service:** `src/integrations/odoo_fsm_subtasks.py`
+**OPS structured output registration:** `scripts/register_ops_structured_outputs.py`
 
-**Python Handlers**: `src/vapi/tools/revenue/`
-
-### HR Tools (3 tools)
-
-- `payroll_inquiry.json` - Inquire about payroll and commissions
-- `onboarding_inquiry.json` - Get onboarding checklist and training info
-- `hiring_inquiry.json` - Get hiring requirements and process info
-
-**Access**: HR, Managers, Executives, Admin
-
-**Python Handlers**: `src/vapi/tools/people/`
-
-### Operations Tools (2+ tools)
-
-- `inventory_inquiry.json` - Check parts and equipment inventory
-- `purchase_request.json` - Create purchase requests for parts/equipment
-
-**Access**: Managers, Dispatch, Executives, Admin
-
-**Python Handlers**: `src/vapi/tools/core/`
-
-## Role-Based Access Control
-
-The system automatically identifies callers by phone number and assigns roles:
-
-- **Customer**: Default role for unknown callers (customer-facing tools only)
-- **Technician**: Identified from Odoo `hr.employee` or static roster
-- **HR**: Identified from Odoo job title
-- **Billing**: Identified from Odoo job title
-- **Manager**: Identified from Odoo job title
-- **Dispatch**: Identified from Odoo job title
-- **Executive**: Identified from Odoo job title
-- **Admin**: Full access to all tools
-
-**Identification Flow:**
-1. Try Odoo `hr.employee` lookup (phone, mobile, work_phone fields)
-2. Fallback to static technician roster
-3. Default to CUSTOMER if not found
-
-**Access Enforcement:**
-- Backend checks permissions before processing tool calls
-- Unauthorized access returns clear error message
-- All access attempts are logged for audit
-
-## Integration Status
-
-### Odoo Integration
-
-Most tools integrate with Odoo 18 Enterprise:
-- **Appointments**: Create/update `calendar.event` records
-- **Leads**: Create/update `crm.lead` records
-- **Quotes**: Create/update `sale.order` records
-- **Employees**: Query `hr.employee` for identification
-
-### Brain Handlers
-
-Some tools use brain handlers (OPS/CORE/REVENUE/PEOPLE) which may:
-- Query Odoo for data
-- Apply business logic
-- Calculate pricing
-- Route to appropriate workflows
-
-### Static Tools
-
-Some tools provide static or calculated information without Odoo integration:
-- Business hours
-- Service area coverage
-- Maintenance plan information
-- Pricing calculations
+---
 
 ## Phone Numbers & Assistants
 
-### Customer Line
-- **Number**: +1-972-597-1644
-- **Source**: 8x8 call forwarding
-- **Assistant**: "Riley"
-- **Tools**: Customer Facing (18 tools)
-- **Purpose**: Public customer service
+| Line | Number | Assistant | In-Call Tools | Post-Call |
+|------|--------|-----------|--------------|-----------|
+| Customer | +1-972-597-1644 (8x8) | Riley Customer Inbound | 5 | PostCallProcessor (4 structured outputs) |
+| Internal OPS | +1-855-768-3265 (Twilio) | Riley OPS | 0 | OpsPostCallProcessor (FSM Subtask Request) |
 
-### Internal OPS Line
-- **Number**: +1-855-768-3265
-- **Source**: Twilio direct integration
-- **Assistant**: "Riley Tech"
-- **Tools**: Internal OPS (6+ tools)
-- **Purpose**: Internal employee support (technicians, HR, billing, managers)
+---
 
 ## Python Handler Locations
 
-All tool handlers are in `src/vapi/tools/`:
+All tool handlers remain in `src/vapi/tools/` (unchanged):
 
-- **OPS tools**: `src/vapi/tools/ops/`
-- **REVENUE tools**: `src/vapi/tools/revenue/`
-- **CORE tools**: `src/vapi/tools/core/`
-- **PEOPLE tools**: `src/vapi/tools/people/`
-- **UTILS tools**: `src/vapi/tools/utils/`
+- `src/vapi/tools/ops/` — appointment and service request handlers
+- `src/vapi/tools/revenue/` — quote, membership, ivr_close_sale handlers
+- `src/vapi/tools/core/` — billing, pricing, complaint handlers
+- `src/vapi/tools/people/` — HR handlers (payroll, onboarding, hiring)
+- `src/vapi/tools/utils/` — business hours, service area, maintenance plans, notifications
 
-Tool registration is in `src/vapi/tools/register_tools.py`.
+**Tool registry:** `src/vapi/tools/register_tools.py`
+**Base handler:** `src/vapi/tools/base.py`
 
-## Adding New Tools
+---
 
-1. **Create Python Handler**: Add handler function in appropriate `src/vapi/tools/` subdirectory
-2. **Create JSON Schema**: Add schema file in appropriate `doc/vapi/tools/` subdirectory
-3. **Register Tool**: Add registration in `src/vapi/tools/register_tools.py`
-4. **Update Permissions**: Add tool to `TOOL_PERMISSIONS` in `src/vapi/tools/base.py` if needed
-5. **Update Documentation**: Update this README and `.cursor/context.json`
+## Knowledge Base (Replaces Information Tools)
 
-## Notes
+Static data that was previously served by tools is now in the Knowledge Base, queried automatically by the LLM:
 
-- All tools use the same Server URL endpoint: `https://haes-hvac.fly.dev/vapi/server`
-- Tools are automatically registered on import via `register_tools.py`
-- Role-based access is enforced at the backend level
-- New employees work immediately when added to Odoo (no code changes needed)
-- Static roster provides fallback if Odoo is unavailable
+| Data | KB File | Old Tool |
+|------|---------|----------|
+| Business hours | `doc/vapi/kb/customer_faq.txt` | `check_business_hours` |
+| Service area | `doc/vapi/kb/customer_faq.txt` | `get_service_area_info` |
+| Pricing | `doc/vapi/kb/customer_faq.txt` | `get_pricing` |
+| Maintenance plans | `doc/vapi/kb/customer_faq.txt` | `get_maintenance_plans` |
+| Payment terms | `doc/vapi/kb/policies.txt` | `payment_terms_inquiry` |
+
+**KB assignment:** See `doc/vapi/KB_ASSIGNMENT.md`

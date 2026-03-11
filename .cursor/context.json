@@ -325,31 +325,25 @@
         "access_control": "src/vapi/tools/base.py - TOOL_PERMISSIONS dictionary and check_access() method"
       },
       "tool_organization": {
-        "structure": "Organized by access level in doc/vapi/tools/",
-        "customer_facing": {
-          "folder": "doc/vapi/tools/customer_facing/",
-          "count": 18,
-          "in_call_count": 5,
-          "post_call_count": 13,
-          "description": "Customer-facing tools — 5 active in-call (read-only), 13 post-call via structured outputs",
-          "in_call_tools": ["check_availability", "lookup_customer_profile", "check_appointment_status", "check_lead_status", "billing_inquiry"],
-          "subcategories": {
-            "appointments": 5,
-            "leads_quotes": 4,
-            "billing": 3,
-            "information": 5,
-            "complaints": 1
-          }
+        "structure": "Organized by execution context in doc/vapi/tools/",
+        "in_call": {
+          "folder": "doc/vapi/tools/in_call/",
+          "count": 5,
+          "description": "Tools attached to VAPI (Riley Customer Inbound). Read-only, called during live conversation.",
+          "tools": ["check_availability", "lookup_customer_profile", "check_appointment_status", "check_lead_status", "billing_inquiry"]
+        },
+        "post_call": {
+          "folder": "doc/vapi/tools/post_call/",
+          "count": 14,
+          "description": "Backend handlers triggered by PostCallProcessor via structured outputs. NOT attached to VAPI.",
+          "tools": ["schedule_appointment", "reschedule_appointment", "cancel_appointment", "create_service_request", "request_quote", "request_membership_enrollment", "send_notification", "create_complaint", "invoice_request", "payment_terms_inquiry", "get_pricing", "get_maintenance_plans", "get_service_area_info", "check_business_hours"],
+          "note": "Last 4 (pricing, maintenance plans, service area, business hours) moved to KB. Handler code retained."
         },
         "internal_ops": {
           "folder": "doc/vapi/tools/internal_ops/",
           "count": 6,
-          "description": "Internal employee tools available via Internal OPS Line",
-          "subcategories": {
-            "technician": 1,
-            "hr": 3,
-            "operations": 2
-          }
+          "description": "All UNLINKED from VAPI Dashboard. Code retained. Riley OPS uses post-call structured output only.",
+          "tools": ["ivr_close_sale", "payroll_inquiry", "onboarding_inquiry", "hiring_inquiry", "inventory_inquiry", "purchase_request"]
         }
       },
       "transfer_policy": {
@@ -360,7 +354,7 @@
       "documentation": {
         "system_prompt": "doc/vapi/system_prompt.md",
         "system_prompt_internal_ops": "doc/vapi/system_prompt_internal_ops.md",
-        "tool_schemas": "doc/vapi/tools/ (organized in customer_facing/ and internal_ops/ folders)",
+        "tool_schemas": "doc/vapi/tools/ (organized in in_call/, post_call/, and internal_ops/ folders)",
         "tool_organization_guide": "doc/vapi/tools/README.md",
         "kb_docs": [
           "doc/vapi/kb/customer_faq.txt",
