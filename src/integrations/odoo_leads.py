@@ -181,7 +181,19 @@ class LeadService:
             task_fields = await self._get_project_task_fields()
             if "name" not in task_fields:
                 return
-            task_code = f"J{int(task_id):06d}"
+
+            # Read the real task_code from Odoo (UNIQUE_ID field) instead of
+            # fabricating one from the record ID, which produces a mismatch.
+            task_code = None
+            if "task_code" in task_fields:
+                rows = await self.client.read(
+                    "project.task", [task_id], fields=["task_code"],
+                )
+                if rows:
+                    task_code = rows[0].get("task_code")
+            if not task_code:
+                task_code = f"J{int(task_id):06d}"
+
             display_name = self._compose_fsm_task_name(
                 task_code=task_code,
                 customer_name=customer_name,

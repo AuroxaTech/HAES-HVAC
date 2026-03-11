@@ -138,7 +138,15 @@ class FSMSubtaskService:
         await self._ensure_authenticated()
         task_id = await self.client.create("project.task", values)
 
-        task_code = f"J{task_id:06d}"
+        # Read real task_code from Odoo (UNIQUE_ID field) for accurate logging
+        task_code = f"J{task_id:06d}"  # fallback
+        try:
+            rows = await self.client.read("project.task", [task_id], fields=["task_code"])
+            if rows and rows[0].get("task_code"):
+                task_code = rows[0]["task_code"]
+        except Exception:
+            pass
+
         logger.info(
             "%s Created subtask %s: '%s' under parent %d",
             _LOG_PREFIX, task_code, subtask["title"], parent_task["id"],
@@ -159,7 +167,14 @@ class FSMSubtaskService:
         for subtask in subtasks:
             try:
                 task_id = await self.create_subtask(parent_task, subtask)
-                task_code = f"J{task_id:06d}"
+                # Read real task_code from Odoo
+                task_code = f"J{task_id:06d}"  # fallback
+                try:
+                    rows = await self.client.read("project.task", [task_id], fields=["task_code"])
+                    if rows and rows[0].get("task_code"):
+                        task_code = rows[0]["task_code"]
+                except Exception:
+                    pass
                 results.append({
                     "title": subtask["title"],
                     "task_code": task_code,
