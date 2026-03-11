@@ -10,6 +10,7 @@ Currently handles:
 Future phases will add more OPS actions here.
 """
 
+import asyncio
 import logging
 from typing import Any
 
@@ -55,12 +56,15 @@ class OpsPostCallProcessor:
 
     # ── Public entry point ───────────────────────────────────────────
 
-    async def process(self, call_id: str, payload: dict) -> dict[str, Any]:
+    async def process(
+        self, call_id: str, payload: dict, *, recording_url: str | None = None,
+    ) -> dict[str, Any]:
         """Main entry — called from end-of-call webhook handler.
 
         Args:
             call_id: VAPI call ID
             payload: Full end-of-call-report webhook payload
+            recording_url: Optional VAPI call recording URL
 
         Returns:
             Summary dict of actions taken
@@ -91,6 +95,25 @@ class OpsPostCallProcessor:
                 logger.info(
                     "%s call_id=%s FSM Subtask Request hasSubtasks=false — skipping",
                     _PREFIX, call_id,
+                )
+
+        # Upload call recording to parent FSM task (fire-and-forget)
+        if recording_url:
+            parent_task_id = next(
+                (r.get("parent_task_id") for r in results if r.get("parent_task_id")),
+                None,
+            )
+            if parent_task_id:
+                from src.integrations.odoo_attachments import upload_recording_to_odoo
+
+                asyncio.create_task(
+                    upload_recording_to_odoo(
+                        recording_url, "project.task", parent_task_id, call_id,
+                    )
+                )
+                logger.info(
+                    "%s call_id=%s queued recording upload to project.task %s",
+                    _PREFIX, call_id, parent_task_id,
                 )
 
         logger.info(

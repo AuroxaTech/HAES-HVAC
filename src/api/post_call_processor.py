@@ -64,17 +64,21 @@ class PostCallProcessor:
 
     # ── Public entry point ───────────────────────────────────────────
 
-    async def process(self, call_id: str, payload: dict) -> dict[str, Any]:
+    async def process(
+        self, call_id: str, payload: dict, *, recording_url: str | None = None,
+    ) -> dict[str, Any]:
         """
         Main entry — called from the end-of-call webhook handler.
 
         Args:
             call_id: VAPI call ID
             payload: Full end-of-call-report webhook payload
+            recording_url: Optional VAPI call recording URL
 
         Returns:
             Summary dict of actions taken
         """
+        self._recording_url = recording_url
         structured_outputs = self._extract_structured_outputs(payload)
         if not structured_outputs:
             logger.info("%s call_id=%s no structured outputs — skipping", _PREFIX, call_id)
@@ -259,6 +263,25 @@ class PostCallProcessor:
             )
             await self._create_follow_up(call_id, customer, analytics, phone)
             logger.info("%s call_id=%s follow_up completed", _PREFIX, call_id)
+
+        # 4. Upload call recording to CRM lead (fire-and-forget)
+        if self._recording_url:
+            lead_id = next(
+                (r.get("lead_id") for r in results if r.get("lead_id")),
+                None,
+            )
+            if lead_id:
+                from src.integrations.odoo_attachments import upload_recording_to_odoo
+
+                asyncio.create_task(
+                    upload_recording_to_odoo(
+                        self._recording_url, "crm.lead", lead_id, call_id,
+                    )
+                )
+                logger.info(
+                    "%s call_id=%s queued recording upload to crm.lead %s",
+                    _PREFIX, call_id, lead_id,
+                )
 
         action_names = [r.get("action", "") for r in results]
         logger.info(

@@ -1233,6 +1233,15 @@ async def vapi_server_url(request: Request) -> dict[str, Any]:
         try:
             artifact = message.get("artifact", {})
             structured_outputs = artifact.get("structuredOutputs", [])
+
+            # Extract recording URL (new VAPI format, with legacy fallback)
+            _recording = artifact.get("recording", {})
+            recording_url = (
+                _recording.get("url") if isinstance(_recording, dict) else None
+            ) or message.get("recordingUrl")
+            if recording_url:
+                logger.info("Recording URL available for call %s", call_id)
+
             if structured_outputs:
                 # Extract output names for routing
                 _raw_outputs = list(structured_outputs.values()) if isinstance(structured_outputs, dict) else structured_outputs
@@ -1248,7 +1257,7 @@ async def vapi_server_url(request: Request) -> dict[str, Any]:
 
                     ops_processor = OpsPostCallProcessor()
                     asyncio.create_task(
-                        ops_processor.process(call_id, body)
+                        ops_processor.process(call_id, body, recording_url=recording_url)
                     )
                     logger.info(
                         "Launched OPS post-call processor for call %s (outputs: %s)",
@@ -1260,7 +1269,7 @@ async def vapi_server_url(request: Request) -> dict[str, Any]:
 
                     processor = PostCallProcessor()
                     asyncio.create_task(
-                        processor.process(call_id, body)
+                        processor.process(call_id, body, recording_url=recording_url)
                     )
                     logger.info(
                         "Launched post-call processor for call %s (%d structured outputs)",
